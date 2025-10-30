@@ -1,0 +1,665 @@
+{
+  "info": {
+    "name": "Estudio API - Sistema de Inventario",
+    "description": "Colección completa de endpoints para el sistema de inventario",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json",
+    "_exporter_id": "12345678"
+  },
+  "auth": {
+    "type": "bearer",
+    "bearer": [
+      {
+        "key": "token",
+        "value": "{{access_token}}",
+        "type": "string"
+      }
+    ]
+  },
+  "item": [
+    {
+      "name": "1. Autenticación",
+      "item": [
+        {
+          "name": "Login",
+          "request": {
+            "method": "POST",
+            "header": [],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"admin@estudio.com\",\n  \"password\": \"password123\"\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/auth/login",
+              "host": ["{{base_url}}"],
+              "path": ["auth", "login"]
+            }
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "2. Usuarios",
+      "item": [
+        {
+          "name": "Crear Usuario",
+          "request": {
+            "method": "POST",
+            "header": [],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"usuarioRolId\": 3,\n  \"usuarioNombre\": \"Carlos\",\n  \"usuarioApellido\": \"Técnico\",\n  \"usuarioCorreo\": \"tecnico@estudio.com\",\n  \"usuarioDocumento\": \"1234567890\",\n  \"usuarioContrasena\": \"password123\",\n  \"usuarioSede\": 1,\n  \"usuarioOficina\": 1,\n  \"usuarioBodega\": 1\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/users",
+              "host": ["{{base_url}}"],
+              "path": ["users"]
+            }
+          }
+        },
+        {
+          "name": "Listar Usuarios",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/users",
+              "host": ["{{base_url}}"],
+              "path": ["users"]
+            }
+          }
+        },
+        {
+          "name": "Obtener Usuario",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/users/:id",
+              "host": ["{{base_url}}"],
+              "path": ["users", ":id"],
+              "variable": [
+                {
+                  "key": "id",
+                  "value": "1"
+                }
+              ]
+            }
+          }
+        },
+        {
+          "name": "Actualizar Estado Usuario",
+          "request": {
+            "method": "PATCH",
+            "header": [],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"usuarioEstado\": false\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/users/:id/estado",
+              "host": ["{{base_url}}"],
+              "path": ["users", ":id", "estado"],
+              "variable": [
+                {
+                  "key": "id",
+                  "value": "1"
+                }
+              ]
+            }
+          }
+        },
+        {
+          "name": "Cambiar Rol",
+          "request": {
+            "method": "POST",
+            "header": [],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"usuarioRolId\": 2\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/users/:id/change-role",
+              "host": ["{{base_url}}"],
+              "path": ["users", ":id", "change-role"],
+              "variable": [
+                {
+                  "key": "id",
+                  "value": "1"
+                }
+              ]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "3. Materiales",
+      "item": [
+        {
+          "name": "Crear Material",
+          "request": {
+            "method": "POST",
+            "header": [],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"categoriaId\": 1,\n  \"proveedorId\": 1,\n  \"inventarioId\": 1,\n  \"materialCodigo\": \"MAT-001\",\n  \"materialNombre\": \"Medidor Digital\",\n  \"materialDescripcion\": \"Medidor digital de agua\",\n  \"materialStock\": 100,\n  \"materialStockMinimo\": 20,\n  \"materialStockMaximo\": 200,\n  \"materialPrecio\": 150000,\n  \"materialUnidadMedida\": \"unidad\",\n  \"materialMarca\": \"XYZ\",\n  \"materialModelo\": \"MD-2024\"\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/materiales",
+              "host": ["{{base_url}}"],
+              "path": ["materiales"]
+            }
+          }
+        },
+        {
+          "name": "Listar Materiales",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/materiales",
+              "host": ["{{base_url}}"],
+              "path": ["materiales"]
+            }
+          }
+        },
+        {
+          "name": "Obtener Material",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/materiales/:id",
+              "host": ["{{base_url}}"],
+              "path": ["materiales", ":id"],
+              "variable": [
+                {
+                  "key": "id",
+                  "value": "1"
+                }
+              ]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "4. Movimientos",
+      "item": [
+        {
+          "name": "Registrar Entrada",
+          "request": {
+            "method": "POST",
+            "header": [],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"materialId\": 1,\n  \"movimientoTipo\": \"entrada\",\n  \"movimientoCantidad\": 50,\n  \"proveedorId\": 1,\n  \"usuarioId\": 1,\n  \"movimientoObservaciones\": \"Compra de materiales\"\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/movimientos",
+              "host": ["{{base_url}}"],
+              "path": ["movimientos"]
+            }
+          }
+        },
+        {
+          "name": "Registrar Salida",
+          "request": {
+            "method": "POST",
+            "header": [],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"materialId\": 1,\n  \"movimientoTipo\": \"salida\",\n  \"movimientoCantidad\": 10,\n  \"instalacionId\": 1,\n  \"usuarioId\": 1,\n  \"movimientoObservaciones\": \"Material para instalación\"\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/movimientos",
+              "host": ["{{base_url}}"],
+              "path": ["movimientos"]
+            }
+          }
+        },
+        {
+          "name": "Registrar Devolución",
+          "request": {
+            "method": "POST",
+            "header": [],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"materialId\": 1,\n  \"movimientoTipo\": \"devolucion\",\n  \"movimientoCantidad\": 5,\n  \"instalacionId\": 1,\n  \"usuarioId\": 1,\n  \"movimientoObservaciones\": \"Material no utilizado\"\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/movimientos",
+              "host": ["{{base_url}}"],
+              "path": ["movimientos"]
+            }
+          }
+        },
+        {
+          "name": "Listar Movimientos",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/movimientos",
+              "host": ["{{base_url}}"],
+              "path": ["movimientos"]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "5. Traslados",
+      "item": [
+        {
+          "name": "Crear Traslado",
+          "request": {
+            "method": "POST",
+            "header": [],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"materialId\": 1,\n  \"bodegaOrigenId\": 1,\n  \"bodegaDestinoId\": 2,\n  \"trasladoCantidad\": 20,\n  \"usuarioId\": 1,\n  \"trasladoObservaciones\": \"Traslado por inventario\"\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/traslados",
+              "host": ["{{base_url}}"],
+              "path": ["traslados"]
+            }
+          }
+        },
+        {
+          "name": "Completar Traslado",
+          "request": {
+            "method": "POST",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/traslados/:id/completar",
+              "host": ["{{base_url}}"],
+              "path": ["traslados", ":id", "completar"],
+              "variable": [
+                {
+                  "key": "id",
+                  "value": "1"
+                }
+              ]
+            }
+          }
+        },
+        {
+          "name": "Listar Traslados",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/traslados",
+              "host": ["{{base_url}}"],
+              "path": ["traslados"]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "6. Instalaciones",
+      "item": [
+        {
+          "name": "Crear Instalación",
+          "request": {
+            "method": "POST",
+            "header": [],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"instalacionCodigo\": \"INST-001\",\n  \"tipoInstalacionId\": 1,\n  \"clienteId\": 1,\n  \"instalacionMedidorNumero\": \"MED-12345\",\n  \"instalacionSelloNumero\": \"SELLO-67890\",\n  \"instalacionFechaHora\": \"2024-01-15T10:00:00\",\n  \"materialesInstalados\": {\n    \"materiales\": [\n      { \"materialId\": 1, \"cantidad\": 2 }\n    ]\n  },\n  \"instalacionProyectos\": {\n    \"proyectos\": [\n      { \"proyectoId\": 1, \"itemsSeleccionados\": [1, 2] }\n    ]\n  },\n  \"instalacionObservaciones\": \"Instalación completa\"\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/instalaciones",
+              "host": ["{{base_url}}"],
+              "path": ["instalaciones"]
+            }
+          }
+        },
+        {
+          "name": "Asignar Usuarios a Instalación",
+          "request": {
+            "method": "POST",
+            "header": [],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"usuarios\": [\n    { \"usuarioId\": 5, \"rolEnInstalacion\": \"tecnico\" },\n    { \"usuarioId\": 12, \"rolEnInstalacion\": \"empleado\" }\n  ]\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/instalaciones-usuarios/:instalacionId/asignar",
+              "host": ["{{base_url}}"],
+              "path": ["instalaciones-usuarios", ":instalacionId", "asignar"],
+              "variable": [
+                {
+                  "key": "instalacionId",
+                  "value": "1"
+                }
+              ]
+            }
+          }
+        },
+        {
+          "name": "Listar Instalaciones",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/instalaciones",
+              "host": ["{{base_url}}"],
+              "path": ["instalaciones"]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "7. Clientes",
+      "item": [
+        {
+          "name": "Crear Cliente",
+          "request": {
+            "method": "POST",
+            "header": [],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"clienteNombreCompleto\": \"Juan Pérez García\",\n  \"clienteTelefono\": \"3001234567\",\n  \"clienteCorreo\": \"juan.perez@example.com\",\n  \"clienteDocumento\": \"1234567890\",\n  \"clienteDireccion\": \"Calle 123 #45-67\",\n  \"municipioId\": 1\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/clientes",
+              "host": ["{{base_url}}"],
+              "path": ["clientes"]
+            }
+          }
+        },
+        {
+          "name": "Listar Clientes",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/clientes",
+              "host": ["{{base_url}}"],
+              "path": ["clientes"]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "8. Chat y Estados",
+      "item": [
+        {
+          "name": "Actualizar Estado",
+          "request": {
+            "method": "POST",
+            "header": [],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"estado\": \"ocupado\",\n  \"mensajeEstado\": \"Realizando instalación INST-001\"\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/estados-usuario/actualizar",
+              "host": ["{{base_url}}"],
+              "path": ["estados-usuario", "actualizar"]
+            }
+          }
+        },
+        {
+          "name": "Ver Mi Estado",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/estados-usuario/mi-estado",
+              "host": ["{{base_url}}"],
+              "path": ["estados-usuario", "mi-estado"]
+            }
+          }
+        },
+        {
+          "name": "Enviar Mensaje",
+          "request": {
+            "method": "POST",
+            "header": [],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"grupoId\": 1,\n  \"texto\": \"Hola equipo, lista para la instalación\",\n  \"mensajeRespuestaId\": null\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/mensajes/enviar",
+              "host": ["{{base_url}}"],
+              "path": ["mensajes", "enviar"]
+            }
+          }
+        },
+        {
+          "name": "Responder Mensaje",
+          "request": {
+            "method": "POST",
+            "header": [],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"grupoId\": 1,\n  \"texto\": \"Perfecto, camino hacia allí\",\n  \"mensajeRespuestaId\": 15\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/mensajes/enviar",
+              "host": ["{{base_url}}"],
+              "path": ["mensajes", "enviar"]
+            }
+          }
+        },
+        {
+          "name": "Ver Mensajes del Grupo",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/mensajes/grupo/:grupoId?limit=50",
+              "host": ["{{base_url}}"],
+              "path": ["mensajes", "grupo", ":grupoId"],
+              "query": [
+                {
+                  "key": "limit",
+                  "value": "50"
+                }
+              ],
+              "variable": [
+                {
+                  "key": "grupoId",
+                  "value": "1"
+                }
+              ]
+            }
+          }
+        },
+        {
+          "name": "Reaccionar a Mensaje",
+          "request": {
+            "method": "POST",
+            "header": [],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"tipoReaccion\": \"like\"\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/reacciones-mensaje/:mensajeId",
+              "host": ["{{base_url}}"],
+              "path": ["reacciones-mensaje", ":mensajeId"],
+              "variable": [
+                {
+                  "key": "mensajeId",
+                  "value": "1"
+                }
+              ]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "9. Proyectos",
+      "item": [
+        {
+          "name": "Crear Proyecto",
+          "request": {
+            "method": "POST",
+            "header": [],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"proyectoNombre\": \"Instalación Residencial Básica\",\n  \"proyectoDescripcion\": \"Proyecto estándar para viviendas\",\n  \"proyectoCodigo\": \"PROY-001\",\n  \"tipoProyectoId\": 1\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/proyectos",
+              "host": ["{{base_url}}"],
+              "path": ["proyectos"]
+            }
+          }
+        },
+        {
+          "name": "Agregar Item a Proyecto",
+          "request": {
+            "method": "POST",
+            "header": [],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"proyectoId\": 1,\n  \"materialId\": 5,\n  \"itemCantidad\": 2,\n  \"itemDescripcion\": \"Medidor de agua\"\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/items-proyecto",
+              "host": ["{{base_url}}"],
+              "path": ["items-proyecto"]
+            }
+          }
+        },
+        {
+          "name": "Listar Proyectos",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/proyectos",
+              "host": ["{{base_url}}"],
+              "path": ["proyectos"]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "10. Categorías",
+      "item": [
+        {
+          "name": "Crear Categoría",
+          "request": {
+            "method": "POST",
+            "header": [],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"categoriaNombre\": \"Medidores\",\n  \"categoriaDescripcion\": \"Equipos de medición\",\n  \"categoriaCodigo\": \"CAT-001\"\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/categorias",
+              "host": ["{{base_url}}"],
+              "path": ["categorias"]
+            }
+          }
+        },
+        {
+          "name": "Crear Subcategoría",
+          "request": {
+            "method": "POST",
+            "header": [],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"categoriaNombre\": \"Medidores de Agua\",\n  \"categoriaDescripcion\": \"Medidores para agua potable\",\n  \"categoriaCodigo\": \"CAT-001-001\",\n  \"categoriaPadreId\": 1\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/categorias",
+              "host": ["{{base_url}}"],
+              "path": ["categorias"]
+            }
+          }
+        },
+        {
+          "name": "Listar Categorías",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/categorias",
+              "host": ["{{base_url}}"],
+              "path": ["categorias"]
+            }
+          }
+        },
+        {
+          "name": "Ver Subcategorías",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/categorias/:id/subcategorias",
+              "host": ["{{base_url}}"],
+              "path": ["categorias", ":id", "subcategorias"],
+              "variable": [
+                {
+                  "key": "id",
+                  "value": "1"
+                }
+              ]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "11. Proveedores",
+      "item": [
+        {
+          "name": "Crear Proveedor",
+          "request": {
+            "method": "POST",
+            "header": [],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"proveedorNombre\": \"Proveedor ABC S.A.S.\",\n  \"proveedorNit\": \"900123456-7\",\n  \"proveedorTelefono\": \"3001234567\",\n  \"proveedorEmail\": \"contacto@proveedorabc.com\",\n  \"proveedorDireccion\": \"Calle 10 # 20-30, Bogotá\",\n  \"proveedorContacto\": \"Juan Pérez\"\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/proveedores",
+              "host": ["{{base_url}}"],
+              "path": ["proveedores"]
+            }
+          }
+        },
+        {
+          "name": "Listar Proveedores",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/proveedores",
+              "host": ["{{base_url}}"],
+              "path": ["proveedores"]
+            }
+          }
+        }
+      ]
+    }
+  ],
+  "variable": [
+    {
+      "key": "base_url",
+      "value": "http://localhost:3000/api/v1",
+      "type": "string"
+    },
+    {
+      "key": "access_token",
+      "value": "",
+      "type": "string"
+    }
+  ]
+}
+

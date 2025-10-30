@@ -1,0 +1,60 @@
+version: '3.8'
+
+services:
+  mysql:
+    image: mysql:8.0
+    container_name: inventario-mysql
+    restart: unless-stopped
+    environment:
+      MYSQL_ROOT_PASSWORD: ${DB_PASSWORD:-root}
+      MYSQL_DATABASE: ${DB_NAME:-inventario_db}
+      MYSQL_USER: ${DB_USERNAME:-root}
+      MYSQL_PASSWORD: ${DB_PASSWORD:-root}
+    ports:
+      - "${DB_PORT:-3306}:3306"
+    volumes:
+      - mysql_data:/var/lib/mysql
+    networks:
+      - inventario-network
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    command: --default-authentication-plugin=mysql_native_password
+
+  backend:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: inventario-backend
+    restart: unless-stopped
+    ports:
+      - "${PORT:-3000}:3000"
+    environment:
+      NODE_ENV: ${NODE_ENV:-production}
+      PORT: ${PORT:-3000}
+      DB_HOST: mysql
+      DB_PORT: ${DB_PORT:-3306}
+      DB_USERNAME: ${DB_USERNAME:-root}
+      DB_PASSWORD: ${DB_PASSWORD:-root}
+      DB_NAME: ${DB_NAME:-inventario_db}
+      JWT_SECRET: ${JWT_SECRET:-your-super-secret-jwt-key-change-in-production}
+      JWT_EXPIRES_IN: ${JWT_EXPIRES_IN:-24h}
+      FRONTEND_URL: ${FRONTEND_URL:-http://localhost:3000}
+    depends_on:
+      mysql:
+        condition: service_healthy
+    networks:
+      - inventario-network
+    volumes:
+      - ./logs:/app/logs
+
+volumes:
+  mysql_data:
+    driver: local
+
+networks:
+  inventario-network:
+    driver: bridge
+
