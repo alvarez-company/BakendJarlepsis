@@ -1,4 +1,4 @@
-import { Injectable, NotFoundException, Inject, ForwardRef } from '@nestjs/common';
+import { Injectable, NotFoundException, Inject, forwardRef } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { Instalacion, EstadoInstalacion } from './instalacion.entity';
@@ -7,18 +7,28 @@ import { UpdateInstalacionDto } from './dto/update-instalacion.dto';
 import { ChatGateway } from '../chat/chat.gateway';
 import { NotificacionesService } from '../notificaciones/notificaciones.service';
 import { InstalacionesUsuariosService } from '../instalaciones-usuarios/instalaciones-usuarios.service';
+import { MovimientosService } from '../movimientos/movimientos.service';
+import { MaterialesService } from '../materiales/materiales.service';
+import { InventariosService } from '../inventarios/inventarios.service';
+import { TipoMovimiento } from '../movimientos/movimiento-inventario.entity';
 
 @Injectable()
 export class InstalacionesService {
   constructor(
     @InjectRepository(Instalacion)
     private instalacionesRepository: Repository<Instalacion>,
-    @Inject(ForwardRef(() => ChatGateway))
+    @Inject(forwardRef(() => ChatGateway))
     private chatGateway: ChatGateway,
-    @Inject(ForwardRef(() => NotificacionesService))
+    @Inject(forwardRef(() => NotificacionesService))
     private notificacionesService: NotificacionesService,
-    @Inject(ForwardRef(() => InstalacionesUsuariosService))
+    @Inject(forwardRef(() => InstalacionesUsuariosService))
     private instalacionesUsuariosService: InstalacionesUsuariosService,
+    @Inject(forwardRef(() => MovimientosService))
+    private movimientosService: MovimientosService,
+    @Inject(forwardRef(() => MaterialesService))
+    private materialesService: MaterialesService,
+    @Inject(forwardRef(() => InventariosService))
+    private inventariosService: InventariosService,
   ) {}
 
   async create(createInstalacionDto: CreateInstalacionDto, usuarioId: number): Promise<Instalacion> {
@@ -95,7 +105,13 @@ export class InstalacionesService {
     const usuariosIds = usuariosAsignados.map(u => u.usuarioId);
 
     // Enviar notificaciones según el estado
-    if (nuevoEstado === EstadoInstalacion.COMPLETADA) {
+    if (nuevoEstado === EstadoInstalacion.COMPLETADA || nuevoEstado === EstadoInstalacion.FINALIZADA) {
+      // Actualizar materiales cuando la instalación se completa o finaliza
+      // Solo actualizar si el estado anterior no era COMPLETADA o FINALIZADA para evitar duplicados
+      if (estadoAnterior !== EstadoInstalacion.COMPLETADA && estadoAnterior !== EstadoInstalacion.FINALIZADA) {
+        await this.actualizarMaterialesInstalacion(instalacionId);
+      }
+
       // Notificar al usuario que completó la instalación
       await this.notificacionesService.crearNotificacionInstalacionCompletada(
         usuarioId,
@@ -140,5 +156,27 @@ export class InstalacionesService {
     }
 
     return instalacionActualizada;
+  }
+
+  private async actualizarMaterialesInstalacion(instalacionId: number): Promise<void> {
+    // Obtener todos los movimientos asociados a esta instalación
+    const movimientos = await this.movimientosService.findByInstalacion(instalacionId);
+
+    // Para cada movimiento de tipo SALIDA, actualizar el material
+    for (const movimiento of movimientos) {
+      if (movimiento.movimientoTipo === TipoMovimiento.SALIDA) {
+        // Obtener el material
+        const material = await this.materialesService.findOne(movimiento.materialId);
+        
+        // Si el material tiene un inventario asociado, actualizar precio si viene en el movimiento
+        if (material.inventarioId && movimiento.movimientoPrecioUnitario) {
+          await this.materialesService.actualizarInventarioYPrecio(
+            movimiento.materialId,
+            material.inventarioId, // Mantener el inventarioId actual
+            movimiento.movimientoPrecioUnitario, // Actualizar el precio
+          );
+        }
+      }
+    }
   }
 }

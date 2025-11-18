@@ -42,6 +42,9 @@ export class Traslado {
   @Column({ type: 'text', nullable: true })
   trasladoObservaciones: string;
 
+  @Column({ nullable: true })
+  trasladoCodigo: string; // Código para agrupar múltiples traslados
+
   @Column()
   usuarioId: number;
 

@@ -57,7 +57,11 @@ export class MaterialesController {
   @Roles('superadmin', 'admin', 'tecnico')
   @ApiOperation({ summary: 'Ajustar stock de un material' })
   ajustarStock(@Param('id') id: string, @Body() ajustarStockDto: AjustarStockDto) {
-    return this.materialesService.ajustarStock(+id, ajustarStockDto.cantidad);
+    return this.materialesService.ajustarStock(
+      +id,
+      ajustarStockDto.cantidad,
+      ajustarStockDto.bodegaId,
+    );
   }
 
   @Delete(':id')

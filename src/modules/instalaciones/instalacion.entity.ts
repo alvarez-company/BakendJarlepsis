@@ -13,6 +13,7 @@ export enum EstadoInstalacion {
   PENDIENTE = 'pendiente',
   EN_PROCESO = 'en_proceso',
   COMPLETADA = 'completada',
+  FINALIZADA = 'finalizada',
   CANCELADA = 'cancelada',
 }
 

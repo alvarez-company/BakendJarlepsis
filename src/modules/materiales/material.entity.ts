@@ -30,11 +30,21 @@ export class Material {
   @Column()
   proveedorId: number;
 
-  @Column()
+  @Column({ nullable: true })
   inventarioId: number;
 
-  @Column({ unique: true })
+  @Column()
   materialCodigo: string;
+
+  @Column({ nullable: true })
+  materialPadreId: number;
+
+  @ManyToOne('Material', 'variantes', { nullable: true, eager: false, lazy: false })
+  @JoinColumn({ name: 'materialPadreId' })
+  materialPadre: any;
+
+  @OneToMany('Material', 'materialPadre', { eager: false, lazy: false })
+  variantes: any[];
 
   @Column()
   materialNombre: string;
@@ -44,12 +54,6 @@ export class Material {
 
   @Column({ type: 'decimal', precision: 10, scale: 2, default: 0 })
   materialStock: number;
-
-  @Column({ type: 'decimal', precision: 10, scale: 2, default: 0 })
-  materialStockMinimo: number;
-
-  @Column({ type: 'decimal', precision: 10, scale: 2, nullable: true })
-  materialStockMaximo: number;
 
   @Column({ type: 'decimal', precision: 10, scale: 2 })
   materialPrecio: number;
@@ -70,10 +74,7 @@ export class Material {
   @Column({ nullable: true })
   materialSerial: string;
 
-  @Column({ nullable: true })
-  materialCodigoBarras: string;
-
-  @Column({ nullable: true })
+  @Column({ type: 'longtext', nullable: true })
   materialFoto: string;
 
   @Column({ nullable: true })
@@ -93,6 +94,9 @@ export class Material {
   @ManyToOne('Inventario', 'materiales')
   @JoinColumn({ name: 'inventarioId' })
   inventario: any;
+
+  @OneToMany('MaterialBodega', 'material')
+  materialBodegas: any[];
 
   @OneToMany('MovimientoInventario', 'material')
   movimientos: any[];

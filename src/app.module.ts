@@ -1,8 +1,7 @@
 import { Module } from '@nestjs/common';
-import { ConfigModule } from '@nestjs/config';
+import { ConfigModule, ConfigService } from '@nestjs/config';
 import { ThrottlerModule } from '@nestjs/throttler';
 import { TypeOrmModule } from '@nestjs/typeorm';
-import { databaseConfig } from './config/database.config';
 import { AuthModule } from './modules/auth/auth.module';
 import { UsersModule } from './modules/users/users.module';
 import { RolesModule } from './modules/roles/roles.module';
@@ -50,7 +49,46 @@ import { CommonModule } from './common/common.module';
     ]),
     // Database
     TypeOrmModule.forRootAsync({
-      useFactory: () => databaseConfig,
+      imports: [ConfigModule],
+      useFactory: (configService: ConfigService) => {
+        const host = configService.get<string>('DB_HOST', '127.0.0.1');
+        const port = configService.get<string>('DB_PORT', '3306');
+        const username = configService.get<string>('DB_USERNAME', 'root');
+        const password = configService.get<string>('DB_PASSWORD', '') || '';
+        const database = configService.get<string>('DB_NAME', 'jarlepsisdev');
+        
+        // Log configuration for debugging
+        console.log('🔍 Database Configuration:');
+        console.log('  Host:', host);
+        console.log('  Port:', parseInt(port, 10));
+        console.log('  Username:', username);
+        console.log('  Password:', password ? '***SET***' : 'EMPTY');
+        console.log('  Database:', database);
+        
+        const config = {
+          type: 'mysql' as const,
+          host,
+          port: parseInt(port, 10),
+          username,
+          password: password || '',
+          database,
+          autoLoadEntities: true,
+          synchronize: false,
+          logging: false,
+          retryAttempts: 1,
+          retryDelay: 1000,
+        };
+        
+        console.log('📝 TypeORM Config:', JSON.stringify({
+          ...config,
+          password: config.password ? '***' : undefined,
+          entities: '[...]',
+          migrations: '[...]',
+        }, null, 2));
+        
+        return config;
+      },
+      inject: [ConfigService],
     }),
     // Modules
     CommonModule,

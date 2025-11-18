@@ -39,6 +39,15 @@ export class InventariosService {
     return this.inventariosRepository.save(inventario);
   }
 
+  async findByBodega(bodegaId: number): Promise<Inventario | null> {
+    const inventarios = await this.inventariosRepository.find({
+      where: { bodegaId, inventarioEstado: true },
+      relations: ['bodega'],
+    });
+    // Retornar el primer inventario activo de la bodega, o null si no hay
+    return inventarios.length > 0 ? inventarios[0] : null;
+  }
+
   async remove(id: number): Promise<void> {
     const inventario = await this.findOne(id);
     

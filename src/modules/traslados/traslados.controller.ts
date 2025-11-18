@@ -37,6 +37,13 @@ export class TrasladosController {
     return this.trasladosService.findAll();
   }
 
+  @Get('codigo/:codigo')
+  @Roles('superadmin', 'admin', 'tecnico', 'traslados')
+  @ApiOperation({ summary: 'Get traslados by código' })
+  findByCodigo(@Param('codigo') codigo: string) {
+    return this.trasladosService.findByCodigo(codigo);
+  }
+
   @Get(':id')
   @Roles('superadmin', 'admin', 'tecnico')
   @ApiOperation({ summary: 'Get a traslado by ID' })

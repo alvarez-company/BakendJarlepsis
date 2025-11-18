@@ -6,20 +6,20 @@ export class CreateUserDto {
   @IsNumber()
   usuarioRolId: number;
 
-  @ApiProperty({ required: false })
+  @ApiProperty({ required: false, nullable: true })
   @IsNumber()
   @IsOptional()
-  usuarioSede?: number;
+  usuarioSede?: number | null;
 
-  @ApiProperty({ required: false })
+  @ApiProperty({ required: false, nullable: true })
   @IsNumber()
   @IsOptional()
-  usuarioBodega?: number;
+  usuarioBodega?: number | null;
 
-  @ApiProperty({ required: false })
+  @ApiProperty({ required: false, nullable: true })
   @IsNumber()
   @IsOptional()
-  usuarioOficina?: number;
+  usuarioOficina?: number | null;
 
   @ApiProperty({ example: 'Juan' })
   @IsString()

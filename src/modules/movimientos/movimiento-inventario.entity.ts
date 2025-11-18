@@ -22,6 +22,11 @@ export class MovimientoInventario {
   @Column()
   materialId: number;
 
+  // Relación comentada temporalmente para evitar problemas
+  // @ManyToOne('Material', 'movimientos', { nullable: false })
+  // @JoinColumn({ name: 'materialId' })
+  // material: any;
+
   @Column({
     type: 'enum',
     enum: TipoMovimiento,
@@ -57,6 +62,28 @@ export class MovimientoInventario {
   @ManyToOne('Proveedor', 'movimientos', { nullable: true })
   @JoinColumn({ name: 'proveedorId' })
   proveedor: any;
+
+  @Column({ nullable: true })
+  inventarioId: number;
+
+  @ManyToOne('Inventario', 'movimientos', { nullable: true })
+  @JoinColumn({ name: 'inventarioId' })
+  inventario: any;
+
+  // bodegaId y bodega comentados porque la columna no existe en la BD
+  // La bodega se obtiene a través del inventario
+  // @Column({ nullable: true })
+  // bodegaId: number;
+
+  // @ManyToOne('Bodega', 'movimientos', { nullable: true })
+  // @JoinColumn({ name: 'bodegaId' })
+  // bodega: any;
+
+  @Column({ nullable: true })
+  movimientoCodigo: string; // Código para agrupar múltiples movimientos
+
+  @Column({ nullable: true })
+  oficinaId: number; // Oficina asociada al movimiento (para entradas por oficina)
 
   @Column({ default: true })
   movimientoEstado: boolean;

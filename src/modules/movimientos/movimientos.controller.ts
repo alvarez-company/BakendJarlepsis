@@ -2,6 +2,7 @@ import {
   Controller,
   Get,
   Post,
+  Patch,
   Body,
   Param,
   Delete,
@@ -39,11 +40,25 @@ export class MovimientosController {
     return this.movimientosService.findAll();
   }
 
+  @Get('codigo/:codigo')
+  @Roles('superadmin', 'admin', 'tecnico', 'entradas', 'salidas', 'devoluciones')
+  @ApiOperation({ summary: 'Get movimientos by código' })
+  findByCodigo(@Param('codigo') codigo: string) {
+    return this.movimientosService.findByCodigo(codigo);
+  }
+
   @Get(':id')
   @Roles('superadmin', 'admin', 'tecnico')
   @ApiOperation({ summary: 'Get a movimiento by ID' })
   findOne(@Param('id') id: string) {
     return this.movimientosService.findOne(+id);
+  }
+
+  @Patch(':id')
+  @Roles('superadmin', 'admin', 'tecnico', 'entradas', 'salidas', 'devoluciones')
+  @ApiOperation({ summary: 'Update a movimiento' })
+  update(@Param('id') id: string, @Body() updateMovimientoDto: CreateMovimientoDto) {
+    return this.movimientosService.update(+id, updateMovimientoDto);
   }
 
   @Delete(':id')

@@ -6,6 +6,9 @@ import { Instalacion } from './instalacion.entity';
 import { ChatModule } from '../chat/chat.module';
 import { NotificacionesModule } from '../notificaciones/notificaciones.module';
 import { InstalacionesUsuariosModule } from '../instalaciones-usuarios/instalaciones-usuarios.module';
+import { MovimientosModule } from '../movimientos/movimientos.module';
+import { MaterialesModule } from '../materiales/materiales.module';
+import { InventariosModule } from '../inventarios/inventarios.module';
 
 @Module({
   imports: [
@@ -13,6 +16,9 @@ import { InstalacionesUsuariosModule } from '../instalaciones-usuarios/instalaci
     forwardRef(() => ChatModule),
     forwardRef(() => NotificacionesModule),
     forwardRef(() => InstalacionesUsuariosModule),
+    MovimientosModule,
+    MaterialesModule,
+    InventariosModule,
   ],
   controllers: [InstalacionesController],
   providers: [InstalacionesService],

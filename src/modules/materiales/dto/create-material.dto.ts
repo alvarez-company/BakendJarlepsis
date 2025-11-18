@@ -1,6 +1,34 @@
 import { ApiProperty } from '@nestjs/swagger';
-import { IsString, IsNumber, IsOptional, IsEnum, Min } from 'class-validator';
+import {
+  IsString,
+  IsNumber,
+  IsOptional,
+  IsEnum,
+  IsBoolean,
+  Min,
+  ValidateIf,
+  ValidateNested,
+  ArrayNotEmpty,
+} from 'class-validator';
+import { Type } from 'class-transformer';
 import { UnidadMedida } from '../material.entity';
+
+export class MaterialBodegaInputDto {
+  @ApiProperty({ example: 1 })
+  @IsNumber()
+  bodegaId: number;
+
+  @ApiProperty({ example: 50, required: false, default: 0 })
+  @IsNumber()
+  @Min(0)
+  stock?: number;
+
+  @ApiProperty({ example: 12000, required: false })
+  @IsNumber()
+  @Min(0)
+  @IsOptional()
+  precioPromedio?: number;
+}
 
 export class CreateMaterialDto {
   @ApiProperty({ example: 1 })
@@ -11,9 +39,11 @@ export class CreateMaterialDto {
   @IsNumber()
   proveedorId: number;
 
-  @ApiProperty({ example: 1 })
+  @ApiProperty({ example: 1, required: false, nullable: true })
+  @IsOptional()
+  @ValidateIf((o) => o.inventarioId !== null && o.inventarioId !== undefined)
   @IsNumber()
-  inventarioId: number;
+  inventarioId?: number | null;
 
   @ApiProperty({ example: 'MAT-001' })
   @IsString()
@@ -32,16 +62,6 @@ export class CreateMaterialDto {
   @IsNumber()
   @Min(0)
   materialStock: number;
-
-  @ApiProperty({ example: 10, default: 0 })
-  @IsNumber()
-  @Min(0)
-  materialStockMinimo: number;
-
-  @ApiProperty({ required: false })
-  @IsNumber()
-  @IsOptional()
-  materialStockMaximo?: number;
 
   @ApiProperty({ example: 15000 })
   @IsNumber()
@@ -71,11 +91,21 @@ export class CreateMaterialDto {
   @ApiProperty({ required: false })
   @IsString()
   @IsOptional()
-  materialCodigoBarras?: string;
-
-  @ApiProperty({ required: false })
-  @IsString()
-  @IsOptional()
   materialFoto?: string;
+
+  @ApiProperty({ required: false, default: true })
+  @IsBoolean()
+  @IsOptional()
+  materialEstado?: boolean;
+
+  @ApiProperty({
+    required: false,
+    type: [MaterialBodegaInputDto],
+    description: 'Distribución inicial de stock por bodega',
+  })
+  @IsOptional()
+  @ValidateNested({ each: true })
+  @Type(() => MaterialBodegaInputDto)
+  bodegas?: MaterialBodegaInputDto[];
 }
 

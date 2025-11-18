@@ -42,7 +42,7 @@ async function bootstrap() {
 
   // Swagger documentation
   const config = new DocumentBuilder()
-    .setTitle('Estudio API')
+    .setTitle('Jarlepsis API')
     .setDescription('API robusta con NestJS')
     .setVersion('1.0')
     .addBearerAuth()
