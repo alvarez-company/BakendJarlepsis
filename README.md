@@ -247,11 +247,27 @@ backend/
 - CORS configurado
 - Validación de entrada
 
+## 🔄 GitFlow
+
+Este proyecto utiliza **GitFlow** como metodología de gestión de ramas. Para más información sobre cómo trabajar con GitFlow, consulta:
+
+📖 [Guía de GitFlow](./GITFLOW.md)
+
+### Ramas Principales
+- **`main`**: Código de producción
+- **`develop`**: Código de desarrollo
+
+### Flujo de Trabajo
+1. Crear rama `feature/*` desde `develop` para nuevas funcionalidades
+2. Crear rama `release/*` desde `develop` para preparar releases
+3. Crear rama `hotfix/*` desde `main` para correcciones urgentes
+
 ## 📞 Soporte
 
 Para más información, consulta:
 - Documentación Swagger: `/api/docs`
 - Logs: `logs/` directory
+- [Guía de GitFlow](./GITFLOW.md)
 
 ---
 
