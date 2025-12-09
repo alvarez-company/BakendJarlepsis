@@ -1,4 +1,4 @@
-import { Controller, Get, Post, Body, Patch, Param, Delete, UseGuards, Query } from '@nestjs/common';
+import { Controller, Get, Post, Body, Patch, Param, Delete, UseGuards, Query, Request } from '@nestjs/common';
 import { ApiTags, ApiBearerAuth } from '@nestjs/swagger';
 import { ItemsProyectoService } from './items-proyecto.service';
 import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard';
@@ -14,8 +14,8 @@ export class ItemsProyectoController {
 
   @Post()
   @Roles('superadmin', 'admin')
-  create(@Body() data: any) {
-    return this.service.create(data);
+  create(@Body() data: any, @Request() req) {
+    return this.service.create(data, req.user.usuarioId);
   }
 
   @Get()

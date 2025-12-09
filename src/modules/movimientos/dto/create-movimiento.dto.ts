@@ -1,5 +1,5 @@
 import { ApiProperty } from '@nestjs/swagger';
-import { IsNumber, IsEnum, IsString, IsOptional, Min, IsArray, ValidateNested } from 'class-validator';
+import { IsNumber, IsEnum, IsString, IsOptional, Min, IsArray, ValidateNested, IsIn } from 'class-validator';
 import { Type } from 'class-transformer';
 import { TipoMovimiento } from '../movimiento-inventario.entity';
 
@@ -54,14 +54,31 @@ export class CreateMovimientoDto {
   @IsOptional()
   inventarioId?: number;
 
-  @ApiProperty({ required: false, example: 1 })
-  @IsNumber()
-  @IsOptional()
-  oficinaId?: number;
-
   @ApiProperty({ required: false })
   @IsString()
   @IsOptional()
   movimientoCodigo?: string; // Código para agrupar múltiples movimientos
+
+  @ApiProperty({ required: false, description: 'Asignar materiales directamente a técnicos (solo para entradas)' })
+  @IsArray()
+  @IsOptional()
+  asignacionesTecnicos?: Array<{
+    usuarioId: number;
+    materiales: Array<{
+      materialId: number;
+      cantidad: number;
+    }>;
+  }>;
+
+  @ApiProperty({ required: false, example: 1, description: 'ID del técnico cuando el origen es técnico (para salidas/devoluciones)' })
+  @IsNumber()
+  @IsOptional()
+  tecnicoOrigenId?: number;
+
+  @ApiProperty({ required: false, enum: ['bodega', 'tecnico'], description: 'Tipo de origen del movimiento (para salidas/devoluciones)' })
+  @IsOptional()
+  @IsString()
+  @IsIn(['bodega', 'tecnico'])
+  origenTipo?: 'bodega' | 'tecnico';
 }
 

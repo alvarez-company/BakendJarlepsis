@@ -20,6 +20,16 @@ export class CreateSedeDto {
   @IsOptional()
   sedeTelefono?: string;
 
+  @ApiProperty({ required: false })
+  @IsString()
+  @IsOptional()
+  sedeCorreo?: string;
+
+  @ApiProperty({ required: false })
+  @IsString()
+  @IsOptional()
+  sedeFoto?: string;
+
   @ApiProperty({ required: false, default: true })
   @IsBoolean()
   @IsOptional()

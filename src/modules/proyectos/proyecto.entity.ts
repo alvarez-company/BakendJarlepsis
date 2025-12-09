@@ -23,15 +23,11 @@ export class Proyecto {
   @Column({ nullable: true })
   proyectoCodigo: string;
 
-  @Column()
-  tipoProyectoId: number;
-
-  @ManyToOne('TipoProyecto', 'proyectos')
-  @JoinColumn({ name: 'tipoProyectoId' })
-  tipoProyecto: any;
-
   @Column({ default: true })
   proyectoEstado: boolean;
+
+  @Column({ nullable: true })
+  usuarioRegistra: number;
 
   @OneToMany('ItemProyecto', 'proyecto')
   items: any[];

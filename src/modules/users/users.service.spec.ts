@@ -57,7 +57,7 @@ describe('UsersService', () => {
       expect(result).toEqual(mockUser);
       expect(mockRepository.findOne).toHaveBeenCalledWith({
         where: { usuarioId: 1 },
-        relations: ['usuarioRol', 'sede', 'oficina', 'bodega'],
+        relations: ['usuarioRol', 'sede', 'bodega'],
       });
     });
   });

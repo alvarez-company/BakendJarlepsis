@@ -32,6 +32,12 @@ export class RolesService {
     return role;
   }
 
+  async findByTipo(rolTipo: string): Promise<Role | null> {
+    return this.rolesRepository.findOne({
+      where: { rolTipo: rolTipo as any },
+    });
+  }
+
   async update(id: number, updateRoleDto: UpdateRoleDto): Promise<Role> {
     const role = await this.findOne(id);
     Object.assign(role, updateRoleDto);

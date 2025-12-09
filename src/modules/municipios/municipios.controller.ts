@@ -24,28 +24,28 @@ export class MunicipiosController {
   constructor(private readonly municipiosService: MunicipiosService) {}
 
   @Post()
-  @Roles('superadmin')
+  @Roles('superadmin', 'admin')
   @ApiOperation({ summary: 'Create a new municipio' })
   create(@Body() createMunicipioDto: CreateMunicipioDto) {
     return this.municipiosService.create(createMunicipioDto);
   }
 
   @Get()
-  @Roles('superadmin', 'admin')
+  @Roles('superadmin', 'admin', 'tecnico', 'instalaciones')
   @ApiOperation({ summary: 'Get all municipios' })
   findAll() {
     return this.municipiosService.findAll();
   }
 
   @Get(':id')
-  @Roles('superadmin', 'admin')
+  @Roles('superadmin', 'admin', 'tecnico', 'instalaciones')
   @ApiOperation({ summary: 'Get a municipio by ID' })
   findOne(@Param('id') id: string) {
     return this.municipiosService.findOne(+id);
   }
 
   @Patch(':id')
-  @Roles('superadmin')
+  @Roles('superadmin', 'admin')
   @ApiOperation({ summary: 'Update a municipio' })
   update(@Param('id') id: string, @Body() updateMunicipioDto: UpdateMunicipioDto) {
     return this.municipiosService.update(+id, updateMunicipioDto);

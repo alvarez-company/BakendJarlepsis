@@ -1,0 +1,4 @@
+# Este directorio puede contener scripts SQL que se ejecutarán automáticamente
+# cuando se cree la base de datos por primera vez.
+# Los archivos .sql se ejecutarán en orden alfabético.
+

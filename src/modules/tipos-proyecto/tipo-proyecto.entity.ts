@@ -21,9 +21,6 @@ export class TipoProyecto {
   @Column({ default: true })
   tipoProyectoEstado: boolean;
 
-  @OneToMany('Proyecto', 'tipoProyecto')
-  proyectos: any[];
-
   @CreateDateColumn()
   fechaCreacion: Date;
 

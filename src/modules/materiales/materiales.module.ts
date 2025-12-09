@@ -1,12 +1,20 @@
-import { Module } from '@nestjs/common';
+import { Module, forwardRef } from '@nestjs/common';
 import { TypeOrmModule } from '@nestjs/typeorm';
 import { MaterialesController } from './materiales.controller';
 import { MaterialesService } from './materiales.service';
 import { Material } from './material.entity';
 import { MaterialBodega } from './material-bodega.entity';
+import { InventariosModule } from '../inventarios/inventarios.module';
+import { ExportacionModule } from '../exportacion/exportacion.module';
+import { InventarioTecnicoModule } from '../inventario-tecnico/inventario-tecnico.module';
 
 @Module({
-  imports: [TypeOrmModule.forFeature([Material, MaterialBodega])],
+  imports: [
+    TypeOrmModule.forFeature([Material, MaterialBodega]),
+    InventariosModule,
+    ExportacionModule,
+    forwardRef(() => InventarioTecnicoModule),
+  ],
   controllers: [MaterialesController],
   providers: [MaterialesService],
   exports: [MaterialesService],

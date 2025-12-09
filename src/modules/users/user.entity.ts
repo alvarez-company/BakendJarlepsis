@@ -24,9 +24,6 @@ export class User {
   @Column({ nullable: true })
   usuarioBodega: number;
 
-  @Column({ nullable: true })
-  usuarioOficina: number;
-
   @Column()
   usuarioNombre: string;
 
@@ -39,6 +36,9 @@ export class User {
   @Column({ nullable: true })
   usuarioTelefono: string;
 
+  @Column({ nullable: true })
+  tipoDocumentoId: number;
+
   @Column({ unique: true })
   usuarioDocumento: string;
 
@@ -47,6 +47,9 @@ export class User {
 
   @Column({ nullable: true })
   usuarioCreador: number;
+
+  @Column({ type: 'longtext', nullable: true })
+  usuarioFoto: string;
 
   @Column({ default: true })
   usuarioEstado: boolean;
@@ -59,13 +62,13 @@ export class User {
   @JoinColumn({ name: 'usuarioSede' })
   sede: any;
 
-  @ManyToOne('Oficina', 'usuarios', { nullable: true })
-  @JoinColumn({ name: 'usuarioOficina' })
-  oficina: any;
-
   @ManyToOne('Bodega', 'usuarios', { nullable: true })
   @JoinColumn({ name: 'usuarioBodega' })
   bodega: any;
+
+  @ManyToOne('TipoDocumentoIdentidad', 'usuarios', { nullable: true })
+  @JoinColumn({ name: 'tipoDocumentoId' })
+  tipoDocumento: any;
 
   @OneToMany('Instalacion', 'usuarioTecnico')
   instalaciones: any[];
@@ -96,6 +99,15 @@ export class User {
 
   @OneToMany('Notificacion', 'usuario')
   notificaciones: any[];
+
+  @OneToMany('InventarioTecnico', 'usuario')
+  inventarioTecnico: any[];
+
+  @OneToMany('AsignacionTecnico', 'usuario')
+  asignacionesRecibidas: any[];
+
+  @OneToMany('AsignacionTecnico', 'usuarioAsignador')
+  asignacionesRealizadas: any[];
 
   @CreateDateColumn()
   fechaCreacion: Date;

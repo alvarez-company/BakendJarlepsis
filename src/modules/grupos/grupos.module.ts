@@ -1,11 +1,21 @@
-import { Module } from '@nestjs/common';
+import { Module, forwardRef } from '@nestjs/common';
 import { TypeOrmModule } from '@nestjs/typeorm';
 import { GruposService } from './grupos.service';
 import { GruposController } from './grupos.controller';
 import { Grupo } from './grupo.entity';
+import { MensajesModule } from '../mensajes/mensajes.module';
+import { UsersModule } from '../users/users.module';
+import { UsuariosGruposModule } from '../usuarios-grupos/usuarios-grupos.module';
+import { NotificacionesModule } from '../notificaciones/notificaciones.module';
 
 @Module({
-  imports: [TypeOrmModule.forFeature([Grupo])],
+  imports: [
+    TypeOrmModule.forFeature([Grupo]),
+    forwardRef(() => MensajesModule),
+    forwardRef(() => UsersModule),
+    forwardRef(() => UsuariosGruposModule),
+    forwardRef(() => NotificacionesModule),
+  ],
   controllers: [GruposController],
   providers: [GruposService],
   exports: [GruposService],

@@ -24,7 +24,7 @@ export class MunicipiosService {
   async findOne(id: number): Promise<Municipio> {
     const municipio = await this.municipiosRepository.findOne({
       where: { municipioId: id },
-      relations: ['departamento', 'oficinas'],
+      relations: ['departamento'], // oficinas eliminado
     });
     if (!municipio) {
       throw new NotFoundException(`Municipio con ID ${id} no encontrado`);

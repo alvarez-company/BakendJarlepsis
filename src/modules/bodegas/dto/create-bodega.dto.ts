@@ -16,9 +16,24 @@ export class CreateBodegaDto {
   @IsOptional()
   bodegaUbicacion?: string;
 
+  @ApiProperty({ required: false })
+  @IsString()
+  @IsOptional()
+  bodegaTelefono?: string;
+
+  @ApiProperty({ required: false })
+  @IsString()
+  @IsOptional()
+  bodegaCorreo?: string;
+
+  @ApiProperty({ required: false })
+  @IsString()
+  @IsOptional()
+  bodegaFoto?: string;
+
   @ApiProperty({ example: 1 })
   @IsNumber()
-  oficinaId: number;
+  sedeId: number;
 
   @ApiProperty({ required: false, default: true })
   @IsBoolean()

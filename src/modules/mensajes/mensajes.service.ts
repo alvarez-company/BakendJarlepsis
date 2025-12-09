@@ -64,12 +64,13 @@ export class MensajesService {
     return resultado.map((row: any) => row.usuarioId);
   }
 
-  async obtenerMensajesGrupo(grupoId: number, limit: number = 50): Promise<Mensaje[]> {
+  async obtenerMensajesGrupo(grupoId: number, limit: number = 50, offset: number = 0): Promise<Mensaje[]> {
     return this.mensajesRepository.find({
       where: { grupoId, mensajeActivo: true },
       relations: ['usuario', 'mensajeRespuesta', 'reacciones'],
       order: { fechaCreacion: 'DESC' },
       take: limit,
+      skip: offset,
     });
   }
 
@@ -89,5 +90,16 @@ export class MensajesService {
     mensaje.mensajeActivo = false;
     await this.mensajesRepository.save(mensaje);
   }
+
+  async obtenerUltimoMensaje(grupoId: number): Promise<Mensaje | null> {
+    const mensajes = await this.mensajesRepository.find({
+      where: { grupoId, mensajeActivo: true },
+      relations: ['usuario'],
+      order: { fechaCreacion: 'DESC' },
+      take: 1,
+    });
+    return mensajes.length > 0 ? mensajes[0] : null;
+  }
+
 }
 

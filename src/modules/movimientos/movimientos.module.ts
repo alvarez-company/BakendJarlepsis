@@ -1,4 +1,4 @@
-import { Module } from '@nestjs/common';
+import { Module, forwardRef } from '@nestjs/common';
 import { TypeOrmModule } from '@nestjs/typeorm';
 import { MovimientosController } from './movimientos.controller';
 import { MovimientosService } from './movimientos.service';
@@ -7,6 +7,9 @@ import { MaterialesModule } from '../materiales/materiales.module';
 import { InventariosModule } from '../inventarios/inventarios.module';
 import { ProveedoresModule } from '../proveedores/proveedores.module';
 import { UsersModule } from '../users/users.module';
+import { AuditoriaModule } from '../auditoria/auditoria.module';
+import { ExportacionModule } from '../exportacion/exportacion.module';
+import { InventarioTecnicoModule } from '../inventario-tecnico/inventario-tecnico.module';
 
 @Module({
   imports: [
@@ -14,7 +17,10 @@ import { UsersModule } from '../users/users.module';
     MaterialesModule,
     InventariosModule,
     ProveedoresModule,
-    UsersModule,
+    forwardRef(() => UsersModule), // Usar forwardRef para evitar dependencia circular
+    AuditoriaModule,
+    ExportacionModule,
+    forwardRef(() => InventarioTecnicoModule),
   ],
   controllers: [MovimientosController],
   providers: [MovimientosService],

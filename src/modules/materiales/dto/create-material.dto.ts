@@ -11,7 +11,6 @@ import {
   ArrayNotEmpty,
 } from 'class-validator';
 import { Type } from 'class-transformer';
-import { UnidadMedida } from '../material.entity';
 
 export class MaterialBodegaInputDto {
   @ApiProperty({ example: 1 })
@@ -68,10 +67,10 @@ export class CreateMaterialDto {
   @Min(0)
   materialPrecio: number;
 
-  @ApiProperty({ enum: UnidadMedida, default: UnidadMedida.UNIDAD })
-  @IsEnum(UnidadMedida)
+  @ApiProperty({ example: 1, required: false })
+  @IsNumber()
   @IsOptional()
-  materialUnidadMedida?: UnidadMedida;
+  unidadMedidaId?: number;
 
   @ApiProperty({ required: false })
   @IsString()

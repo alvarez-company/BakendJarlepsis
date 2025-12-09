@@ -18,9 +18,14 @@ export class JwtStrategy extends PassportStrategy(Strategy) {
   }
 
   async validate(payload: any) {
+    // Validar que payload.sub existe y es un número válido
+    if (!payload.sub || isNaN(payload.sub)) {
+      throw new UnauthorizedException('Token inválido: ID de usuario no encontrado');
+    }
+    
     const user = await this.usersService.findOne(payload.sub);
     if (!user || !user.usuarioEstado) {
-      throw new UnauthorizedException();
+      throw new UnauthorizedException('Usuario no encontrado o inactivo');
     }
     return user;
   }

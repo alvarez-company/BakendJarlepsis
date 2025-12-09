@@ -7,7 +7,10 @@ import { UpdateTrasladoDto } from './dto/update-traslado.dto';
 import { MovimientosService } from '../movimientos/movimientos.service';
 import { MaterialesService } from '../materiales/materiales.service';
 import { InventariosService } from '../inventarios/inventarios.service';
+import { BodegasService } from '../bodegas/bodegas.service';
 import { TipoMovimiento } from '../movimientos/movimiento-inventario.entity';
+import { AuditoriaService } from '../auditoria/auditoria.service';
+import { TipoEntidad } from '../auditoria/auditoria.entity';
 
 @Injectable()
 export class TrasladosService {
@@ -20,7 +23,32 @@ export class TrasladosService {
     private materialesService: MaterialesService,
     @Inject(forwardRef(() => InventariosService))
     private inventariosService: InventariosService,
+    @Inject(forwardRef(() => BodegasService))
+    private bodegasService: BodegasService,
+    @Inject(forwardRef(() => AuditoriaService))
+    private auditoriaService: AuditoriaService,
   ) {}
+
+  private async generarIdentificadorUnico(): Promise<string> {
+    // Buscar el último identificador único
+    const ultimoTraslado = await this.trasladosRepository
+      .createQueryBuilder('traslado')
+      .where('traslado.identificadorUnico IS NOT NULL')
+      .andWhere('traslado.identificadorUnico LIKE :pattern', { pattern: 'TRA-%' })
+      .orderBy('CAST(SUBSTRING(traslado.identificadorUnico, 5) AS UNSIGNED)', 'DESC')
+      .limit(1)
+      .getOne();
+
+    let siguienteNumero = 1;
+    if (ultimoTraslado?.identificadorUnico) {
+      const match = ultimoTraslado.identificadorUnico.match(/TRA-(\d+)/);
+      if (match) {
+        siguienteNumero = parseInt(match[1], 10) + 1;
+      }
+    }
+
+    return `TRA-${siguienteNumero}`;
+  }
 
   async create(createTrasladoDto: CreateTrasladoDto): Promise<Traslado[]> {
     // Validar que origen y destino sean diferentes
@@ -39,6 +67,10 @@ export class TrasladosService {
       // Verificar que el material existe
       await this.materialesService.findOne(materialDto.materialId);
 
+      // Generar identificador único para cada traslado individual
+      // Esto asegura que cada traslado tenga un identificador único, incluso si son del mismo grupo
+      const identificadorUnico = await this.generarIdentificadorUnico();
+
       // Crear el traslado con estado pendiente
       const traslado = this.trasladosRepository.create({
         materialId: materialDto.materialId,
@@ -48,6 +80,7 @@ export class TrasladosService {
         trasladoObservaciones: createTrasladoDto.trasladoObservaciones,
         usuarioId: createTrasladoDto.usuarioId,
         trasladoCodigo: trasladoCodigo,
+        identificadorUnico: identificadorUnico, // Identificador único autogenerado para cada traslado
         trasladoEstado: EstadoTraslado.PENDIENTE,
       });
       const trasladoGuardado = await this.trasladosRepository.save(traslado);
@@ -58,28 +91,164 @@ export class TrasladosService {
   }
 
   async findAll(): Promise<Traslado[]> {
-    return this.trasladosRepository.find({
-      relations: ['material', 'bodegaOrigen', 'bodegaDestino', 'usuario'],
-    });
+    try {
+      return await this.trasladosRepository.find({
+        relations: ['material', 'bodegaOrigen', 'bodegaDestino', 'usuario'],
+      });
+    } catch (error: any) {
+      console.error('Error en findAll de traslados:', error);
+      console.error('Mensaje:', error.message);
+      // Si el error es por una columna que no existe, usar query builder
+      if (error.message?.includes('trasladoCodigo') || error.message?.includes('materialPadreId')) {
+        // Usar query builder y seleccionar explícitamente las columnas
+        const queryBuilder = this.trasladosRepository
+          .createQueryBuilder('traslado')
+          .select([
+            'traslado.trasladoId',
+            'traslado.materialId',
+            'traslado.bodegaOrigenId',
+            'traslado.bodegaDestinoId',
+            'traslado.trasladoCantidad',
+            'traslado.trasladoEstado',
+            'traslado.trasladoObservaciones',
+            'traslado.usuarioId',
+            'traslado.fechaCreacion',
+            'traslado.fechaActualizacion',
+          ])
+          .leftJoinAndSelect('traslado.material', 'material')
+          .leftJoinAndSelect('traslado.bodegaOrigen', 'bodegaOrigen')
+          .leftJoinAndSelect('traslado.bodegaDestino', 'bodegaDestino')
+          .leftJoinAndSelect('traslado.usuario', 'usuario');
+        
+        // Incluir trasladoCodigo en el select (si la columna existe en BD, funcionará; si no, el error se manejará)
+        queryBuilder.addSelect('traslado.trasladoCodigo', 'traslado_trasladoCodigo');
+        
+        try {
+          return await queryBuilder.getMany();
+        } catch (retryError: any) {
+          // Si el error persiste, intentar sin trasladoCodigo
+          if (retryError.message?.includes('trasladoCodigo')) {
+            const queryBuilderFallback = this.trasladosRepository
+              .createQueryBuilder('traslado')
+              .select([
+                'traslado.trasladoId',
+                'traslado.materialId',
+                'traslado.bodegaOrigenId',
+                'traslado.bodegaDestinoId',
+                'traslado.trasladoCantidad',
+                'traslado.trasladoEstado',
+                'traslado.trasladoObservaciones',
+                'traslado.usuarioId',
+                'traslado.fechaCreacion',
+                'traslado.fechaActualizacion',
+              ])
+              .leftJoinAndSelect('traslado.material', 'material')
+              .leftJoinAndSelect('traslado.bodegaOrigen', 'bodegaOrigen')
+              .leftJoinAndSelect('traslado.bodegaDestino', 'bodegaDestino')
+              .leftJoinAndSelect('traslado.usuario', 'usuario');
+            return await queryBuilderFallback.getMany();
+          }
+          throw retryError;
+        }
+      }
+      throw error;
+    }
   }
 
   async findOne(id: number): Promise<Traslado> {
-    const traslado = await this.trasladosRepository.findOne({
-      where: { trasladoId: id },
-      relations: ['material', 'bodegaOrigen', 'bodegaDestino', 'usuario'],
-    });
-    if (!traslado) {
-      throw new NotFoundException(`Traslado con ID ${id} no encontrado`);
+    try {
+      const traslado = await this.trasladosRepository.findOne({
+        where: { trasladoId: id },
+        relations: ['material', 'bodegaOrigen', 'bodegaDestino', 'usuario'],
+      });
+      if (!traslado) {
+        throw new NotFoundException(`Traslado con ID ${id} no encontrado`);
+      }
+      return traslado;
+    } catch (error: any) {
+      if (error instanceof NotFoundException) {
+        throw error;
+      }
+      if (error.message?.includes('trasladoCodigo') || error.message?.includes('materialPadreId')) {
+        // Si el error es por una columna que no existe, usar query builder
+        const queryBuilder = this.trasladosRepository
+          .createQueryBuilder('traslado')
+          .select([
+            'traslado.trasladoId',
+            'traslado.materialId',
+            'traslado.bodegaOrigenId',
+            'traslado.bodegaDestinoId',
+            'traslado.trasladoCantidad',
+            'traslado.trasladoEstado',
+            'traslado.trasladoObservaciones',
+            'traslado.usuarioId',
+            'traslado.fechaCreacion',
+            'traslado.fechaActualizacion',
+          ])
+          .leftJoinAndSelect('traslado.material', 'material')
+          .leftJoinAndSelect('traslado.bodegaOrigen', 'bodegaOrigen')
+          .leftJoinAndSelect('traslado.bodegaDestino', 'bodegaDestino')
+          .leftJoinAndSelect('traslado.usuario', 'usuario')
+          .where('traslado.trasladoId = :id', { id });
+        
+        try {
+          queryBuilder.addSelect('traslado.trasladoCodigo', 'traslado_trasladoCodigo');
+        } catch (e) {
+          // Ignorar si la columna no existe
+        }
+        
+        const traslado = await queryBuilder.getOne();
+        if (!traslado) {
+          throw new NotFoundException(`Traslado con ID ${id} no encontrado`);
+        }
+        return traslado;
+      }
+      throw error;
     }
-    return traslado;
   }
 
   async findByCodigo(codigo: string): Promise<Traslado[]> {
-    const traslados = await this.trasladosRepository.find({
-      where: { trasladoCodigo: codigo },
-      relations: ['material', 'bodegaOrigen', 'bodegaDestino', 'usuario'],
-    });
-    return traslados;
+    try {
+      return await this.trasladosRepository.find({
+        where: { trasladoCodigo: codigo },
+        relations: ['material', 'bodegaOrigen', 'bodegaDestino', 'usuario'],
+      });
+    } catch (error: any) {
+      if (error.message?.includes('trasladoCodigo') || error.message?.includes('materialPadreId')) {
+        // Si el error es por una columna que no existe, usar query builder
+        const queryBuilder = this.trasladosRepository
+          .createQueryBuilder('traslado')
+          .select([
+            'traslado.trasladoId',
+            'traslado.materialId',
+            'traslado.bodegaOrigenId',
+            'traslado.bodegaDestinoId',
+            'traslado.trasladoCantidad',
+            'traslado.trasladoEstado',
+            'traslado.trasladoObservaciones',
+            'traslado.usuarioId',
+            'traslado.fechaCreacion',
+            'traslado.fechaActualizacion',
+          ])
+          .leftJoinAndSelect('traslado.material', 'material')
+          .leftJoinAndSelect('traslado.bodegaOrigen', 'bodegaOrigen')
+          .leftJoinAndSelect('traslado.bodegaDestino', 'bodegaDestino')
+          .leftJoinAndSelect('traslado.usuario', 'usuario');
+        
+        // Si trasladoCodigo existe, filtrar por él
+        try {
+          queryBuilder
+            .addSelect('traslado.trasladoCodigo', 'traslado_trasladoCodigo')
+            .where('traslado.trasladoCodigo = :codigo', { codigo });
+        } catch (e) {
+          // Si la columna no existe, retornar array vacío
+          return [];
+        }
+        
+        return await queryBuilder.getMany();
+      }
+      throw error;
+    }
   }
 
   async completarTraslado(id: number): Promise<Traslado> {
@@ -96,33 +265,49 @@ export class TrasladosService {
         where: { trasladoCodigo: traslado.trasladoCodigo },
       });
 
-      // Obtener inventarios de bodegas
-      const inventarioOrigen = await this.inventariosService.findByBodega(traslado.bodegaOrigenId);
-      const inventarioDestino = await this.inventariosService.findByBodega(traslado.bodegaDestinoId);
+      // Obtener o crear inventarios de bodegas
+      let inventarioOrigen = await this.inventariosService.findByBodega(traslado.bodegaOrigenId);
+      let inventarioDestino = await this.inventariosService.findByBodega(traslado.bodegaDestinoId);
 
-      if (!inventarioOrigen || !inventarioDestino) {
-        throw new BadRequestException('No se encontraron inventarios activos para las bodegas seleccionadas.');
+      // Crear inventarios automáticamente si no existen
+      if (!inventarioOrigen) {
+        const bodegaOrigen = await this.bodegasService.findOne(traslado.bodegaOrigenId);
+        inventarioOrigen = await this.inventariosService.create({
+          inventarioNombre: `Inventario - ${bodegaOrigen.bodegaNombre || 'Bodega Origen'}`,
+          inventarioDescripcion: `Inventario creado automáticamente para traslados`,
+          bodegaId: traslado.bodegaOrigenId,
+          inventarioEstado: true,
+        });
+      }
+
+      if (!inventarioDestino) {
+        const bodegaDestino = await this.bodegasService.findOne(traslado.bodegaDestinoId);
+        inventarioDestino = await this.inventariosService.create({
+          inventarioNombre: `Inventario - ${bodegaDestino.bodegaNombre || 'Bodega Destino'}`,
+          inventarioDescripcion: `Inventario creado automáticamente para traslados`,
+          bodegaId: traslado.bodegaDestinoId,
+          inventarioEstado: true,
+        });
       }
 
       // Procesar cada traslado del grupo
+      // NOTA: Las salidas solo se crean automáticamente para instalaciones, no para traslados
+      // Los traslados ajustan el stock directamente sin crear movimientos de salida
       for (const t of trasladosGrupo) {
         // Verificar que el material existe
         await this.materialesService.findOne(t.materialId);
 
-        // Crear movimiento de salida en bodega origen
-        await this.movimientosService.create({
-          materiales: [{
-            materialId: t.materialId,
-            movimientoCantidad: t.trasladoCantidad,
-          }],
-          movimientoTipo: TipoMovimiento.SALIDA,
-          usuarioId: t.usuarioId,
-          inventarioId: inventarioOrigen.inventarioId,
-          movimientoObservaciones: `Traslado a bodega ${t.bodegaDestinoId}`,    
-          movimientoCodigo: traslado.trasladoCodigo,
-        });
+        // Ajustar stock en bodega origen (reducir) sin crear movimiento de salida
+        // Las salidas solo se crean automáticamente para instalaciones
+        if (inventarioOrigen && inventarioOrigen.bodegaId) {
+          await this.materialesService.ajustarStock(
+            t.materialId,
+            -Number(t.trasladoCantidad),
+            inventarioOrigen.bodegaId
+          );
+        }
 
-        // Crear movimiento de entrada en bodega destino con inventarioId       
+        // Crear movimiento de entrada en bodega destino
         await this.movimientosService.create({
           materiales: [{
             materialId: t.materialId,
@@ -144,6 +329,8 @@ export class TrasladosService {
     }
 
     // Si no tiene código, procesar como traslado individual
+    // NOTA: Las salidas solo se crean automáticamente para instalaciones, no para traslados
+    // Los traslados ajustan el stock directamente sin crear movimientos de salida
     // Verificar que el material existe
     await this.materialesService.findOne(traslado.materialId);
 
@@ -155,20 +342,15 @@ export class TrasladosService {
       throw new BadRequestException('No se encontraron inventarios activos para las bodegas seleccionadas.');
     }
 
-    // Crear movimiento de salida en bodega origen
-    await this.movimientosService.create({
-      materiales: [{
-        materialId: traslado.materialId,
-        movimientoCantidad: traslado.trasladoCantidad,
-      }],
-      movimientoTipo: TipoMovimiento.SALIDA,
-      usuarioId: traslado.usuarioId,
-      inventarioId: inventarioOrigen.inventarioId,
-      movimientoObservaciones: `Traslado a bodega ${traslado.bodegaDestinoId}`, 
-      movimientoCodigo: traslado.trasladoCodigo,
-    });
+    // Ajustar stock en bodega origen (reducir) sin crear movimiento de salida
+    // Las salidas solo se crean automáticamente para instalaciones
+    await this.materialesService.ajustarStock(
+      traslado.materialId,
+      -Number(traslado.trasladoCantidad),
+      inventarioOrigen.bodegaId
+    );
 
-    // Crear movimiento de entrada en bodega destino con inventarioId
+    // Crear movimiento de entrada en bodega destino
     await this.movimientosService.create({
       materiales: [{
         materialId: traslado.materialId,
@@ -203,8 +385,59 @@ export class TrasladosService {
     return this.trasladosRepository.save(traslado);
   }
 
-  async remove(id: number): Promise<void> {
+  async remove(id: number, usuarioId: number): Promise<void> {
     const traslado = await this.findOne(id);
+    
+    // Guardar datos completos para auditoría
+    const datosEliminados = {
+      trasladoId: traslado.trasladoId,
+      materialId: traslado.materialId,
+      bodegaOrigenId: traslado.bodegaOrigenId,
+      bodegaDestinoId: traslado.bodegaDestinoId,
+      trasladoCantidad: traslado.trasladoCantidad,
+      trasladoEstado: traslado.trasladoEstado,
+      trasladoCodigo: traslado.trasladoCodigo,
+      identificadorUnico: traslado.identificadorUnico,
+      fechaCreacion: traslado.fechaCreacion,
+      fechaActualizacion: traslado.fechaActualizacion,
+    };
+
+    // Si el traslado está completado, buscar y eliminar los movimientos asociados
+    if (traslado.trasladoEstado === EstadoTraslado.COMPLETADO && traslado.trasladoCodigo) {
+      try {
+        // Buscar todos los movimientos con el mismo código de traslado
+        const movimientosAsociados = await this.movimientosService.findByCodigo(traslado.trasladoCodigo);
+        
+        // Eliminar cada movimiento (esto revertirá los stocks automáticamente)
+        for (const movimiento of movimientosAsociados) {
+          try {
+            await this.movimientosService.remove(movimiento.movimientoId, usuarioId);
+          } catch (error) {
+            console.error(`Error al eliminar movimiento ${movimiento.movimientoId} asociado a traslado ${id}:`, error);
+          }
+        }
+      } catch (error) {
+        console.error('Error al buscar y eliminar movimientos asociados al traslado:', error);
+        // Continuar con la eliminación aunque falle la eliminación de movimientos
+      }
+    }
+
+    // Registrar en auditoría antes de eliminar
+    try {
+      await this.auditoriaService.registrarEliminacion(
+        TipoEntidad.TRASLADO,
+        traslado.trasladoId,
+        datosEliminados,
+        usuarioId,
+        'Eliminación de traslado',
+        `Traslado ${traslado.identificadorUnico || traslado.trasladoCodigo} eliminado. Movimientos asociados eliminados y stocks revertidos.`
+      );
+    } catch (error) {
+      console.error('Error al registrar en auditoría:', error);
+      // Continuar con la eliminación aunque falle la auditoría
+    }
+
+    // Eliminar el traslado
     await this.trasladosRepository.remove(traslado);
   }
 }

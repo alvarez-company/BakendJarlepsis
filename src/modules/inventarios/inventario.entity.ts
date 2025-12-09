@@ -33,6 +33,9 @@ export class Inventario {
   @OneToMany('Material', 'inventario')
   materiales: any[];
 
+  @OneToMany('AsignacionTecnico', 'inventario')
+  asignacionesTecnicos: any[];
+
   @CreateDateColumn()
   fechaCreacion: Date;
 

@@ -21,6 +21,16 @@ export class CreateOficinaDto {
   oficinaTelefono?: string;
 
   @ApiProperty({ required: false })
+  @IsString()
+  @IsOptional()
+  oficinaCorreo?: string;
+
+  @ApiProperty({ required: false })
+  @IsString()
+  @IsOptional()
+  oficinaFoto?: string;
+
+  @ApiProperty({ required: false })
   @IsNumber()
   @IsOptional()
   sedeId?: number;

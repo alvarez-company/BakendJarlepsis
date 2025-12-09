@@ -16,11 +16,6 @@ export class CreateUserDto {
   @IsOptional()
   usuarioBodega?: number | null;
 
-  @ApiProperty({ required: false, nullable: true })
-  @IsNumber()
-  @IsOptional()
-  usuarioOficina?: number | null;
-
   @ApiProperty({ example: 'Juan' })
   @IsString()
   usuarioNombre: string;
@@ -38,9 +33,19 @@ export class CreateUserDto {
   @IsOptional()
   usuarioTelefono?: string;
 
+  @ApiProperty({ required: false, example: 1 })
+  @IsNumber()
+  @IsOptional()
+  tipoDocumentoId?: number;
+
   @ApiProperty({ example: '1234567890' })
   @IsString()
   usuarioDocumento: string;
+
+  @ApiProperty({ required: false })
+  @IsString()
+  @IsOptional()
+  usuarioFoto?: string;
 
   @ApiProperty({ example: 'password123', minLength: 6 })
   @IsString()

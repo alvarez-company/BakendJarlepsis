@@ -8,12 +8,16 @@ import {
   Delete,
   UseGuards,
   Request,
+  Res,
+  Query,
 } from '@nestjs/common';
-import { ApiTags, ApiBearerAuth, ApiOperation } from '@nestjs/swagger';
+import { ApiTags, ApiBearerAuth, ApiOperation, ApiQuery } from '@nestjs/swagger';
+import { Response } from 'express';
 import { MaterialesService } from './materiales.service';
 import { CreateMaterialDto } from './dto/create-material.dto';
 import { UpdateMaterialDto } from './dto/update-material.dto';
 import { AjustarStockDto } from './dto/ajustar-stock.dto';
+import { ExportacionService } from '../exportacion/exportacion.service';
 import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard';
 import { RolesGuard } from '../../common/guards/roles.guard';
 import { Roles } from '../../common/decorators/roles.decorator';
@@ -23,7 +27,10 @@ import { Roles } from '../../common/decorators/roles.decorator';
 @Controller('materiales')
 @UseGuards(JwtAuthGuard, RolesGuard)
 export class MaterialesController {
-  constructor(private readonly materialesService: MaterialesService) {}
+  constructor(
+    private readonly materialesService: MaterialesService,
+    private readonly exportacionService: ExportacionService,
+  ) {}
 
   @Post()
   @Roles('superadmin', 'admin')
@@ -64,11 +71,145 @@ export class MaterialesController {
     );
   }
 
+  @Post(':id/duplicate')
+  @Roles('superadmin', 'admin')
+  @ApiOperation({ summary: 'Duplicar un material' })
+  duplicate(@Param('id') id: string, @Request() req) {
+    return this.materialesService.duplicate(+id, req.user.usuarioId);
+  }
+
   @Delete(':id')
   @Roles('superadmin')
   @ApiOperation({ summary: 'Delete a material' })
   remove(@Param('id') id: string) {
     return this.materialesService.remove(+id);
+  }
+
+  @Get('export/excel')
+  @Roles('superadmin', 'admin', 'tecnico', 'bodega', 'inventario')
+  @ApiOperation({ summary: 'Export materials to Excel' })
+  @ApiQuery({ name: 'filters', required: false, type: String })
+  async exportToExcel(@Request() req, @Res() res: Response, @Query('filters') filters?: string) {
+    try {
+      const materiales = await this.materialesService.findAll(req.user);
+      
+      // Parsear filtros si existen
+      let filteredData = materiales;
+      if (filters) {
+        try {
+          const filterObj = JSON.parse(filters);
+          // Aplicar filtros básicos
+          if (filterObj.search) {
+            const search = filterObj.search.toLowerCase();
+            filteredData = filteredData.filter((m: any) =>
+              m.materialNombre?.toLowerCase().includes(search) ||
+              m.materialCodigo?.toLowerCase().includes(search)
+            );
+          }
+        } catch (e) {
+          // Si hay error parseando filtros, usar todos los datos
+        }
+      }
+
+      const columns = [
+        { key: 'materialCodigo', label: 'Código' },
+        { key: 'materialNombre', label: 'Nombre' },
+        { key: 'materialDescripcion', label: 'Descripción' },
+        { key: 'categoria', label: 'Categoría' },
+        { key: 'proveedor', label: 'Proveedor' },
+        { key: 'materialStock', label: 'Stock' },
+        { key: 'materialPrecio', label: 'Precio' },
+        { key: 'unidadMedida', label: 'Unidad de Medida' },
+        { key: 'materialEstado', label: 'Estado' },
+      ];
+
+      const exportData = filteredData.map((m: any) => ({
+        materialCodigo: m.materialCodigo || '-',
+        materialNombre: m.materialNombre,
+        materialDescripcion: m.materialDescripcion || '-',
+        categoria: m.categoria?.categoriaNombre || 'Sin categoría',
+        proveedor: m.proveedor?.proveedorNombre || 'Sin proveedor',
+        materialStock: m.materialStock || 0,
+        materialPrecio: m.materialPrecio || 0,
+        unidadMedida: m.unidadMedida?.unidadMedidaNombre || m.unidadMedida?.unidadMedidaSimbolo || '-',
+        materialEstado: m.materialEstado ? 'Activo' : 'Inactivo',
+      }));
+
+      const buffer = await this.exportacionService.exportToExcel({
+        columns,
+        data: exportData,
+        filename: 'reporte-materiales',
+      });
+
+      res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+      res.setHeader('Content-Disposition', 'attachment; filename="reporte-materiales.xlsx"');
+      res.send(buffer);
+    } catch (error) {
+      res.status(500).json({ message: 'Error al exportar a Excel', error: error.message });
+    }
+  }
+
+  @Get('export/pdf')
+  @Roles('superadmin', 'admin', 'tecnico', 'bodega', 'inventario')
+  @ApiOperation({ summary: 'Export materials to PDF' })
+  @ApiQuery({ name: 'filters', required: false, type: String })
+  async exportToPdf(@Request() req, @Res() res: Response, @Query('filters') filters?: string) {
+    try {
+      const materiales = await this.materialesService.findAll(req.user);
+      
+      // Parsear filtros si existen
+      let filteredData = materiales;
+      if (filters) {
+        try {
+          const filterObj = JSON.parse(filters);
+          if (filterObj.search) {
+            const search = filterObj.search.toLowerCase();
+            filteredData = filteredData.filter((m: any) =>
+              m.materialNombre?.toLowerCase().includes(search) ||
+              m.materialCodigo?.toLowerCase().includes(search)
+            );
+          }
+        } catch (e) {
+          // Si hay error parseando filtros, usar todos los datos
+        }
+      }
+
+      const columns = [
+        { key: 'materialCodigo', label: 'Código' },
+        { key: 'materialNombre', label: 'Nombre' },
+        { key: 'materialDescripcion', label: 'Descripción' },
+        { key: 'categoria', label: 'Categoría' },
+        { key: 'proveedor', label: 'Proveedor' },
+        { key: 'materialStock', label: 'Stock' },
+        { key: 'materialPrecio', label: 'Precio' },
+        { key: 'unidadMedida', label: 'Unidad de Medida' },
+        { key: 'materialEstado', label: 'Estado' },
+      ];
+
+      const exportData = filteredData.map((m: any) => ({
+        materialCodigo: m.materialCodigo || '-',
+        materialNombre: m.materialNombre,
+        materialDescripcion: m.materialDescripcion || '-',
+        categoria: m.categoria?.categoriaNombre || 'Sin categoría',
+        proveedor: m.proveedor?.proveedorNombre || 'Sin proveedor',
+        materialStock: m.materialStock || 0,
+        materialPrecio: m.materialPrecio || 0,
+        unidadMedida: m.unidadMedida?.unidadMedidaNombre || m.unidadMedida?.unidadMedidaSimbolo || '-',
+        materialEstado: m.materialEstado ? 'Activo' : 'Inactivo',
+      }));
+
+      const buffer = await this.exportacionService.exportToPdf({
+        columns,
+        data: exportData,
+        filename: 'reporte-materiales',
+      });
+
+      res.setHeader('Content-Type', 'application/pdf');
+      res.setHeader('Content-Disposition', 'attachment; filename="reporte-materiales.pdf"');
+      res.send(buffer);
+    } catch (error) {
+      res.status(500).json({ message: 'Error al exportar a PDF', error: error.message });
+    }
   }
 }
 

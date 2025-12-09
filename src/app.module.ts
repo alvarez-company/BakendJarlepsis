@@ -9,7 +9,7 @@ import { PaisesModule } from './modules/paises/paises.module';
 import { DepartamentosModule } from './modules/departamentos/departamentos.module';
 import { MunicipiosModule } from './modules/municipios/municipios.module';
 import { SedesModule } from './modules/sedes/sedes.module';
-import { OficinasModule } from './modules/oficinas/oficinas.module';
+// import { OficinasModule } from './modules/oficinas/oficinas.module'; // Oficinas eliminado
 import { BodegasModule } from './modules/bodegas/bodegas.module';
 import { CategoriasModule } from './modules/categorias/categorias.module';
 import { ProveedoresModule } from './modules/proveedores/proveedores.module';
@@ -31,7 +31,19 @@ import { MensajesModule } from './modules/mensajes/mensajes.module';
 import { ReaccionesMensajeModule } from './modules/reacciones-mensaje/reacciones-mensaje.module';
 import { NotificacionesModule } from './modules/notificaciones/notificaciones.module';
 import { ChatModule } from './modules/chat/chat.module';
+import { TiposDocumentosIdentidadModule } from './modules/tipos-documentos-identidad/tipos-documentos-identidad.module';
+import { UnidadesMedidaModule } from './modules/unidades-medida/unidades-medida.module';
+import { ClasificacionesModule } from './modules/clasificaciones/clasificaciones.module';
+import { StatsModule } from './modules/stats/stats.module';
+import { ExportacionModule } from './modules/exportacion/exportacion.module';
 import { CommonModule } from './common/common.module';
+import { InventarioTecnicoModule } from './modules/inventario-tecnico/inventario-tecnico.module';
+import { AsignacionesTecnicosModule } from './modules/asignaciones-tecnicos/asignaciones-tecnicos.module';
+import { InstalacionesMaterialesModule } from './modules/instalaciones-materiales/instalaciones-materiales.module';
+import { EstadosInstalacionModule } from './modules/estados-instalacion/estados-instalacion.module';
+import { EstadosClienteModule } from './modules/estados-cliente/estados-cliente.module';
+import { EstadosMovimientoModule } from './modules/estados-movimiento/estados-movimiento.module';
+import { EstadosTrasladoModule } from './modules/estados-traslado/estados-traslado.module';
 
 @Module({
   imports: [
@@ -57,13 +69,7 @@ import { CommonModule } from './common/common.module';
         const password = configService.get<string>('DB_PASSWORD', '') || '';
         const database = configService.get<string>('DB_NAME', 'jarlepsisdev');
         
-        // Log configuration for debugging
-        console.log('🔍 Database Configuration:');
-        console.log('  Host:', host);
-        console.log('  Port:', parseInt(port, 10));
-        console.log('  Username:', username);
-        console.log('  Password:', password ? '***SET***' : 'EMPTY');
-        console.log('  Database:', database);
+        // Database configuration
         
         const config = {
           type: 'mysql' as const,
@@ -79,13 +85,6 @@ import { CommonModule } from './common/common.module';
           retryDelay: 1000,
         };
         
-        console.log('📝 TypeORM Config:', JSON.stringify({
-          ...config,
-          password: config.password ? '***' : undefined,
-          entities: '[...]',
-          migrations: '[...]',
-        }, null, 2));
-        
         return config;
       },
       inject: [ConfigService],
@@ -99,7 +98,7 @@ import { CommonModule } from './common/common.module';
     DepartamentosModule,
     MunicipiosModule,
     SedesModule,
-    OficinasModule,
+    // OficinasModule, // Oficinas eliminado
     BodegasModule,
     CategoriasModule,
     ProveedoresModule,
@@ -121,6 +120,18 @@ import { CommonModule } from './common/common.module';
     ReaccionesMensajeModule,
     NotificacionesModule,
     ChatModule,
+    TiposDocumentosIdentidadModule,
+    UnidadesMedidaModule,
+    ClasificacionesModule,
+    StatsModule,
+    ExportacionModule,
+    InventarioTecnicoModule,
+    AsignacionesTecnicosModule,
+    InstalacionesMaterialesModule,
+    EstadosInstalacionModule,
+    EstadosClienteModule,
+    EstadosMovimientoModule,
+    EstadosTrasladoModule,
   ],
 })
 export class AppModule {}
