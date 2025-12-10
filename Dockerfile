@@ -1,36 +1,43 @@
-# DEPENDENCIAS
-FROM node:22-alpine3.22 AS deps
-WORKDIR /usr/src/app
+# Build stage
+FROM node:20-alpine AS builder
+
+WORKDIR /app
+
+# Copy package files
 COPY package*.json ./
-RUN npm install
 
+# Install dependencies
+RUN npm ci
 
-# Builder - Construir imagen docker producción
-FROM node:22-alpine3.22 AS builder
-WORKDIR /usr/src/app
-# copia de deps, los modulos de node ya instalados
-COPY --from=deps /usr/src/app/node_modules ./node_modules
-# copiar todo el codigo fuente de la aplicacion
+# Copy source code
 COPY . .
+
+# Build the application
 RUN npm run build
-RUN npm ci -f --only=production && npm cache clean --force
 
-# Creación de la imagen final de docker para producción
-FROM node:22-alpine3.22 AS production
+# Production stage
+FROM node:20-alpine
 
-WORKDIR /usr/src/app
-COPY --from=builder /usr/src/app/node_modules ./node_modules
-COPY --from=builder /usr/src/app/dist ./dist
+WORKDIR /app
 
-ENV NODE_ENV=production
+# Copy package files
+COPY package*.json ./
 
-USER node
+# Install only production dependencies
+RUN npm ci --only=production
 
-EXPOSE 8080
+# Copy built application from builder stage
+COPY --from=builder /app/dist ./dist
+
+# Create logs directory
+RUN mkdir -p logs
+
+# Expose port
+EXPOSE 3000
 
 # Health check
 HEALTHCHECK --interval=30s --timeout=3s --start-period=40s --retries=3 \
   CMD node -e "require('http').get('http://localhost:3000/api/v1/health', (r) => {process.exit(r.statusCode === 200 ? 0 : 1)})"
 
-
-CMD [ "node", "dist/main.js" ]
+# Start the application
+CMD ["node", "dist/main"]

@@ -53,11 +53,36 @@ jobs:
 
       - name: Deploy to Cloud Run
         run: |
-          SERVICE_NAME=bakend-jarlepsis
+          SERVICE_NAME=back-jarlep
           gcloud run deploy "$SERVICE_NAME" \
             --image="$IMAGE" \
             --platform=managed \
             --region="us-central1" \
             --allow-unauthenticated \
-            --port=8080
-            --set-env-vars="NODE_ENV=prod,PORT=8080,DB_HOST=srv1925.hstgr.io,DB_PORT=3306,DB_USERNAME=u675639001_jarlep,DB_PASSWORD=CRz7cfJx!3,DB_NAME=u675639001_jarlep,JWT_SECRET=tafsastfdasdtyweqvncq7cq6ctewncsdc765evw6282,JWT_EXPIRES_IN=24h,FRONTEND_URL=https://jarlep.com,MINIAPP_URL=https://app.jarlep.com,ADMIN_EMAIL=admin@jarlepsis.com,ADMIN_PASSWORD=Admin1234,ADMIN_NOMBRE=Super,ADMIN_APELLIDO=Admin,ADMIN_DOCUMENTO=9999999999"
+            --port=8080 \
+            --service-account=alvarez-company@farmsmanager.iam.gserviceaccount.com \
+            --set-env-vars="NODE_ENV=prod" \
+            --set-env-vars="DB_HOST=srv1925.hstgr.io" \
+            --set-env-vars="DB_PORT=3306" \
+            --set-env-vars="DB_USERNAME=u675639001_jarlepdev" \
+            --set-env-vars="DB_PASSWORD=7+VT93qDZl" \
+            --set-env-vars="DB_NAME=u675639001_jarlepdev" \
+            --set-env-vars="JWT_SECRET=tafsastfdasdtyweqvncq7cq6ctewncsdc765evw6282" \
+            --set-env-vars="JWT_EXPIRES_IN=24h" \
+            --set-env-vars="FRONTEND_URL=https://jarlepsis.web.app" \
+            --set-env-vars="MINIAPP_URL=https://app-jarlep.web.app" \
+            --set-env-vars="ADMIN_EMAIL=admin@jarlepsis.com" \
+            --set-env-vars="ADMIN_PASSWORD=Admin1234" \
+            --set-env-vars="ADMIN_NOMBRE=Super" \
+            --set-env-vars="ADMIN_APELLIDO=Admin" \
+            --set-env-vars="ADMIN_DOCUMENTO=9999999999"
+
+
+# docker run -d \
+#   --name back-jarlep \
+#   -p 8080:8080 \
+#   --env-file .env \
+#   us-central1-docker.pkg.dev/farmsmanager/alvarez-company/back-jarlep:1.0.0
+
+# docker buildx build --platform=linux/amd64 -t us-central1-docker.pkg.dev/farmsmanager/alvarez-company/back-jarlep:1.1.0 .
+# docker push us-central1-docker.pkg.dev/farmsmanager/alvarez-company/back-jarlep:1.1.0
