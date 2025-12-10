@@ -1,18 +1,63 @@
-steps:
-  - name: "gcr.io/cloud-builders/docker"
-    args:
-      [
-        "build",
-        "-t",
-        "us-central1-docker.pkg.dev/farmsmanager/alvarez-company/bakend-jarlepsis",
-        "-f",
-        "dockerfile.prod",
-        "--platform=linux/amd64",
-        ".",
-      ]
-  - name: "gcr.io/cloud-builders/docker"
-    args:
-      [
-        "push",
-        "us-central1-docker.pkg.dev/farmsmanager/alvarez-company/bakend-jarlepsis",
-      ]
+name: Deploy to Cloud Run
+
+on:
+  push:
+    branches:
+      - main   # o master, según tu repo
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+
+    permissions:
+      contents: 'read'
+      id-token: 'write'
+
+    steps:
+      - name: Checkout repo
+        uses: actions/checkout@v4
+
+      - name: Set up Node (para tests opcionales)
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+
+      # (Opcional) correr tests antes de construir
+      - name: Install dependencies
+        run: npm install
+
+      - name: Run tests
+        run: npm test
+        continue-on-error: true  # ponlo en false si quieres que falle si los tests fallan
+
+      - name: Set up gcloud CLI
+        uses: google-github-actions/setup-gcloud@v2
+        with:
+          project_id: farmsmanager
+          service_account_key: alvarez-company@farmsmanager.iam.gserviceaccount.com
+          export_default_credentials: true
+
+      - name: Configure Docker auth for Artifact Registry
+        run: |
+          gcloud auth configure-docker us-central1-docker.pkg.dev --quiet
+
+      - name: Build Docker image
+        run: |
+          IMAGE="us-central1-docker.pkg.dev/farmsmanager/alvarez-company/bakend-jarlepsis:${{ github.sha }}"
+          echo "IMAGE=$IMAGE" >> $GITHUB_ENV
+          docker build -t "$IMAGE" .
+
+      - name: Push Docker image
+        run: |
+          docker push "$IMAGE"
+
+      - name: Deploy to Cloud Run
+        run: |
+          SERVICE_NAME=bakend-jarlepsis
+          gcloud run deploy "$SERVICE_NAME" \
+            --image="$IMAGE" \
+            --platform=managed \
+            --region="us-central1" \
+            --allow-unauthenticated \
+            --port=8080
+            --set-env-vars="NODE_ENV=prod,PORT=8080,DB_HOST=srv1925.hstgr.io,DB_PORT=3306,DB_USERNAME=u675639001_jarlep,DB_PASSWORD=CRz7cfJx!3,DB_NAME=u675639001_jarlep,JWT_SECRET=tafsastfdasdtyweqvncq7cq6ctewncsdc765evw6282,JWT_EXPIRES_IN=24h,FRONTEND_URL=https://jarlep.com,MINIAPP_URL=https://app.jarlep.com,ADMIN_EMAIL=admin@jarlepsis.com,ADMIN_PASSWORD=Admin1234,ADMIN_NOMBRE=Super,ADMIN_APELLIDO=Admin,ADMIN_DOCUMENTO=9999999999"
