@@ -2,6 +2,10 @@
 
 Backend robusto desarrollado con NestJS, MySQL y Docker para gestión de inventario.
 
+## 📦 Repositorio
+
+**Repositorio**: [https://github.com/alvarez-company/BakendJarlepsis.git](https://github.com/alvarez-company/BakendJarlepsis.git)
+
 ## 🎯 Características
 
 - 🔐 **Autenticación JWT** con Passport
