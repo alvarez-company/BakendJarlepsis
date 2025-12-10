@@ -24,9 +24,10 @@ export class Oficina {
   @Column()
   municipioId: number;
 
-  @ManyToOne(() => Municipio, (municipio) => municipio.oficinas)
-  @JoinColumn({ name: 'municipioId' })
-  municipio: Municipio;
+  // Relación con Municipio comentada - oficinas eliminado
+  // @ManyToOne(() => Municipio, (municipio) => municipio.oficinas)
+  // @JoinColumn({ name: 'municipioId' })
+  // municipio: Municipio;
 
   @Column({ type: 'text', nullable: true })
   oficinaDireccion: string;
@@ -34,21 +35,28 @@ export class Oficina {
   @Column({ nullable: true })
   oficinaTelefono: string;
 
+  @Column({ nullable: true })
+  oficinaCorreo: string;
+
+  @Column({ type: 'longtext', nullable: true })
+  oficinaFoto: string;
+
   @Column({ default: true })
   oficinaEstado: boolean;
 
   @Column({ nullable: true })
   sedeId: number;
 
-  @ManyToOne(() => Sede, (sede) => sede.oficinas)
-  @JoinColumn({ name: 'sedeId' })
-  sede: Sede;
+  // Relaciones comentadas - oficinas eliminado, bodegas ahora pertenecen directamente a sedes
+  // @ManyToOne(() => Sede, (sede) => sede.oficinas)
+  // @JoinColumn({ name: 'sedeId' })
+  // sede: Sede;
 
-  @OneToMany(() => Bodega, (bodega) => bodega.oficina)
-  bodegas: Bodega[];
+  // @OneToMany(() => Bodega, (bodega) => bodega.oficina)
+  // bodegas: Bodega[];
 
-  @OneToMany(() => User, (user) => user.oficina)
-  usuarios: User[];
+  // @OneToMany(() => User, (user) => user.oficina)
+  // usuarios: User[];
 
   @CreateDateColumn()
   fechaCreacion: Date;

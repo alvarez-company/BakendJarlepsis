@@ -1,13 +1,16 @@
-import { Injectable } from '@nestjs/common';
+import { Injectable, forwardRef, Inject } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { Notificacion, TipoNotificacion } from './notificacion.entity';
+import { ChatGateway } from '../chat/chat.gateway';
 
 @Injectable()
 export class NotificacionesService {
   constructor(
     @InjectRepository(Notificacion)
     private notificacionesRepository: Repository<Notificacion>,
+    @Inject(forwardRef(() => ChatGateway))
+    private chatGateway: ChatGateway,
   ) {}
 
   async crearNotificacion(
@@ -16,19 +19,38 @@ export class NotificacionesService {
     titulo: string,
     contenido: string,
     datosAdicionales?: any,
+    emitirSocket: boolean = true,
   ): Promise<Notificacion> {
-    const notificacion = this.notificacionesRepository.create({
-      usuarioId,
-      tipoNotificacion: tipo,
-      titulo,
-      contenido,
-      datosAdicionales,
-      grupoId: datosAdicionales?.grupoId,
-      instalacionId: datosAdicionales?.instalacionId,
-      mensajeId: datosAdicionales?.mensajeId,
-    });
+    try {
+      const notificacion = this.notificacionesRepository.create({
+        usuarioId,
+        tipoNotificacion: tipo,
+        titulo,
+        contenido,
+        datosAdicionales,
+        grupoId: datosAdicionales?.grupoId,
+        instalacionId: datosAdicionales?.instalacionId,
+        mensajeId: datosAdicionales?.mensajeId,
+      });
 
-    return this.notificacionesRepository.save(notificacion);
+      const saved = await this.notificacionesRepository.save(notificacion);
+      
+      // Emitir notificación por WebSocket si está habilitado
+      if (emitirSocket) {
+        try {
+          this.chatGateway.emitirNotificacion(usuarioId, saved);
+        } catch (wsError) {
+          console.error(`[NotificacionesService] Error al emitir notificación por WebSocket:`, wsError);
+          // No lanzar error, la notificación ya se guardó en la BD
+        }
+      }
+      
+      return saved;
+    } catch (error) {
+      console.error(`[NotificacionesService] ❌ Error al crear notificación:`, error);
+      console.error(`[NotificacionesService] Stack trace:`, error.stack);
+      throw error;
+    }
   }
 
   async crearNotificacionInstalacionCompletada(
@@ -71,6 +93,113 @@ export class NotificacionesService {
     );
   }
 
+  async crearNotificacionInstalacionAsignacion(
+    tecnicoId: number,
+    instalacionId: number,
+    instalacionCodigo: string,
+    clienteNombre: string,
+  ): Promise<Notificacion> {
+    return this.crearNotificacion(
+      tecnicoId,
+      TipoNotificacion.INSTALACION_ASIGNACION,
+      'Instalación en Asignación',
+      `La instalación ${instalacionCodigo} para el cliente ${clienteNombre} está en estado de asignación.`,
+      {
+        instalacionId,
+        instalacionCodigo,
+        clienteNombre,
+      },
+    );
+  }
+
+  async crearNotificacionInstalacionConstruccion(
+    tecnicoId: number,
+    instalacionId: number,
+    instalacionCodigo: string,
+    clienteNombre: string,
+  ): Promise<Notificacion> {
+    return this.crearNotificacion(
+      tecnicoId,
+      TipoNotificacion.INSTALACION_CONSTRUCCION,
+      'Instalación en Construcción',
+      `La instalación ${instalacionCodigo} para el cliente ${clienteNombre} está en construcción.`,
+      {
+        instalacionId,
+        instalacionCodigo,
+        clienteNombre,
+      },
+    );
+  }
+
+  async crearNotificacionInstalacionCertificacion(
+    tecnicoId: number,
+    instalacionId: number,
+    instalacionCodigo: string,
+    clienteNombre: string,
+  ): Promise<Notificacion> {
+    return this.crearNotificacion(
+      tecnicoId,
+      TipoNotificacion.INSTALACION_CERTIFICACION,
+      'Instalación en Certificación',
+      `La instalación ${instalacionCodigo} para el cliente ${clienteNombre} está en proceso de certificación.`,
+      {
+        instalacionId,
+        instalacionCodigo,
+        clienteNombre,
+      },
+    );
+  }
+
+  async crearNotificacionInstalacionNovedad(
+    tecnicoId: number,
+    instalacionId: number,
+    instalacionCodigo: string,
+    clienteNombre: string,
+    motivo?: string,
+  ): Promise<Notificacion> {
+    const contenido = motivo 
+      ? `La instalación ${instalacionCodigo} para el cliente ${clienteNombre} tiene una novedad técnica: ${motivo}.`
+      : `La instalación ${instalacionCodigo} para el cliente ${clienteNombre} tiene una novedad técnica.`;
+    
+    return this.crearNotificacion(
+      tecnicoId,
+      TipoNotificacion.INSTALACION_NOVEDAD,
+      'Novedad Técnica en Instalación',
+      contenido,
+      {
+        instalacionId,
+        instalacionCodigo,
+        clienteNombre,
+        motivo,
+      },
+    );
+  }
+
+  async crearNotificacionInstalacionAnulada(
+    tecnicoId: number,
+    instalacionId: number,
+    instalacionCodigo: string,
+    clienteNombre: string,
+    motivo?: string,
+  ): Promise<Notificacion> {
+    const contenido = motivo 
+      ? `La instalación ${instalacionCodigo} para el cliente ${clienteNombre} ha sido anulada. Motivo: ${motivo}.`
+      : `La instalación ${instalacionCodigo} para el cliente ${clienteNombre} ha sido anulada.`;
+    
+    return this.crearNotificacion(
+      tecnicoId,
+      TipoNotificacion.INSTALACION_ANULADA,
+      'Instalación Anulada',
+      contenido,
+      {
+        instalacionId,
+        instalacionCodigo,
+        clienteNombre,
+        motivo,
+      },
+    );
+  }
+
   async crearNotificacionMensajeNuevo(
     usuariosIds: number[],
     grupoId: number,
@@ -82,6 +211,7 @@ export class NotificacionesService {
     const notificaciones: Notificacion[] = [];
 
     for (const usuarioId of usuariosIds) {
+      // emitirSocket=true para que se emita automáticamente por socket
       const notificacion = await this.crearNotificacion(
         usuarioId,
         TipoNotificacion.MENSAJE_NUEVO,
@@ -93,6 +223,7 @@ export class NotificacionesService {
           mensajeId,
           remitenteNombre,
         },
+        true, // emitirSocket
       );
       notificaciones.push(notificacion);
     }
@@ -126,17 +257,31 @@ export class NotificacionesService {
       throw new Error('Notificación no encontrada');
     }
 
+    // Si ya está leída, no hacer nada
+    if (notificacion.leida) {
+      return notificacion;
+    }
+
     notificacion.leida = true;
     notificacion.fechaLectura = new Date();
 
-    return this.notificacionesRepository.save(notificacion);
+    const notificacionActualizada = await this.notificacionesRepository.save(notificacion);
+
+    // Emitir evento socket para actualizar el contador y la notificación actualizada
+    this.chatGateway.emitirNotificacionActualizada(usuarioId, notificacionActualizada);
+
+    return notificacionActualizada;
   }
 
   async marcarTodasComoLeidas(usuarioId: number): Promise<void> {
+    const fechaLectura = new Date();
     await this.notificacionesRepository.update(
       { usuarioId, leida: false },
-      { leida: true, fechaLectura: new Date() },
+      { leida: true, fechaLectura },
     );
+
+    // Emitir evento socket para actualizar el contador en el frontend
+    this.chatGateway.emitirNotificacionesTodasLeidas(usuarioId);
   }
 
   async contarNoLeidas(usuarioId: number): Promise<number> {
@@ -154,6 +299,36 @@ export class NotificacionesService {
     if (result.affected === 0) {
       throw new Error('Notificación no encontrada');
     }
+  }
+
+  async obtenerNotificacionesPorGrupo(grupoId: number, usuarioId: number): Promise<Notificacion[]> {
+    return this.notificacionesRepository.find({
+      where: {
+        grupoId,
+        usuarioId,
+        tipoNotificacion: TipoNotificacion.MENSAJE_NUEVO,
+      },
+      order: { fechaCreacion: 'DESC' },
+    });
+  }
+
+  async marcarLeidasPorGrupo(grupoId: number, usuarioId: number): Promise<void> {
+    const fechaLectura = new Date();
+    await this.notificacionesRepository.update(
+      { 
+        grupoId, 
+        usuarioId, 
+        tipoNotificacion: TipoNotificacion.MENSAJE_NUEVO,
+        leida: false 
+      },
+      { 
+        leida: true, 
+        fechaLectura 
+      },
+    );
+
+    // Emitir evento socket para actualizar el contador en el frontend
+    this.chatGateway.emitirNotificacionesTodasLeidas(usuarioId);
   }
 }
 

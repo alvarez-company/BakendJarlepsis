@@ -25,7 +25,7 @@ export class InventariosService {
   async findOne(id: number): Promise<Inventario> {
     const inventario = await this.inventariosRepository.findOne({
       where: { inventarioId: id },
-      relations: ['bodega', 'materiales'],
+      relations: ['bodega', 'bodega.sede', 'materiales'],
     });
     if (!inventario) {
       throw new NotFoundException(`Inventario con ID ${id} no encontrado`);

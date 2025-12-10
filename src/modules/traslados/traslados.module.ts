@@ -6,6 +6,9 @@ import { Traslado } from './traslado.entity';
 import { MovimientosModule } from '../movimientos/movimientos.module';
 import { MaterialesModule } from '../materiales/materiales.module';
 import { InventariosModule } from '../inventarios/inventarios.module';
+import { BodegasModule } from '../bodegas/bodegas.module';
+import { AuditoriaModule } from '../auditoria/auditoria.module';
+import { ExportacionModule } from '../exportacion/exportacion.module';
 
 @Module({
   imports: [
@@ -13,6 +16,9 @@ import { InventariosModule } from '../inventarios/inventarios.module';
     MovimientosModule,
     MaterialesModule,
     InventariosModule,
+    BodegasModule,
+    AuditoriaModule,
+    ExportacionModule,
   ],
   controllers: [TrasladosController],
   providers: [TrasladosService],

@@ -14,7 +14,28 @@ import { JwtService } from '@nestjs/jwt';
 @Injectable()
 @WebSocketGateway({
   cors: {
-    origin: process.env.FRONTEND_URL || 'http://localhost:5173',
+    origin: (origin, callback) => {
+      const frontendUrl = process.env.FRONTEND_URL || 'http://localhost:4173';
+      const miniappUrl = process.env.MINIAPP_URL || 'http://localhost:4174';
+      const allowedOrigins = [frontendUrl, miniappUrl];
+      
+      // Permitir requests sin origin (mobile apps, etc.)
+      if (!origin) {
+        return callback(null, true);
+      }
+      
+      // Verificar si el origin está en la lista permitida
+      if (allowedOrigins.includes(origin)) {
+        callback(null, true);
+      } else {
+        // En desarrollo, permitir cualquier origin localhost
+        if (process.env.NODE_ENV === 'development' && origin.includes('localhost')) {
+          callback(null, true);
+        } else {
+          callback(new Error('Not allowed by CORS'));
+        }
+      }
+    },
     credentials: true,
   },
   namespace: '/chat',
@@ -113,7 +134,9 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect {
     const socketId = this.users.get(usuarioId);
     if (socketId) {
       this.server.to(socketId).emit('notificacion_nueva', notificacion);
-      this.logger.log(`Notificación enviada al usuario ${usuarioId}`);
+      this.logger.log(`Notificación enviada al usuario ${usuarioId} (socket: ${socketId})`);
+    } else {
+      this.logger.warn(`Usuario ${usuarioId} no está conectado, notificación guardada pero no emitida`);
     }
   }
 
@@ -124,6 +147,32 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect {
         this.server.to(socketId).emit(evento, datos);
       }
     });
+  }
+
+  emitirNotificacionActualizada(usuarioId: number, notificacion: any) {
+    const socketId = this.users.get(usuarioId);
+    if (socketId) {
+      this.server.to(socketId).emit('notificacion_actualizada', notificacion);
+      // También emitir evento para actualizar contador
+      this.emitirNotificacionLeida(usuarioId);
+    }
+  }
+
+  emitirNotificacionesTodasLeidas(usuarioId: number) {
+    const socketId = this.users.get(usuarioId);
+    if (socketId) {
+      this.server.to(socketId).emit('notificaciones_todas_leidas');
+      // También emitir evento para actualizar contador
+      this.emitirNotificacionLeida(usuarioId);
+    }
+  }
+
+  emitirNotificacionLeida(usuarioId: number) {
+    const socketId = this.users.get(usuarioId);
+    if (socketId) {
+      this.server.to(socketId).emit('notificaciones_leidas');
+      this.logger.log(`Evento notificaciones_leidas enviado al usuario ${usuarioId}`);
+    }
   }
 
   obtenerUsuariosConectados(): number[] {

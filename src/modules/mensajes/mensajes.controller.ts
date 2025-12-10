@@ -20,8 +20,16 @@ export class MensajesController {
 
   @Get('grupo/:grupoId')
   @Roles('superadmin', 'admin', 'tecnico', 'empleado')
-  obtenerMensajes(@Param('grupoId') grupoId: string, @Query('limit') limit?: string) {
-    return this.service.obtenerMensajesGrupo(+grupoId, limit ? +limit : 50);
+  obtenerMensajes(
+    @Param('grupoId') grupoId: string, 
+    @Query('limit') limit?: string,
+    @Query('offset') offset?: string
+  ) {
+    return this.service.obtenerMensajesGrupo(
+      +grupoId, 
+      limit ? +limit : 50,
+      offset ? +offset : 0
+    );
   }
 
   @Post(':mensajeId/editar')

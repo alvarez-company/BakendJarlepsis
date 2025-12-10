@@ -1,60 +1,37 @@
-version: '3.8'
-
 services:
-  mysql:
-    image: mysql:8.0
-    container_name: inventario-mysql
-    restart: unless-stopped
-    environment:
-      MYSQL_ROOT_PASSWORD: ${DB_PASSWORD:-root}
-      MYSQL_DATABASE: ${DB_NAME:-inventario_db}
-      MYSQL_USER: ${DB_USERNAME:-root}
-      MYSQL_PASSWORD: ${DB_PASSWORD:-root}
-    ports:
-      - "${DB_PORT:-3306}:3306"
-    volumes:
-      - mysql_data:/var/lib/mysql
-    networks:
-      - inventario-network
-    healthcheck:
-      test: ["CMD", "mysqladmin", "ping", "-h", "localhost"]
-      interval: 10s
-      timeout: 5s
-      retries: 5
-    command: --default-authentication-plugin=mysql_native_password
-
   backend:
     build:
       context: .
       dockerfile: Dockerfile
-    container_name: inventario-backend
+    container_name: jarlepsis-backend
     restart: unless-stopped
     ports:
-      - "${PORT:-3000}:3000"
+      - "${PORT:-4100}:3000"
     environment:
       NODE_ENV: ${NODE_ENV:-production}
-      PORT: ${PORT:-3000}
-      DB_HOST: mysql
+      PORT: 3000
+      DB_HOST: ${DB_HOST}
       DB_PORT: ${DB_PORT:-3306}
-      DB_USERNAME: ${DB_USERNAME:-root}
-      DB_PASSWORD: ${DB_PASSWORD:-root}
-      DB_NAME: ${DB_NAME:-inventario_db}
-      JWT_SECRET: ${JWT_SECRET:-your-super-secret-jwt-key-change-in-production}
+      DB_USERNAME: ${DB_USERNAME}
+      DB_PASSWORD: ${DB_PASSWORD}
+      DB_NAME: ${DB_NAME}
+      JWT_SECRET: ${JWT_SECRET:-tafsastfdasdtyweqvncq7cq6ctewncsdc765evw6282}
       JWT_EXPIRES_IN: ${JWT_EXPIRES_IN:-24h}
-      FRONTEND_URL: ${FRONTEND_URL:-http://localhost:3000}
-    depends_on:
-      mysql:
-        condition: service_healthy
-    networks:
-      - inventario-network
+      FRONTEND_URL: ${FRONTEND_URL:-http://localhost:4173}
+      MINIAPP_URL: ${MINIAPP_URL:-http://localhost:4174}
     volumes:
       - ./logs:/app/logs
-
-volumes:
-  mysql_data:
-    driver: local
+    networks:
+      - jarlepsis-network
+    healthcheck:
+      test: ["CMD", "node", "-e", "require('http').get('http://localhost:3000/api/v1/health', (r) => {process.exit(r.statusCode === 200 ? 0 : 1)})"]
+      interval: 30s
+      timeout: 3s
+      retries: 3
+      start_period: 40s
 
 networks:
-  inventario-network:
+  jarlepsis-network:
     driver: bridge
+    name: jarlepsis_network
 

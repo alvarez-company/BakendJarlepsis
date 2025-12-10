@@ -9,16 +9,6 @@ import {
   JoinColumn,
 } from 'typeorm';
 
-export enum UnidadMedida {
-  UNIDAD = 'unidad',
-  KILOGRAMO = 'kg',
-  GRAMO = 'g',
-  LITRO = 'litro',
-  METRO = 'metro',
-  CAJA = 'caja',
-  PAQUETE = 'paquete',
-}
-
 @Entity('materiales')
 export class Material {
   @PrimaryGeneratedColumn()
@@ -36,16 +26,6 @@ export class Material {
   @Column()
   materialCodigo: string;
 
-  @Column({ nullable: true })
-  materialPadreId: number;
-
-  @ManyToOne('Material', 'variantes', { nullable: true, eager: false, lazy: false })
-  @JoinColumn({ name: 'materialPadreId' })
-  materialPadre: any;
-
-  @OneToMany('Material', 'materialPadre', { eager: false, lazy: false })
-  variantes: any[];
-
   @Column()
   materialNombre: string;
 
@@ -58,12 +38,8 @@ export class Material {
   @Column({ type: 'decimal', precision: 10, scale: 2 })
   materialPrecio: number;
 
-  @Column({
-    type: 'enum',
-    enum: UnidadMedida,
-    default: UnidadMedida.UNIDAD,
-  })
-  materialUnidadMedida: UnidadMedida;
+  @Column({ nullable: true })
+  unidadMedidaId: number;
 
   @Column({ nullable: true })
   materialMarca: string;
@@ -95,6 +71,10 @@ export class Material {
   @JoinColumn({ name: 'inventarioId' })
   inventario: any;
 
+  @ManyToOne('UnidadMedida', 'materiales', { nullable: true })
+  @JoinColumn({ name: 'unidadMedidaId' })
+  unidadMedida: any;
+
   @OneToMany('MaterialBodega', 'material')
   materialBodegas: any[];
 
@@ -106,6 +86,12 @@ export class Material {
 
   @OneToMany('ItemProyecto', 'material')
   itemsProyecto: any[];
+
+  @OneToMany('InventarioTecnico', 'material')
+  inventarioTecnico: any[];
+
+  @OneToMany('InstalacionMaterial', 'material')
+  instalacionesMateriales: any[];
 
   @CreateDateColumn()
   fechaCreacion: Date;

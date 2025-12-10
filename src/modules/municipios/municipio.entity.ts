@@ -9,7 +9,7 @@ import {
   JoinColumn,
 } from 'typeorm';
 import { Departamento } from '../departamentos/departamento.entity';
-import { Oficina } from '../oficinas/oficina.entity';
+// import { Oficina } from '../oficinas/oficina.entity'; // Oficinas eliminado
 
 @Entity('municipios')
 export class Municipio {
@@ -32,8 +32,9 @@ export class Municipio {
   @JoinColumn({ name: 'departamentoId' })
   departamento: Departamento;
 
-  @OneToMany(() => Oficina, (oficina) => oficina.municipio)
-  oficinas: Oficina[];
+  // Oficinas eliminado - las bodegas ahora pertenecen directamente a sedes
+  // @OneToMany(() => Oficina, (oficina) => oficina.municipio)
+  // oficinas: Oficina[];
 
   @CreateDateColumn()
   fechaCreacion: Date;

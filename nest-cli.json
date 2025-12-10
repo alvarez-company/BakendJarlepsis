@@ -5,7 +5,44 @@
   "compilerOptions": {
     "deleteOutDir": true,
     "webpack": true,
-    "tsConfigPath": "tsconfig.json"
+    "tsConfigPath": "tsconfig.json",
+    "watchAssets": false,
+    "assets": []
+  },
+  "watchOptions": {
+    "watch": true,
+    "ignore": [
+      "node_modules/**",
+      "dist/**",
+      "logs/**",
+      "public/**",
+      "migrations/**",
+      "scripts/**",
+      "postman/**",
+      "docker/**",
+      "documents/**",
+      ".git/**",
+      ".vscode/**",
+      ".cursor/**",
+      "coverage/**",
+      "test/**",
+      "*.log",
+      "*.md",
+      "*.json",
+      "*.yml",
+      "*.yaml",
+      "*.lock",
+      "*.cache",
+      "*.tmp",
+      "*.swp",
+      "*.swo",
+      "*.DS_Store",
+      "env.example",
+      ".env*",
+      "package-lock.json",
+      "yarn.lock",
+      "pnpm-lock.yaml"
+    ]
   }
 }
 

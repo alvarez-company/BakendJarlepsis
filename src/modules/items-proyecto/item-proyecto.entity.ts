@@ -17,10 +17,10 @@ export class ItemProyecto {
   proyectoId: number;
 
   @Column()
-  materialId: number;
+  itemNombre: string;
 
-  @Column({ type: 'decimal', precision: 10, scale: 2 })
-  itemCantidad: number;
+  @Column({ nullable: true })
+  itemCodigo: string;
 
   @Column({ type: 'text', nullable: true })
   itemDescripcion: string;
@@ -28,13 +28,12 @@ export class ItemProyecto {
   @Column({ default: true })
   itemEstado: boolean;
 
+  @Column({ nullable: true })
+  usuarioRegistra: number;
+
   @ManyToOne('Proyecto', 'items')
   @JoinColumn({ name: 'proyectoId' })
   proyecto: any;
-
-  @ManyToOne('Material', 'itemsProyecto')
-  @JoinColumn({ name: 'materialId' })
-  material: any;
 
   @CreateDateColumn()
   fechaCreacion: Date;

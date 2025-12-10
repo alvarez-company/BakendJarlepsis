@@ -47,7 +47,7 @@ Thumbs.db
 .env.test
 
 # Docker
-.dockerignore
+# .dockerignore (se incluye en el repo)
 
 # Database
 *.sqlite

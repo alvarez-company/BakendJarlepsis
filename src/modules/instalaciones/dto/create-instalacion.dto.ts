@@ -1,11 +1,7 @@
 import { ApiProperty } from '@nestjs/swagger';
-import { IsString, IsNumber, IsOptional, IsDateString } from 'class-validator';
+import { IsString, IsNumber, IsOptional, IsDateString, IsArray } from 'class-validator';
 
 export class CreateInstalacionDto {
-  @ApiProperty({ example: 'INST-001' })
-  @IsString()
-  instalacionCodigo: string;
-
   @ApiProperty({ example: 1 })
   @IsNumber()
   tipoInstalacionId: number;
@@ -13,6 +9,10 @@ export class CreateInstalacionDto {
   @ApiProperty({ example: 1 })
   @IsNumber()
   clienteId: number;
+
+  @ApiProperty({ example: 'INST-001', description: 'Código de instalación (obligatorio, único por instalación)' })
+  @IsString()
+  instalacionCodigo: string;
 
   @ApiProperty({ required: false })
   @IsString()
@@ -24,10 +24,15 @@ export class CreateInstalacionDto {
   @IsOptional()
   instalacionSelloNumero?: string;
 
+  @ApiProperty({ required: false, description: 'Sello del regulador' })
+  @IsString()
+  @IsOptional()
+  instalacionSelloRegulador?: string;
+
   @ApiProperty({ required: false })
   @IsDateString()
   @IsOptional()
-  instalacionFechaHora?: string;
+  instalacionFecha?: string;
 
   @ApiProperty({ required: false, description: 'JSON con materiales instalados' })
   @IsOptional()
@@ -37,8 +42,24 @@ export class CreateInstalacionDto {
   @IsOptional()
   instalacionProyectos?: any;
 
-  @ApiProperty({ required: false })
+  @ApiProperty({ required: false, description: 'Observaciones generales de la instalación' })
   @IsString()
   @IsOptional()
   instalacionObservaciones?: string;
+
+  @ApiProperty({ required: false, description: 'Observaciones específicas del técnico' })
+  @IsString()
+  @IsOptional()
+  observacionesTecnico?: string;
+
+  @ApiProperty({ required: false, description: 'Array de IDs de usuarios asignados', type: [Number] })
+  @IsArray()
+  @IsNumber({}, { each: true })
+  @IsOptional()
+  usuariosAsignados?: number[];
+
+  @ApiProperty({ required: false, description: 'ID de la bodega de origen de materiales' })
+  @IsNumber()
+  @IsOptional()
+  bodegaId?: number;
 }

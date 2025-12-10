@@ -7,6 +7,7 @@ import {
   ManyToOne,
   JoinColumn,
 } from 'typeorm';
+import { EstadoTrasladoEntity } from '../estados-traslado/estado-traslado.entity';
 
 export enum EstadoTraslado {
   PENDIENTE = 'pendiente',
@@ -37,13 +38,23 @@ export class Traslado {
     enum: EstadoTraslado,
     default: EstadoTraslado.PENDIENTE,
   })
-  trasladoEstado: EstadoTraslado;
+  trasladoEstado: EstadoTraslado; // Mantener por compatibilidad
+
+  @Column({ nullable: true })
+  estadoTrasladoId: number;
+
+  @ManyToOne(() => EstadoTrasladoEntity, { nullable: true })
+  @JoinColumn({ name: 'estadoTrasladoId' })
+  estadoTraslado: EstadoTrasladoEntity;
 
   @Column({ type: 'text', nullable: true })
   trasladoObservaciones: string;
 
   @Column({ nullable: true })
   trasladoCodigo: string; // Código para agrupar múltiples traslados
+
+  @Column({ nullable: true, unique: true })
+  identificadorUnico: string; // TRA-1, TRA-2, etc.
 
   @Column()
   usuarioId: number;

@@ -16,7 +16,7 @@ export class TiposProyectoService {
   }
 
   async findAll(): Promise<TipoProyecto[]> {
-    return this.tiposProyectoRepository.find({ relations: ['proyectos'] });
+    return this.tiposProyectoRepository.find();
   }
 
   async findOne(id: number): Promise<TipoProyecto> {

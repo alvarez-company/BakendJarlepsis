@@ -8,7 +8,7 @@ import {
   OneToMany,
   JoinColumn,
 } from 'typeorm';
-import { Oficina } from '../oficinas/oficina.entity';
+import { Bodega } from '../bodegas/bodega.entity';
 import { User } from '../users/user.entity';
 import { Departamento } from '../departamentos/departamento.entity';
 
@@ -33,11 +33,17 @@ export class Sede {
   @Column({ nullable: true })
   sedeTelefono: string;
 
+  @Column({ nullable: true })
+  sedeCorreo: string;
+
+  @Column({ type: 'longtext', nullable: true })
+  sedeFoto: string;
+
   @Column({ default: true })
   sedeEstado: boolean;
 
-  @OneToMany(() => Oficina, (oficina) => oficina.sede)
-  oficinas: Oficina[];
+  @OneToMany(() => Bodega, (bodega) => bodega.sede)
+  bodegas: Bodega[];
 
   @OneToMany(() => User, (user) => user.sede)
   usuarios: User[];

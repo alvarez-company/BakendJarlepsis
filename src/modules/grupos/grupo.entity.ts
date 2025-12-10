@@ -9,9 +9,11 @@ import {
 
 export enum TipoGrupo {
   GENERAL = 'general',
+  SEDE = 'sede',
   OFICINA = 'oficina',
   BODEGA = 'bodega',
   INSTALACION = 'instalacion',
+  DIRECTO = 'directo',
 }
 
 @Entity('grupos')

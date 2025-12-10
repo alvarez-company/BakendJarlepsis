@@ -1,25 +1,109 @@
-import { Injectable, NotFoundException } from '@nestjs/common';
+import { Injectable, NotFoundException, Inject, forwardRef } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { Sede } from './sede.entity';
 import { CreateSedeDto } from './dto/create-sede.dto';
 import { UpdateSedeDto } from './dto/update-sede.dto';
 import { HasRelatedEntitiesException } from '../../common/exceptions/business.exception';
+import { GruposService } from '../grupos/grupos.service';
+import { UsersService } from '../users/users.service';
+import { RolesService } from '../roles/roles.service';
 
 @Injectable()
 export class SedesService {
   constructor(
     @InjectRepository(Sede)
     private sedesRepository: Repository<Sede>,
+    @Inject(forwardRef(() => GruposService))
+    private gruposService: GruposService,
+    @Inject(forwardRef(() => UsersService))
+    private usersService: UsersService,
+    private rolesService: RolesService,
   ) {}
 
   async create(createSedeDto: CreateSedeDto): Promise<Sede> {
     const sede = this.sedesRepository.create(createSedeDto);
-    return this.sedesRepository.save(sede);
+    const savedSede = await this.sedesRepository.save(sede);
+    
+    // Crear grupo de chat automáticamente
+    try {
+      await this.gruposService.crearGrupoSede(savedSede.sedeId, savedSede.sedeNombre);
+    } catch (error) {
+      console.error(`[SedesService] ❌ Error al crear grupo de chat para sede ${savedSede.sedeNombre}:`, error);
+      console.error(`[SedesService] Stack trace:`, error.stack);
+      // No lanzar error para no interrumpir la creación de la sede
+    }
+    
+    // Crear usuario admin automáticamente
+    try {
+      await this.crearUsuarioAdminSede(savedSede);
+    } catch (error) {
+      console.error(`[SedesService] ❌ Error al crear usuario admin para sede ${savedSede.sedeNombre}:`, error);
+      console.error(`[SedesService] Stack trace:`, error.stack);
+      // No lanzar error para no interrumpir la creación de la sede
+    }
+    
+    return savedSede;
+  }
+
+  private async crearUsuarioAdminSede(sede: Sede): Promise<void> {
+    try {
+      // Normalizar el nombre para generar credenciales
+      const nombreNormalizado = sede.sedeNombre
+        .toLowerCase()
+        .normalize('NFD')
+        .replace(/[\u0300-\u036f]/g, '')
+        .replace(/[^a-z0-9]/g, '');
+      
+      // Generar email único
+      let email = `admin.${nombreNormalizado}@jarlepsis.local`;
+      let contador = 1;
+      while (await this.usersService.findByEmail(email)) {
+        email = `admin.${nombreNormalizado}${contador}@jarlepsis.local`;
+        contador++;
+      }
+      
+      // Generar documento único
+      let documento = `ADM-${sede.sedeId}-${Date.now()}`;
+      while (await this.usersService.findByDocument(documento)) {
+        documento = `ADM-${sede.sedeId}-${Date.now()}-${contador}`;
+        contador++;
+      }
+      
+      // Obtener el rol admin
+      const rolAdmin = await this.rolesService.findByTipo('admin');
+      if (!rolAdmin) {
+        throw new Error('Rol admin no encontrado');
+      }
+      
+      // Crear contraseña: admin + nombre de la sede (sin espacios, en minúsculas)
+      // Formato: adminnombresede
+      const password = `admin${nombreNormalizado}`;
+      
+      // Crear el usuario
+      const nuevoUsuario = await this.usersService.create({
+        usuarioRolId: rolAdmin.rolId,
+        usuarioSede: sede.sedeId,
+        usuarioNombre: 'Administrador',
+        usuarioApellido: sede.sedeNombre,
+        usuarioCorreo: email,
+        usuarioDocumento: documento,
+        usuarioContrasena: password,
+      }, undefined);
+      
+      // Asegurar que el usuario esté activo
+      if (!nuevoUsuario.usuarioEstado) {
+        await this.usersService.updateEstado(nuevoUsuario.usuarioId, true);
+      }
+      
+    } catch (error) {
+      console.error(`[SedesService] Error al crear usuario admin para sede ${sede.sedeNombre}:`, error);
+      throw error;
+    }
   }
 
   async findAll(user?: any): Promise<Sede[]> {
-    const allSedes = await this.sedesRepository.find({ relations: ['oficinas'] });
+    const allSedes = await this.sedesRepository.find({ relations: ['bodegas'] });
     
     // SuperAdmin ve todo
     if (user?.usuarioRol?.rolTipo === 'superadmin' || user?.role === 'superadmin') {
@@ -37,7 +121,7 @@ export class SedesService {
   async findOne(id: number): Promise<Sede> {
     const sede = await this.sedesRepository.findOne({
       where: { sedeId: id },
-      relations: ['oficinas', 'usuarios'],
+      relations: ['bodegas', 'usuarios'],
     });
     if (!sede) {
       throw new NotFoundException(`Sede with ID ${id} not found`);
@@ -56,9 +140,9 @@ export class SedesService {
     
     const relations: { [key: string]: number } = {};
     
-    // Contar oficinas asociadas
-    if (sede.oficinas && sede.oficinas.length > 0) {
-      relations['oficinas'] = sede.oficinas.length;
+    // Contar bodegas asociadas
+    if (sede.bodegas && sede.bodegas.length > 0) {
+      relations['bodegas'] = sede.bodegas.length;
     }
     
     // Contar usuarios asignados

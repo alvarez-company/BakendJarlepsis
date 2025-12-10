@@ -28,8 +28,9 @@ export class NotificacionesController {
 
   @Get('contar-no-leidas')
   @Roles('superadmin', 'admin', 'tecnico', 'empleado')
-  contarNoLeidas(@Request() req) {
-    return this.notificacionesService.contarNoLeidas(req.user.usuarioId);
+  async contarNoLeidas(@Request() req) {
+    const count = await this.notificacionesService.contarNoLeidas(req.user.usuarioId);
+    return count;
   }
 
   @Post(':notificacionId/marcar-leida')
@@ -48,6 +49,12 @@ export class NotificacionesController {
   @Roles('superadmin', 'admin', 'tecnico', 'empleado')
   eliminarNotificacion(@Request() req, @Param('notificacionId') notificacionId: string) {
     return this.notificacionesService.eliminarNotificacion(+notificacionId, req.user.usuarioId);
+  }
+
+  @Post('grupo/:grupoId/marcar-leidas')
+  @Roles('superadmin', 'admin', 'tecnico', 'empleado')
+  marcarLeidasPorGrupo(@Request() req, @Param('grupoId') grupoId: string) {
+    return this.notificacionesService.marcarLeidasPorGrupo(+grupoId, req.user.usuarioId);
   }
 }
 
