@@ -63,3 +63,41 @@ Thumbs.db
 build/
 *.tsbuildinfo
 
+# Environment and secrets
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+*.cert
+
+# Database dumps and backups
+*.sql.backup
+*.dump
+*.bak
+
+# PM2
+.pm2/
+
+# TypeScript
+*.tsbuildinfo
+
+# NestJS
+dist/
+*.js.map
+
+# Testing
+/coverage
+/.nyc_output
+test-results/
+playwright-report/
+
+# Misc
+.DS_Store
+*.pid
+*.seed
+*.pid.lock
+.npm
+.eslintcache
+.stylelintcache
+
