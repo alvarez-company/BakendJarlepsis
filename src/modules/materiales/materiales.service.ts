@@ -202,6 +202,14 @@ export class MaterialesService {
   }
 
   /**
+   * Método público para sincronizar el stock de un material.
+   * Útil cuando se necesita forzar una sincronización después de cambios externos.
+   */
+  async sincronizarStock(materialId: number): Promise<void> {
+    await this.syncMaterialStock(materialId);
+  }
+
+  /**
    * Ajusta el stock general del material sin asignarlo a una bodega específica.
    * Esto se usa cuando el stock va directamente a la sede.
    * 

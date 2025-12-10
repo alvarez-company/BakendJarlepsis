@@ -44,6 +44,7 @@ import { EstadosInstalacionModule } from './modules/estados-instalacion/estados-
 import { EstadosClienteModule } from './modules/estados-cliente/estados-cliente.module';
 import { EstadosMovimientoModule } from './modules/estados-movimiento/estados-movimiento.module';
 import { EstadosTrasladoModule } from './modules/estados-traslado/estados-traslado.module';
+import { HealthModule } from './modules/health/health.module';
 
 @Module({
   imports: [
@@ -132,6 +133,7 @@ import { EstadosTrasladoModule } from './modules/estados-traslado/estados-trasla
     EstadosClienteModule,
     EstadosMovimientoModule,
     EstadosTrasladoModule,
+    HealthModule,
   ],
 })
 export class AppModule {}
