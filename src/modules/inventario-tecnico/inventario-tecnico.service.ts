@@ -8,6 +8,8 @@ import { TipoMovimiento, EstadoMovimiento } from '../movimientos/movimiento-inve
 import { InventariosService } from '../inventarios/inventarios.service';
 import { AsignacionesTecnicosService } from '../asignaciones-tecnicos/asignaciones-tecnicos.service';
 import { MaterialesService } from '../materiales/materiales.service';
+import { NotificacionesService } from '../notificaciones/notificaciones.service';
+import { UsersService } from '../users/users.service';
 
 @Injectable()
 export class InventarioTecnicoService {
@@ -22,6 +24,10 @@ export class InventarioTecnicoService {
     private asignacionesTecnicosService: AsignacionesTecnicosService,
     @Inject(forwardRef(() => MaterialesService))
     private materialesService: MaterialesService,
+    @Inject(forwardRef(() => NotificacionesService))
+    private notificacionesService: NotificacionesService,
+    @Inject(forwardRef(() => UsersService))
+    private usersService: UsersService,
   ) {}
 
   async create(createDto: CreateInventarioTecnicoDto): Promise<InventarioTecnico> {
@@ -99,9 +105,10 @@ export class InventarioTecnicoService {
 
     // Crear registro de asignación completa (un registro por cada asignación realizada)
     // El código se generará automáticamente si no se proporciona
+    let asignacionCreada: any = null;
     if (dto.inventarioId && usuarioAsignador) {
       try {
-        await this.asignacionesTecnicosService.create({
+        asignacionCreada = await this.asignacionesTecnicosService.create({
           asignacionCodigo: asignacionCodigo, // undefined = se generará automáticamente
           usuarioId,
           inventarioId: dto.inventarioId,
@@ -116,6 +123,42 @@ export class InventarioTecnicoService {
         console.error('Error al crear registro de asignación:', error);
         // No lanzar error aquí para no interrumpir el proceso, pero registrar el error
       }
+    }
+
+    // Crear notificación para el técnico sobre los materiales asignados
+    try {
+      // Obtener información del asignador y bodega
+      let asignadorNombre = 'Sistema';
+      let bodegaNombre: string | undefined = undefined;
+      
+      if (usuarioAsignador) {
+        try {
+          const asignador = await this.usersService.findOne(usuarioAsignador);
+          asignadorNombre = `${asignador.usuarioNombre || ''} ${asignador.usuarioApellido || ''}`.trim() || 'Usuario';
+        } catch (error) {
+          console.error('Error al obtener datos del asignador:', error);
+        }
+      }
+      
+      if (dto.inventarioId) {
+        try {
+          const inventario = await this.inventariosService.findOne(dto.inventarioId);
+          bodegaNombre = inventario.bodega?.bodegaNombre || inventario.bodega?.bodegaCodigo;
+        } catch (error) {
+          console.error('Error al obtener datos de la bodega:', error);
+        }
+      }
+      
+      await this.notificacionesService.crearNotificacionMaterialesAsignados(
+        usuarioId,
+        asignacionCreada?.asignacionCodigo || `ASIG-${Date.now()}`,
+        dto.materiales.length,
+        asignadorNombre,
+        bodegaNombre,
+      );
+    } catch (error) {
+      console.error('Error al crear notificación de materiales asignados:', error);
+      // No lanzar error para no interrumpir el proceso de asignación
     }
 
     // Asignar materiales al técnico - Actualizar stock si existe, crear si no existe
@@ -170,7 +213,7 @@ export class InventarioTecnicoService {
   async findByUsuario(usuarioId: number): Promise<InventarioTecnico[]> {
     const inventarios = await this.inventarioTecnicoRepository.find({
       where: { usuarioId },
-      relations: ['material', 'material.categoria', 'material.unidadMedida'],
+      relations: ['material', 'material.categoria', 'material.unidadMedida', 'usuario'],
     });
     
     // Agrupar por materialId y sumar cantidades para evitar duplicados
@@ -181,12 +224,16 @@ export class InventarioTecnicoService {
       const cantidad = Number(item.cantidad || 0);
       
       if (materialesAgrupados.has(materialId)) {
-        // Si ya existe, sumar la cantidad
+        // Si ya existe, sumar la cantidad manteniendo todas las relaciones
         const existente = materialesAgrupados.get(materialId)!;
         existente.cantidad = Number(existente.cantidad || 0) + cantidad;
       } else {
-        // Si no existe, agregarlo
-        materialesAgrupados.set(materialId, { ...item, cantidad });
+        // Si no existe, agregarlo manteniendo todas las relaciones del material
+        materialesAgrupados.set(materialId, {
+          ...item,
+          cantidad,
+          material: item.material, // Asegurar que la relación material se mantenga
+        });
       }
     });
     

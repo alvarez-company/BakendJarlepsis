@@ -7,6 +7,8 @@ import { MovimientosModule } from '../movimientos/movimientos.module';
 import { InventariosModule } from '../inventarios/inventarios.module';
 import { AsignacionesTecnicosModule } from '../asignaciones-tecnicos/asignaciones-tecnicos.module';
 import { MaterialesModule } from '../materiales/materiales.module';
+import { NotificacionesModule } from '../notificaciones/notificaciones.module';
+import { UsersModule } from '../users/users.module';
 
 @Module({
   imports: [
@@ -15,6 +17,8 @@ import { MaterialesModule } from '../materiales/materiales.module';
     forwardRef(() => InventariosModule),
     forwardRef(() => AsignacionesTecnicosModule),
     forwardRef(() => MaterialesModule),
+    forwardRef(() => NotificacionesModule),
+    forwardRef(() => UsersModule),
   ],
   controllers: [InventarioTecnicoController],
   providers: [InventarioTecnicoService],

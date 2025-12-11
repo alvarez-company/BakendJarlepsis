@@ -34,6 +34,11 @@ export class CreateInstalacionDto {
   @IsOptional()
   instalacionFecha?: string;
 
+  @ApiProperty({ required: false, description: 'Fecha de asignación Metrogas' })
+  @IsDateString()
+  @IsOptional()
+  fechaAsignacionMetrogas?: string;
+
   @ApiProperty({ required: false, description: 'JSON con materiales instalados' })
   @IsOptional()
   materialesInstalados?: any;

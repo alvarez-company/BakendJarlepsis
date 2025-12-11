@@ -24,6 +24,7 @@ export enum TipoNotificacion {
   MENSAJE_RESPONDIDO = 'mensaje_respondido',
   USUARIO_INGRESO_GRUPO = 'usuario_ingreso_grupo',
   USUARIO_SALIO_GRUPO = 'usuario_salio_grupo',
+  MATERIALES_ASIGNADOS = 'materiales_asignados',
 }
 
 @Entity('notificaciones')
