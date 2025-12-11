@@ -104,11 +104,44 @@ export class InstalacionesService {
       throw new ConflictException(`El código de instalación '${identificadorUnico}' ya está en uso. Por favor, use un código diferente.`);
     }
     
+    // Determinar el estado inicial: pendiente si no hay técnicos asignados
+    let estadoInicial = EstadoInstalacion.PENDIENTE;
+    let estadoInstalacionId: number | null = null;
+    
+    if (usuariosAsignados && usuariosAsignados.length > 0) {
+      // Si hay técnicos asignados, buscar el estado "asignacion" o usar "en_proceso"
+      try {
+        const estadoAsignacion = await this.estadosInstalacionService.findByCodigo('asignacion');
+        estadoInstalacionId = estadoAsignacion.estadoInstalacionId;
+        estadoInicial = EstadoInstalacion.ASIGNACION;
+      } catch {
+        // Si no existe el estado asignacion, usar en_proceso
+        try {
+          const estadoEnProceso = await this.estadosInstalacionService.findByCodigo('en_proceso');
+          estadoInstalacionId = estadoEnProceso.estadoInstalacionId;
+          estadoInicial = EstadoInstalacion.EN_PROCESO;
+        } catch {
+          // Si no existe ningún estado, dejar null y usar el enum por defecto
+        }
+      }
+    } else {
+      // Si no hay técnicos asignados, establecer estado pendiente
+      try {
+        const estadoPendiente = await this.estadosInstalacionService.findByCodigo('pendiente');
+        estadoInstalacionId = estadoPendiente.estadoInstalacionId;
+        estadoInicial = EstadoInstalacion.PENDIENTE;
+      } catch {
+        // Si no existe el estado pendiente, usar el enum por defecto
+      }
+    }
+    
     const instalacion = this.instalacionesRepository.create({
       ...instalacionData,
       identificadorUnico,
       instalacionCodigo: identificadorUnico, // Usar el mismo valor para ambos campos
       usuarioRegistra: usuarioId,
+      estado: estadoInicial,
+      estadoInstalacionId: estadoInstalacionId || undefined,
     });
     
     const savedInstalacion = await this.instalacionesRepository.save(instalacion);
@@ -160,6 +193,7 @@ export class InstalacionesService {
           i.instalacionSelloNumero,
           i.instalacionSelloRegulador,
           i.instalacionFecha,
+          i.fechaAsignacionMetrogas,
           i.fechaAsignacion,
           i.fechaConstruccion,
           i.fechaCertificacion,
@@ -326,6 +360,7 @@ export class InstalacionesService {
         instalacionSelloNumero: row.instalacionSelloNumero,
         instalacionSelloRegulador: row.instalacionSelloRegulador,
         instalacionFecha: row.instalacionFecha,
+        fechaAsignacionMetrogas: row.fechaAsignacionMetrogas,
         fechaAsignacion: row.fechaAsignacion,
         fechaConstruccion: row.fechaConstruccion,
         fechaCertificacion: row.fechaCertificacion,
@@ -406,6 +441,7 @@ export class InstalacionesService {
         i.instalacionSelloNumero,
         i.instalacionSelloRegulador,
         i.instalacionFecha,
+        i.fechaAsignacionMetrogas,
         i.fechaAsignacion,
         i.fechaConstruccion,
         i.fechaCertificacion,
@@ -523,6 +559,7 @@ export class InstalacionesService {
       instalacionSelloNumero: row.instalacionSelloNumero,
       instalacionSelloRegulador: row.instalacionSelloRegulador,
       instalacionFecha: row.instalacionFecha,
+      fechaAsignacionMetrogas: row.fechaAsignacionMetrogas,
       fechaAsignacion: row.fechaAsignacion,
       fechaConstruccion: row.fechaConstruccion,
       fechaCertificacion: row.fechaCertificacion,
@@ -605,17 +642,53 @@ export class InstalacionesService {
     }
     
     // Actualizar usuarios asignados si se proporcionaron
-    if (usuariosAsignados && Array.isArray(usuariosAsignados)) {
+    if (usuariosAsignados !== undefined && Array.isArray(usuariosAsignados)) {
       // Desasignar todos los usuarios actuales
       await this.instalacionesUsuariosService.desasignarUsuarios(id);
       
-      // Asignar los nuevos usuarios
+      // Determinar el nuevo estado según si hay técnicos asignados
+      let nuevoEstado = instalacion.estado;
+      let nuevoEstadoInstalacionId: number | null = null;
+      
       if (usuariosAsignados.length > 0) {
+        // Si hay técnicos asignados, buscar el estado "asignacion" o usar "en_proceso"
+        try {
+          const estadoAsignacion = await this.estadosInstalacionService.findByCodigo('asignacion');
+          nuevoEstadoInstalacionId = estadoAsignacion.estadoInstalacionId;
+          nuevoEstado = EstadoInstalacion.ASIGNACION;
+        } catch {
+          try {
+            const estadoEnProceso = await this.estadosInstalacionService.findByCodigo('en_proceso');
+            nuevoEstadoInstalacionId = estadoEnProceso.estadoInstalacionId;
+            nuevoEstado = EstadoInstalacion.EN_PROCESO;
+          } catch {
+            // Si no existe ningún estado, mantener el estado actual
+          }
+        }
+        
+        // Asignar los nuevos usuarios
         const usuariosParaAsignar = usuariosAsignados.map(usuarioId => ({
           usuarioId,
           rolEnInstalacion: 'tecnico' // Por defecto técnico
         }));
         await this.instalacionesUsuariosService.asignarUsuarios(id, usuariosParaAsignar);
+      } else {
+        // Si no hay técnicos asignados, establecer estado pendiente
+        try {
+          const estadoPendiente = await this.estadosInstalacionService.findByCodigo('pendiente');
+          nuevoEstadoInstalacionId = estadoPendiente.estadoInstalacionId;
+          nuevoEstado = EstadoInstalacion.PENDIENTE;
+        } catch {
+          // Si no existe el estado pendiente, mantener el estado actual
+        }
+      }
+      
+      // Actualizar el estado de la instalación si cambió
+      if (nuevoEstado !== instalacion.estado) {
+        await this.instalacionesRepository.update(id, {
+          estado: nuevoEstado,
+          estadoInstalacionId: nuevoEstadoInstalacionId || undefined,
+        });
       }
     }
     
@@ -731,10 +804,8 @@ export class InstalacionesService {
     if (nuevoEstado === EstadoInstalacion.CERTIFICACION && !instalacion.fechaCertificacion) {
       instalacion.fechaCertificacion = ahora as any;
       
-      // Si viene de construccion, descontar materiales del inventario del técnico
-      if (estadoAnterior === EstadoInstalacion.CONSTRUCCION) {
-        await this.descontarMaterialesDeTecnico(instalacionId);
-      }
+      // NO descontar aquí - los materiales ya se descontaron cuando el técnico los registró
+      // Esto evita descuentos duplicados que causan que el inventario quede en 0 incorrectamente
     }
     
     if (nuevoEstado === EstadoInstalacion.NOVEDAD && !instalacion.fechaNovedad) {

@@ -57,6 +57,26 @@ async function bootstrap() {
     allowedHeaders: ['Content-Type', 'Authorization'],
   });
 
+  // Root endpoint (before global prefix)
+  const httpAdapter = app.getHttpAdapter();
+  httpAdapter.get('/', (req: any, res: any) => {
+    res.json({
+      name: 'Jarlepsis API',
+      version: '1.0.0',
+      status: 'ok',
+      timestamp: new Date().toISOString(),
+      endpoints: {
+        api: '/api/v1',
+        docs: '/api/docs',
+        health: '/api/v1/health',
+      },
+    });
+  });
+  
+  httpAdapter.head('/', (req: any, res: any) => {
+    res.status(200).end();
+  });
+
   // Global prefix
   app.setGlobalPrefix('api/v1');
 

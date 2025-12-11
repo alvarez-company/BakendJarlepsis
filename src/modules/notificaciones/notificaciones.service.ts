@@ -200,6 +200,31 @@ export class NotificacionesService {
     );
   }
 
+  async crearNotificacionMaterialesAsignados(
+    tecnicoId: number,
+    asignacionCodigo: string,
+    cantidadMateriales: number,
+    asignadorNombre: string,
+    bodegaNombre?: string,
+  ): Promise<Notificacion> {
+    const mensaje = cantidadMateriales === 1
+      ? `Se te ha asignado 1 material${bodegaNombre ? ` desde ${bodegaNombre}` : ''} por ${asignadorNombre}.`
+      : `Se te han asignado ${cantidadMateriales} materiales${bodegaNombre ? ` desde ${bodegaNombre}` : ''} por ${asignadorNombre}.`;
+    
+    return this.crearNotificacion(
+      tecnicoId,
+      TipoNotificacion.MATERIALES_ASIGNADOS,
+      'Nuevos Materiales Asignados',
+      mensaje,
+      {
+        asignacionCodigo,
+        cantidadMateriales,
+        asignadorNombre,
+        bodegaNombre,
+      },
+    );
+  }
+
   async crearNotificacionMensajeNuevo(
     usuariosIds: number[],
     grupoId: number,

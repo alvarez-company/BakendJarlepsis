@@ -22,6 +22,7 @@ export class InstalacionesMaterialesService {
     const materialGuardado = await this.instalacionMaterialRepository.save(instalacionMaterial);
     
     // Descontar del inventario del técnico asignado cuando se agrega un material
+    // Esto se hace inmediatamente cuando el técnico registra el material desde la app móvil
     await this.descontarMaterialDelTecnico(createDto.instalacionId, createDto.materialId, createDto.cantidad);
     
     return materialGuardado;

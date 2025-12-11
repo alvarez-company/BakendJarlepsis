@@ -53,6 +53,9 @@ export class Instalacion {
   @Column({ type: 'date', nullable: true })
   instalacionFecha: Date;
 
+  @Column({ type: 'date', nullable: true })
+  fechaAsignacionMetrogas: Date;
+
   // Fechas de estados legacy
   @Column({ type: 'datetime', nullable: true })
   fechaAsignacion: Date;

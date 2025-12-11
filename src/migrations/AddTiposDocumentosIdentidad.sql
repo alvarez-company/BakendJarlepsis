@@ -25,7 +25,8 @@ VALUES
   ('RC', 'Registro Civil', 'Documento de identidad para menores de 7 años', 1),
   ('PA', 'Pasaporte', 'Documento de identidad para viajes internacionales', 1),
   ('NIT', 'Número de Identificación Tributaria', 'Número de identificación tributaria para personas jurídicas', 1),
-  ('NUIP', 'Número Único de Identificación Personal', 'Número único de identificación personal', 1);
+  ('NUIP', 'Número Único de Identificación Personal', 'Número único de identificación personal', 1),
+  ('SIC', 'SIC', 'Sistema de Identificación de Clientes', 1);
 
 -- Agregar columna tipoDocumentoId a la tabla usuarios
 SET @col_exists_usuarios = (SELECT COUNT(*) 
