@@ -80,7 +80,7 @@ export class ClientesService {
       });
       
       // Recalcular cantidadInstalaciones para cada cliente (solo finalizadas)
-      // Usar consulta SQL raw para contar instalaciones finalizadas
+      // y obtener información de instalación asignada
       for (const cliente of clientes) {
         try {
           const resultado = await this.clientesRepository.query(
@@ -98,6 +98,27 @@ export class ClientesService {
               .where('clienteId = :id', { id: cliente.clienteId })
               .execute();
             cliente.cantidadInstalaciones = cantidadFinalizadas;
+          }
+
+          // Obtener la instalación asignada más reciente (que tenga usuarios asignados o esté en estado asignacion)
+          const instalacionAsignada = await this.clientesRepository.query(
+            `SELECT i.instalacionId, i.instalacionCodigo, i.identificadorUnico, i.estado
+             FROM instalaciones i
+             LEFT JOIN instalaciones_usuarios iu ON i.instalacionId = iu.instalacionId AND iu.activo = 1
+             WHERE i.clienteId = ? 
+             AND (iu.instalacionUsuarioId IS NOT NULL OR i.estado IN ('asignacion', 'pendiente', 'en_proceso'))
+             ORDER BY i.fechaCreacion DESC
+             LIMIT 1`,
+            [cliente.clienteId]
+          );
+
+          if (instalacionAsignada && instalacionAsignada.length > 0) {
+            (cliente as any).instalacionAsignada = {
+              instalacionId: instalacionAsignada[0].instalacionId,
+              instalacionCodigo: instalacionAsignada[0].instalacionCodigo,
+              identificadorUnico: instalacionAsignada[0].identificadorUnico,
+              estado: instalacionAsignada[0].estado,
+            };
           }
         } catch (error) {
           console.error(`Error al recalcular instalaciones para cliente ${cliente.clienteId}:`, error);
@@ -135,6 +156,32 @@ export class ClientesService {
     if (!cliente) {
       throw new NotFoundException(`Cliente con ID ${id} no encontrado`);
     }
+
+    // Obtener la instalación asignada más reciente
+    try {
+      const instalacionAsignada = await this.clientesRepository.query(
+        `SELECT i.instalacionId, i.instalacionCodigo, i.identificadorUnico, i.estado
+         FROM instalaciones i
+         LEFT JOIN instalaciones_usuarios iu ON i.instalacionId = iu.instalacionId AND iu.activo = 1
+         WHERE i.clienteId = ? 
+         AND (iu.instalacionUsuarioId IS NOT NULL OR i.estado IN ('asignacion', 'pendiente', 'en_proceso'))
+         ORDER BY i.fechaCreacion DESC
+         LIMIT 1`,
+        [id]
+      );
+
+      if (instalacionAsignada && instalacionAsignada.length > 0) {
+        (cliente as any).instalacionAsignada = {
+          instalacionId: instalacionAsignada[0].instalacionId,
+          instalacionCodigo: instalacionAsignada[0].instalacionCodigo,
+          identificadorUnico: instalacionAsignada[0].identificadorUnico,
+          estado: instalacionAsignada[0].estado,
+        };
+      }
+    } catch (error) {
+      console.error(`Error al obtener instalación asignada para cliente ${id}:`, error);
+    }
+
     return cliente;
   }
 
