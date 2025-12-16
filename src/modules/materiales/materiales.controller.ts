@@ -18,6 +18,7 @@ import { CreateMaterialDto } from './dto/create-material.dto';
 import { UpdateMaterialDto } from './dto/update-material.dto';
 import { AjustarStockDto } from './dto/ajustar-stock.dto';
 import { ExportacionService } from '../exportacion/exportacion.service';
+import { NumerosMedidorService } from '../numeros-medidor/numeros-medidor.service';
 import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard';
 import { RolesGuard } from '../../common/guards/roles.guard';
 import { Roles } from '../../common/decorators/roles.decorator';
@@ -30,6 +31,7 @@ export class MaterialesController {
   constructor(
     private readonly materialesService: MaterialesService,
     private readonly exportacionService: ExportacionService,
+    private readonly numerosMedidorService: NumerosMedidorService,
   ) {}
 
   @Post()
@@ -76,6 +78,16 @@ export class MaterialesController {
   @ApiOperation({ summary: 'Duplicar un material' })
   duplicate(@Param('id') id: string, @Request() req) {
     return this.materialesService.duplicate(+id, req.user.usuarioId);
+  }
+
+  @Post(':id/asignar-numeros-medidor')
+  @Roles('superadmin', 'admin')
+  @ApiOperation({ summary: 'Asignar números de medidor a un material. El material se marcará automáticamente como medidor si no lo está.' })
+  async asignarNumerosMedidor(
+    @Param('id') id: string,
+    @Body() body: { numerosMedidor: string[] }
+  ) {
+    return this.numerosMedidorService.crearMultiples(+id, body.numerosMedidor);
   }
 
   @Delete(':id')

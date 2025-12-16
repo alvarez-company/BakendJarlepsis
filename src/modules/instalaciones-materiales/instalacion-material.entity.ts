@@ -5,6 +5,7 @@ import {
   CreateDateColumn,
   UpdateDateColumn,
   ManyToOne,
+  OneToMany,
   JoinColumn,
 } from 'typeorm';
 
@@ -35,6 +36,9 @@ export class InstalacionMaterial {
   @ManyToOne('Material', 'instalacionesMateriales', { onDelete: 'CASCADE' })
   @JoinColumn({ name: 'materialId' })
   material: any;
+
+  @OneToMany('NumeroMedidor', 'instalacionMaterial')
+  numerosMedidor: any[];
 
   @CreateDateColumn()
   fechaCreacion: Date;

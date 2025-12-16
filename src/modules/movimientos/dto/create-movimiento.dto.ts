@@ -17,6 +17,12 @@ export class MaterialMovimientoDto {
   @IsNumber()
   @IsOptional()
   movimientoPrecioUnitario?: number;
+
+  @ApiProperty({ required: false, description: 'Números de medidor específicos para materiales de categoría medidor', type: [String] })
+  @IsArray()
+  @IsString({ each: true })
+  @IsOptional()
+  numerosMedidor?: string[]; // Números de medidor específicos para este material
 }
 
 export class CreateMovimientoDto {

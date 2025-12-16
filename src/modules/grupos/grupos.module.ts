@@ -7,6 +7,7 @@ import { MensajesModule } from '../mensajes/mensajes.module';
 import { UsersModule } from '../users/users.module';
 import { UsuariosGruposModule } from '../usuarios-grupos/usuarios-grupos.module';
 import { NotificacionesModule } from '../notificaciones/notificaciones.module';
+import { ChatModule } from '../chat/chat.module';
 
 @Module({
   imports: [
@@ -15,6 +16,7 @@ import { NotificacionesModule } from '../notificaciones/notificaciones.module';
     forwardRef(() => UsersModule),
     forwardRef(() => UsuariosGruposModule),
     forwardRef(() => NotificacionesModule),
+    forwardRef(() => ChatModule),
   ],
   controllers: [GruposController],
   providers: [GruposService],

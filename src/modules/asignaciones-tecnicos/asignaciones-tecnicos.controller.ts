@@ -6,6 +6,7 @@ import { CreateAsignacionTecnicoDto } from './dto/create-asignacion-tecnico.dto'
 import { UpdateAsignacionTecnicoDto } from './dto/update-asignacion-tecnico.dto';
 import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard';
 import { ExportacionService } from '../exportacion/exportacion.service';
+import { PaginationDto } from '../../common/dto/pagination.dto';
 
 @ApiTags('asignaciones-tecnicos')
 @Controller('asignaciones-tecnicos')
@@ -25,8 +26,8 @@ export class AsignacionesTecnicosController {
 
   @Get()
   @ApiOperation({ summary: 'Obtener todas las asignaciones' })
-  findAll() {
-    return this.service.findAll();
+  findAll(@Query() paginationDto?: PaginationDto) {
+    return this.service.findAll(paginationDto);
   }
 
   @Get(':id')
@@ -61,8 +62,8 @@ export class AsignacionesTecnicosController {
 
   @Delete(':id')
   @ApiOperation({ summary: 'Eliminar una asignación' })
-  remove(@Param('id') id: string) {
-    return this.service.remove(+id);
+  remove(@Param('id') id: string, @Request() req) {
+    return this.service.remove(+id, req.user.usuarioId);
   }
 
   @Get('export/excel')
@@ -71,7 +72,8 @@ export class AsignacionesTecnicosController {
   @ApiQuery({ name: 'dateEnd', required: false, type: String })
   async exportToExcel(@Res() res: Response, @Query('dateStart') dateStart?: string, @Query('dateEnd') dateEnd?: string) {
     try {
-      const asignaciones = await this.service.findAll();
+      const resultado = await this.service.findAll({ page: 1, limit: 10000 });
+      const asignaciones = resultado.data;
       
       let filteredData = asignaciones;
       
@@ -127,7 +129,8 @@ export class AsignacionesTecnicosController {
   @ApiQuery({ name: 'dateEnd', required: false, type: String })
   async exportToPdf(@Res() res: Response, @Query('dateStart') dateStart?: string, @Query('dateEnd') dateEnd?: string) {
     try {
-      const asignaciones = await this.service.findAll();
+      const resultado = await this.service.findAll({ page: 1, limit: 10000 });
+      const asignaciones = resultado.data;
       
       let filteredData = asignaciones;
       

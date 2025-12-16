@@ -12,16 +12,16 @@ import { EstadoInstalacionEntity } from '../estados-instalacion/estado-instalaci
 
 export enum EstadoInstalacion {
   PENDIENTE = 'pendiente',
-  EN_PROCESO = 'en_proceso',
-  COMPLETADA = 'completada',
-  FINALIZADA = 'finalizada',
-  CANCELADA = 'cancelada',
-  // Valores legacy (mantener por compatibilidad)
   ASIGNACION = 'asignacion',
   CONSTRUCCION = 'construccion',
   CERTIFICACION = 'certificacion',
   NOVEDAD = 'novedad',
   ANULADA = 'anulada',
+  COMPLETADA = 'completada',
+  // Estados legacy (mantener por compatibilidad temporal)
+  EN_PROCESO = 'en_proceso',
+  FINALIZADA = 'finalizada', // Mapear a 'completada'
+  CANCELADA = 'cancelada', // Mapear a 'anulada'
 }
 
 @Entity('instalaciones')

@@ -95,6 +95,6 @@ Pais (Colombia)
 
 Después de ejecutar este script:
 1. Las Sedes se asocian a Departamentos
-2. Las Oficinas se asocian a Municipios
-3. Los usuarios pueden asignarse a Sedes, Oficinas y Bodegas específicas
+2. Las Bodegas se asocian directamente a Sedes
+3. Los usuarios pueden asignarse a Sedes y Bodegas específicas
 

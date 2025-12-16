@@ -7,6 +7,7 @@ import { MaterialBodega } from './material-bodega.entity';
 import { InventariosModule } from '../inventarios/inventarios.module';
 import { ExportacionModule } from '../exportacion/exportacion.module';
 import { InventarioTecnicoModule } from '../inventario-tecnico/inventario-tecnico.module';
+import { NumerosMedidorModule } from '../numeros-medidor/numeros-medidor.module';
 
 @Module({
   imports: [
@@ -14,6 +15,7 @@ import { InventarioTecnicoModule } from '../inventario-tecnico/inventario-tecnic
     InventariosModule,
     ExportacionModule,
     forwardRef(() => InventarioTecnicoModule),
+    forwardRef(() => NumerosMedidorModule),
   ],
   controllers: [MaterialesController],
   providers: [MaterialesService],

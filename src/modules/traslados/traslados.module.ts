@@ -9,6 +9,7 @@ import { InventariosModule } from '../inventarios/inventarios.module';
 import { BodegasModule } from '../bodegas/bodegas.module';
 import { AuditoriaModule } from '../auditoria/auditoria.module';
 import { ExportacionModule } from '../exportacion/exportacion.module';
+import { NumerosMedidorModule } from '../numeros-medidor/numeros-medidor.module';
 
 @Module({
   imports: [
@@ -19,6 +20,7 @@ import { ExportacionModule } from '../exportacion/exportacion.module';
     BodegasModule,
     AuditoriaModule,
     ExportacionModule,
+    NumerosMedidorModule,
   ],
   controllers: [TrasladosController],
   providers: [TrasladosService],

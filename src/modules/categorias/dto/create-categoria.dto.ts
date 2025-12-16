@@ -16,11 +16,6 @@ export class CreateCategoriaDto {
   @IsOptional()
   categoriaCodigo?: string;
 
-  @ApiProperty({ required: false, description: 'ID de la categoría padre para crear subcategoría' })
-  @IsNumber()
-  @IsOptional()
-  categoriaPadreId?: number;
-
   @ApiProperty({ required: false, default: true })
   @IsBoolean()
   @IsOptional()

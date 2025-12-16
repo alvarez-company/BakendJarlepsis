@@ -178,5 +178,23 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect {
   obtenerUsuariosConectados(): number[] {
     return Array.from(this.users.keys());
   }
+
+  emitirCierreChat(grupoId: number, usuariosIds: number[], motivo: string) {
+    usuariosIds.forEach((userId) => {
+      const socketId = this.users.get(userId);
+      if (socketId) {
+        this.server.to(socketId).emit('chat_cerrado', {
+          grupoId,
+          motivo,
+        });
+      }
+    });
+    this.logger.log(`Chat ${grupoId} cerrado. Notificación enviada a ${usuariosIds.length} usuarios.`);
+  }
+
+  emitirMensajeSistema(grupoId: number, mensaje: any) {
+    this.server.to(`grupo_${grupoId}`).emit('mensaje_nuevo', mensaje);
+    this.logger.log(`Mensaje del sistema emitido al grupo ${grupoId}`);
+  }
 }
 

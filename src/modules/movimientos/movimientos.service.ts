@@ -10,6 +10,9 @@ import { UsersService } from '../users/users.service';
 import { AuditoriaService } from '../auditoria/auditoria.service';
 import { TipoEntidad } from '../auditoria/auditoria.entity';
 import { InventarioTecnicoService } from '../inventario-tecnico/inventario-tecnico.service';
+import { NumerosMedidorService } from '../numeros-medidor/numeros-medidor.service';
+import { EstadoNumeroMedidor } from '../numeros-medidor/numero-medidor.entity';
+import { PaginationDto } from '../../common/dto/pagination.dto';
 
 @Injectable()
 export class MovimientosService {
@@ -28,6 +31,8 @@ export class MovimientosService {
     private auditoriaService: AuditoriaService,
     @Inject(forwardRef(() => InventarioTecnicoService))
     private inventarioTecnicoService: InventarioTecnicoService,
+    @Inject(forwardRef(() => NumerosMedidorService))
+    private numerosMedidorService: NumerosMedidorService,
   ) {}
 
   private async generarIdentificadorUnico(tipoMovimiento: TipoMovimiento): Promise<string> {
@@ -259,6 +264,9 @@ export class MovimientosService {
         proveedorId: createMovimientoDto.proveedorId || null,
         movimientoCodigo: movimientoCodigo,
         identificadorUnico: identificadorUnicoMovimiento, // Identificador único autogenerado por movimiento
+        numerosMedidor: materialDto.numerosMedidor && materialDto.numerosMedidor.length > 0 
+          ? materialDto.numerosMedidor 
+          : null, // Guardar números de medidor en el movimiento
       };
       
       // Agregar información del origen (bodega o técnico) para salidas y devoluciones
@@ -312,9 +320,89 @@ export class MovimientosService {
           movimientoEstado: movimientoGuardado.movimientoEstado,
           origenTipo: movimientoGuardado.origenTipo,
           tecnicoOrigenId: movimientoGuardado.tecnicoOrigenId,
+          numerosMedidor: movimientoGuardado.numerosMedidor,
           fechaCreacion: movimientoGuardado.fechaCreacion,
           fechaActualizacion: movimientoGuardado.fechaActualizacion,
         } as any);
+      }
+
+      // Manejar números de medidor si se proporcionan
+      try {
+        const material = await this.materialesService.findOne(materialIdFinal);
+        
+        // Si se proporcionan números de medidor, procesarlos (el servicio marcará automáticamente el material como medidor)
+        if (materialDto.numerosMedidor && materialDto.numerosMedidor.length > 0) {
+          const tipoMovimiento = createMovimientoDto.movimientoTipo;
+          const esEntrada = tipoMovimiento === TipoMovimiento.ENTRADA;
+          const esSalida = tipoMovimiento === TipoMovimiento.SALIDA;
+          const esDevolucion = tipoMovimiento === TipoMovimiento.DEVOLUCION;
+          
+          for (const numeroMedidor of materialDto.numerosMedidor) {
+            // Buscar si ya existe este número de medidor
+            let numeroMedidorEntity = await this.numerosMedidorService.findByNumero(numeroMedidor);
+            
+            if (esEntrada) {
+              // ENTRADA: Solo crear números nuevos. Los números de medidor NUNCA se repiten, incluso si ya salieron o fueron instalados
+              if (!numeroMedidorEntity) {
+                // Crear nuevo número de medidor
+                await this.numerosMedidorService.create({
+                  materialId: materialIdFinal,
+                  numeroMedidor: numeroMedidor,
+                  estado: EstadoNumeroMedidor.DISPONIBLE,
+                });
+              } else {
+                // Si el número ya existe, lanzar error - los números de medidor nunca se repiten
+                throw new BadRequestException(
+                  `El número de medidor "${numeroMedidor}" ya existe en el sistema. Los números de medidor son únicos y nunca se repiten, incluso si ya salieron de inventario o fueron instalados.`
+                );
+              }
+            } else if (esSalida || esDevolucion) {
+              // SALIDA/DEVOLUCIÓN: Cambiar estado según el destino
+              if (!numeroMedidorEntity) {
+                // Si no existe, crear con estado según el destino
+                const estadoInicial = createMovimientoDto.origenTipo === 'tecnico' 
+                  ? EstadoNumeroMedidor.ASIGNADO_TECNICO 
+                  : EstadoNumeroMedidor.DISPONIBLE;
+                
+                await this.numerosMedidorService.create({
+                  materialId: materialIdFinal,
+                  numeroMedidor: numeroMedidor,
+                  estado: estadoInicial,
+                  usuarioId: createMovimientoDto.tecnicoOrigenId || null,
+                });
+              } else {
+                // Actualizar estado según el destino
+                if (createMovimientoDto.origenTipo === 'tecnico' && createMovimientoDto.tecnicoOrigenId) {
+                  // Si va a técnico, obtener inventario técnico
+                  const inventarioTecnico = await this.inventarioTecnicoService.findByUsuario(createMovimientoDto.tecnicoOrigenId);
+                  const inventarioItem = inventarioTecnico.find(
+                    (inv) => inv.materialId === materialIdFinal && inv.usuarioId === createMovimientoDto.tecnicoOrigenId
+                  );
+                  
+                  await this.numerosMedidorService.update(numeroMedidorEntity.numeroMedidorId, {
+                    estado: EstadoNumeroMedidor.ASIGNADO_TECNICO,
+                    usuarioId: createMovimientoDto.tecnicoOrigenId,
+                    inventarioTecnicoId: inventarioItem?.inventarioTecnicoId || null,
+                    instalacionId: null,
+                    instalacionMaterialId: null,
+                  });
+                } else {
+                  // Si va a bodega/sede, cambiar a disponible
+                  await this.numerosMedidorService.update(numeroMedidorEntity.numeroMedidorId, {
+                    estado: EstadoNumeroMedidor.DISPONIBLE,
+                    instalacionId: null,
+                    instalacionMaterialId: null,
+                    usuarioId: null,
+                    inventarioTecnicoId: null,
+                  });
+                }
+              }
+            }
+          }
+        }
+      } catch (error) {
+        console.error(`Error al manejar números de medidor en movimiento:`, error);
+        // No lanzar error para no interrumpir el proceso
       }
 
       // Ajustar stock según el tipo de movimiento (solo si el movimiento está completado)
@@ -587,8 +675,19 @@ export class MovimientosService {
     }
   }
 
-  async findAll(): Promise<any[]> {
+  async findAll(paginationDto?: PaginationDto): Promise<{ data: any[]; total: number; page: number; limit: number }> {
     try {
+      const page = paginationDto?.page || 1;
+      // Si no se especifica límite o es muy grande, usar un valor razonable o sin límite
+      const limit = paginationDto?.limit || 10;
+      const skip = (page - 1) * limit;
+
+      // Obtener el total de registros
+      const totalResult = await this.movimientosRepository.query(
+        `SELECT COUNT(*) as total FROM movimientos_inventario`
+      );
+      const total = totalResult[0]?.total || 0;
+
       // Primero intentar con query raw para evitar problemas con TypeORM y relaciones
       // Asegurar que se incluyan origenTipo y tecnicoOrigenId explícitamente
       const rawMovimientos = await this.movimientosRepository.query(
@@ -612,7 +711,9 @@ export class MovimientosService {
           fechaCreacion,
           fechaActualizacion
         FROM movimientos_inventario 
-        ORDER BY fechaCreacion DESC`
+        ORDER BY fechaCreacion DESC
+        LIMIT ? OFFSET ?`,
+        [limit, skip]
       );
 
       // Si hay movimientos, cargar relaciones manualmente
@@ -653,6 +754,7 @@ export class MovimientosService {
                   materialPrecio: material.materialPrecio,
                   materialFoto: material.materialFoto,
                   materialEstado: material.materialEstado,
+                  materialEsMedidor: material.materialEsMedidor || false,
                 };
             } catch (err) {
               // Error silencioso al cargar material
@@ -746,10 +848,20 @@ export class MovimientosService {
           })
         );
 
-        return movimientosConRelaciones;
+        return {
+          data: movimientosConRelaciones,
+          total: Number(total),
+          page,
+          limit,
+        };
       }
 
-      return rawMovimientos;
+      return {
+        data: rawMovimientos,
+        total: Number(total),
+        page,
+        limit,
+      };
     } catch (error) {
       console.error('Error en findAll de movimientos:', error);
       console.error('Mensaje:', error instanceof Error ? error.message : String(error));
@@ -778,6 +890,18 @@ export class MovimientosService {
 
       // Cargar material manualmente
       const movimientoConRelaciones: any = { ...movimiento };
+      
+      // Parsear numerosMedidor si existe (MySQL devuelve JSON como string)
+      if (movimiento.numerosMedidor) {
+        try {
+          movimientoConRelaciones.numerosMedidor = typeof movimiento.numerosMedidor === 'string'
+            ? JSON.parse(movimiento.numerosMedidor)
+            : movimiento.numerosMedidor;
+        } catch (err) {
+          // Si falla el parse, dejar como está
+          movimientoConRelaciones.numerosMedidor = movimiento.numerosMedidor;
+        }
+      }
       if (movimiento.materialId) {
         try {
           const material = await this.materialesService.findOne(movimiento.materialId);
@@ -789,6 +913,7 @@ export class MovimientosService {
             materialPrecio: material.materialPrecio,
             materialFoto: material.materialFoto,
             materialEstado: material.materialEstado,
+            materialEsMedidor: material.materialEsMedidor || false,
           };
             } catch (err) {
               // Error silencioso al cargar material
@@ -871,6 +996,18 @@ export class MovimientosService {
         movimientos.map(async (movimiento) => {
           const movimientoConRelaciones: any = { ...movimiento };
           
+          // Parsear numerosMedidor si existe (MySQL devuelve JSON como string)
+          if (movimiento.numerosMedidor) {
+            try {
+              movimientoConRelaciones.numerosMedidor = typeof movimiento.numerosMedidor === 'string'
+                ? JSON.parse(movimiento.numerosMedidor)
+                : movimiento.numerosMedidor;
+            } catch (err) {
+              // Si falla el parse, dejar como está
+              movimientoConRelaciones.numerosMedidor = movimiento.numerosMedidor;
+            }
+          }
+          
           if (movimiento.materialId) {
             try {
               const material = await this.materialesService.findOne(movimiento.materialId);
@@ -882,6 +1019,7 @@ export class MovimientosService {
                 materialPrecio: material.materialPrecio,
                 materialFoto: material.materialFoto,
                 materialEstado: material.materialEstado,
+                materialEsMedidor: material.materialEsMedidor || false,
               };
             } catch (err) {
               // Error silencioso al cargar material
@@ -1004,6 +1142,7 @@ export class MovimientosService {
                 materialPrecio: material.materialPrecio,
                 materialFoto: material.materialFoto,
                 materialEstado: material.materialEstado,
+                materialEsMedidor: material.materialEsMedidor || false,
               };
             } catch (err) {
               // Error silencioso al cargar material
@@ -1179,7 +1318,23 @@ export class MovimientosService {
   }
 
   async remove(id: number, usuarioId: number): Promise<void> {
-    const movimiento = await this.findOne(id);
+    // Validaciones previas
+    if (!id || isNaN(id) || id <= 0) {
+      throw new BadRequestException('ID de movimiento inválido');
+    }
+
+    if (!usuarioId || isNaN(usuarioId) || usuarioId <= 0) {
+      throw new BadRequestException('ID de usuario inválido');
+    }
+
+    // Verificar que el movimiento existe directamente en la base de datos
+    const movimiento = await this.movimientosRepository.findOne({
+      where: { movimientoId: id },
+    });
+
+    if (!movimiento) {
+      throw new NotFoundException(`Movimiento con ID ${id} no encontrado`);
+    }
     
     // Guardar datos completos para auditoría
     const datosEliminados = {
@@ -1206,10 +1361,23 @@ export class MovimientosService {
     
     if (movimientoCompletado && movimiento.inventarioId) {
       try {
+        // Validar que el inventario existe
         const inventario = await this.inventariosService.findOne(movimiento.inventarioId);
+        
+        if (!inventario) {
+          throw new BadRequestException(`Inventario con ID ${movimiento.inventarioId} no encontrado`);
+        }
+
         const bodegaId = inventario.bodegaId || inventario.bodega?.bodegaId;
         
         if (bodegaId) {
+          // Validar que el material existe
+          const material = await this.materialesService.findOne(movimiento.materialId);
+          
+          if (!material) {
+            throw new BadRequestException(`Material con ID ${movimiento.materialId} no encontrado`);
+          }
+
           // Revertir el stock (invertir la operación original)
           const tipoStr = String(movimiento.movimientoTipo).toLowerCase();
           const esDevolucion = tipoStr === 'devolucion' || movimiento.movimientoTipo === TipoMovimiento.DEVOLUCION;
@@ -1219,6 +1387,10 @@ export class MovimientosService {
           let cantidadRevertir = 0;
           const cantidadNumerica = Number(movimiento.movimientoCantidad) || 0;
           
+          if (cantidadNumerica <= 0) {
+            throw new BadRequestException('La cantidad del movimiento debe ser mayor a cero');
+          }
+
           if (esEntrada) {
             // Revertir entrada = restar (porque entrada suma stock)
             cantidadRevertir = -cantidadNumerica;
@@ -1231,9 +1403,70 @@ export class MovimientosService {
           }
           
           await this.materialesService.ajustarStock(movimiento.materialId, cantidadRevertir, bodegaId);
+          
+          // Manejar números de medidor si el material es medidor
+          try {
+            if (material.materialEsMedidor && movimiento.numerosMedidor) {
+              // Parsear números de medidor si viene como string (JSON)
+              let numerosMedidorArray: string[] = [];
+              if (typeof movimiento.numerosMedidor === 'string') {
+                try {
+                  numerosMedidorArray = JSON.parse(movimiento.numerosMedidor);
+                } catch {
+                  numerosMedidorArray = [];
+                }
+              } else if (Array.isArray(movimiento.numerosMedidor)) {
+                numerosMedidorArray = movimiento.numerosMedidor;
+              }
+              
+              if (numerosMedidorArray && numerosMedidorArray.length > 0) {
+                // Buscar los IDs de los números de medidor
+                const numerosMedidorIds: number[] = [];
+                for (const numeroStr of numerosMedidorArray) {
+                  try {
+                    const numeroEntity = await this.numerosMedidorService.findByNumero(numeroStr);
+                    if (numeroEntity) {
+                      numerosMedidorIds.push(numeroEntity.numeroMedidorId);
+                    }
+                  } catch (error) {
+                    console.warn(`No se encontró número de medidor: ${numeroStr}`);
+                  }
+                }
+                
+                if (numerosMedidorIds.length > 0) {
+                  if (esEntrada) {
+                    // Si se elimina una ENTRADA: eliminar los números de medidor creados
+                    // o marcarlos como no disponibles (dependiendo de la lógica de negocio)
+                    // Por ahora, los eliminamos directamente
+                    for (const numeroId of numerosMedidorIds) {
+                      try {
+                        await this.numerosMedidorService.remove(numeroId);
+                      } catch (error) {
+                        console.warn(`Error al eliminar número de medidor ${numeroId}:`, error);
+                      }
+                    }
+                  } else if (esSalida || esDevolucion) {
+                    // Si se elimina una SALIDA/DEVOLUCION: liberar números de medidor (marcarlos como disponibles)
+                    // Esto los devuelve al inventario
+                    await this.numerosMedidorService.liberarDeTecnico(numerosMedidorIds);
+                    // También liberar de instalación si estaban instalados
+                    await this.numerosMedidorService.liberarDeInstalacion(numerosMedidorIds);
+                  }
+                }
+              }
+            }
+          } catch (error) {
+            console.error('Error al manejar números de medidor durante eliminación:', error);
+            // Continuar con la eliminación aunque falle el manejo de números de medidor
+          }
         }
       } catch (error) {
-        // Continuar con la eliminación aunque falle la reversión de stock
+        // Si es un error de validación, lanzarlo
+        if (error instanceof BadRequestException || error instanceof NotFoundException) {
+          throw error;
+        }
+        // Para otros errores, loguear y continuar con la eliminación
+        console.error('Error al revertir stock durante eliminación:', error);
       }
     }
 
@@ -1248,11 +1481,29 @@ export class MovimientosService {
         `Movimiento ${movimiento.movimientoTipo} eliminado. Stock revertido.`
       );
     } catch (error) {
-      // Continuar con la eliminación aunque falle la auditoría
+      // Loguear error pero continuar con la eliminación
+      console.error('Error al registrar auditoría durante eliminación:', error);
     }
 
-    // Eliminar el movimiento
-    await this.movimientosRepository.remove(movimiento);
+    // Eliminar el movimiento - verificar nuevamente que existe antes de eliminar
+    try {
+      const movimientoAEliminar = await this.movimientosRepository.findOne({
+        where: { movimientoId: id },
+      });
+
+      if (!movimientoAEliminar) {
+        throw new NotFoundException(`Movimiento con ID ${id} ya fue eliminado o no existe`);
+      }
+
+      await this.movimientosRepository.remove(movimientoAEliminar);
+    } catch (error) {
+      // Si es un error de validación, lanzarlo
+      if (error instanceof NotFoundException) {
+        throw error;
+      }
+      // Para otros errores, intentar eliminar directamente
+      await this.movimientosRepository.remove(movimiento);
+    }
   }
 
   async actualizarEstado(movimientoId: number, nuevoEstado: EstadoMovimiento): Promise<MovimientoInventario> {
@@ -1425,6 +1676,7 @@ export class MovimientosService {
             materialCodigo: material.materialCodigo,
             materialNombre: material.materialNombre,
             materialStock: material.materialStock,
+            materialEsMedidor: material.materialEsMedidor || false,
           };
 
           // Cargar inventario
@@ -1814,6 +2066,18 @@ export class MovimientosService {
         return movimientoEnriquecido;
       })
     );
+  }
+
+  /**
+   * Verifica si un material es medidor usando el campo materialEsMedidor
+   */
+  private async esMaterialMedidor(material: any): Promise<boolean> {
+    if (!material) {
+      return false;
+    }
+
+    // Usar el campo materialEsMedidor para determinar si es medidor
+    return Boolean(material.materialEsMedidor);
   }
 }
 

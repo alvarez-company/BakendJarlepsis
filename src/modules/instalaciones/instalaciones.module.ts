@@ -18,6 +18,7 @@ import { EstadosInstalacionModule } from '../estados-instalacion/estados-instala
 import { InstalacionesMaterialesModule } from '../instalaciones-materiales/instalaciones-materiales.module';
 import { InventarioTecnicoModule } from '../inventario-tecnico/inventario-tecnico.module';
 import { UsersModule } from '../users/users.module';
+import { NumerosMedidorModule } from '../numeros-medidor/numeros-medidor.module';
 
 @Module({
   imports: [
@@ -36,6 +37,7 @@ import { UsersModule } from '../users/users.module';
     forwardRef(() => InstalacionesMaterialesModule),
     forwardRef(() => InventarioTecnicoModule),
     forwardRef(() => UsersModule),
+    forwardRef(() => NumerosMedidorModule),
   ],
   controllers: [InstalacionesController],
   providers: [InstalacionesService],

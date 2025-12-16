@@ -19,7 +19,10 @@ export class InventariosService {
   }
 
   async findAll(): Promise<Inventario[]> {
-    return this.inventariosRepository.find({ relations: ['bodega', 'materiales'] });
+    return this.inventariosRepository.find({ 
+      relations: ['bodega', 'bodega.sede', 'materiales'],
+      where: { inventarioEstado: true }
+    });
   }
 
   async findOne(id: number): Promise<Inventario> {

@@ -59,6 +59,9 @@ export class Material {
   @Column({ default: true })
   materialEstado: boolean;
 
+  @Column({ default: false })
+  materialEsMedidor: boolean;
+
   @ManyToOne('Categoria', 'materiales')
   @JoinColumn({ name: 'categoriaId' })
   categoria: any;
@@ -92,6 +95,9 @@ export class Material {
 
   @OneToMany('InstalacionMaterial', 'material')
   instalacionesMateriales: any[];
+
+  @OneToMany('NumeroMedidor', 'material')
+  numerosMedidor: any[];
 
   @CreateDateColumn()
   fechaCreacion: Date;
