@@ -724,6 +724,19 @@ export class InstalacionesService {
       throw error; // Lanzar el error para detener la eliminación si falla
     }
 
+    // Liberar números de medidor asignados a esta instalación antes de eliminar
+    try {
+      const numerosMedidorInstalacion = await this.numerosMedidorService.findByInstalacion(id);
+      if (numerosMedidorInstalacion.length > 0) {
+        await this.numerosMedidorService.liberarDeInstalacion(
+          numerosMedidorInstalacion.map(n => n.numeroMedidorId)
+        );
+      }
+    } catch (error) {
+      console.error(`Error al liberar números de medidor al eliminar instalación ${id}:`, error);
+      // Continuar con la eliminación aunque falle la liberación
+    }
+
     // Buscar y eliminar todas las salidas asociadas a esta instalación
     try {
       const movimientosAsociados = await this.movimientosService.findByInstalacion(id);
@@ -742,6 +755,14 @@ export class InstalacionesService {
     } catch (error) {
       console.error('Error al buscar y eliminar salidas asociadas:', error);
       // Continuar con la eliminación aunque falle la eliminación de salidas
+    }
+    
+    // Eliminar todos los materiales de instalación (esto también liberará números de medidor)
+    try {
+      await this.instalacionesMaterialesService.removeByInstalacion(id);
+    } catch (error) {
+      console.error(`Error al eliminar materiales de instalación ${id}:`, error);
+      // Continuar con la eliminación aunque falle
     }
 
     // Actualizar cantidad de instalaciones del cliente

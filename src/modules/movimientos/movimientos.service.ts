@@ -1435,22 +1435,38 @@ export class MovimientosService {
                 
                 if (numerosMedidorIds.length > 0) {
                   if (esEntrada) {
-                    // Si se elimina una ENTRADA: eliminar los números de medidor creados
-                    // o marcarlos como no disponibles (dependiendo de la lógica de negocio)
-                    // Por ahora, los eliminamos directamente
+                    // Si se elimina una ENTRADA: verificar si los números fueron creados en esta entrada
+                    // Solo eliminar si fueron creados recientemente (fechaCreacion cercana a la fecha del movimiento)
+                    // Si no, liberarlos a disponible
                     for (const numeroId of numerosMedidorIds) {
                       try {
-                        await this.numerosMedidorService.remove(numeroId);
+                        const numero = await this.numerosMedidorService.findOne(numeroId);
+                        if (numero) {
+                          // Verificar si el número fue creado en esta entrada (misma fecha aproximadamente)
+                          const fechaMovimiento = new Date(movimiento.fechaCreacion);
+                          const fechaNumero = new Date(numero.fechaCreacion);
+                          const diferenciaDias = Math.abs((fechaMovimiento.getTime() - fechaNumero.getTime()) / (1000 * 60 * 60 * 24));
+                          
+                          // Si fue creado en los últimos 2 días, probablemente fue creado en esta entrada
+                          if (diferenciaDias <= 2 && numero.estado === 'disponible') {
+                            // Eliminar solo si fue creado recientemente y está disponible
+                            await this.numerosMedidorService.remove(numeroId);
+                          } else {
+                            // Si no, liberarlo a disponible (puede haber sido usado antes)
+                            await this.numerosMedidorService.liberarDeInstalacion([numeroId]);
+                            await this.numerosMedidorService.liberarDeTecnico([numeroId]);
+                          }
+                        }
                       } catch (error) {
-                        console.warn(`Error al eliminar número de medidor ${numeroId}:`, error);
+                        console.warn(`Error al procesar número de medidor ${numeroId}:`, error);
                       }
                     }
                   } else if (esSalida || esDevolucion) {
-                    // Si se elimina una SALIDA/DEVOLUCION: liberar números de medidor (marcarlos como disponibles)
-                    // Esto los devuelve al inventario
-                    await this.numerosMedidorService.liberarDeTecnico(numerosMedidorIds);
-                    // También liberar de instalación si estaban instalados
+                    // Si se elimina una SALIDA/DEVOLUCION: liberar números de medidor
+                    // Primero liberar de instalación si estaban instalados
                     await this.numerosMedidorService.liberarDeInstalacion(numerosMedidorIds);
+                    // Luego liberar de técnico si estaban asignados
+                    await this.numerosMedidorService.liberarDeTecnico(numerosMedidorIds);
                   }
                 }
               }

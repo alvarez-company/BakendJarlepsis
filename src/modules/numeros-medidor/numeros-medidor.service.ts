@@ -142,10 +142,45 @@ export class NumerosMedidorService {
   }
 
   async findByUsuario(usuarioId: number): Promise<NumeroMedidor[]> {
-    return this.numerosMedidorRepository.find({
+    // Buscar números de medidor donde:
+    // 1. El usuarioId coincide directamente (asignados al técnico)
+    // 2. O están en instalaciones donde el usuario está asignado
+    const numerosAsignados = await this.numerosMedidorRepository.find({
       where: { usuarioId },
-      relations: ['material', 'material.categoria', 'inventarioTecnico', 'instalacionMaterial'],
+      relations: ['material', 'material.categoria', 'inventarioTecnico', 'instalacionMaterial', 'instalacionMaterial.instalacion'],
     });
+
+    // Buscar números de medidor en instalaciones del usuario
+    // Usamos una subconsulta para encontrar instalaciones del usuario
+    const numerosEnInstalaciones = await this.numerosMedidorRepository
+      .createQueryBuilder('numero')
+      .leftJoinAndSelect('numero.material', 'material')
+      .leftJoinAndSelect('material.categoria', 'categoria')
+      .leftJoinAndSelect('numero.inventarioTecnico', 'inventarioTecnico')
+      .leftJoinAndSelect('numero.instalacionMaterial', 'instalacionMaterial')
+      .leftJoinAndSelect('instalacionMaterial.instalacion', 'instalacion')
+      .leftJoin('instalaciones_usuarios', 'iu', 'iu.instalacionId = numero.instalacionId AND iu.activo = 1')
+      .where('iu.usuarioId = :usuarioId', { usuarioId })
+      .andWhere('numero.instalacionId IS NOT NULL')
+      .getMany();
+
+    // Combinar y eliminar duplicados
+    const todosNumeros = [...numerosAsignados, ...numerosEnInstalaciones];
+    const numerosUnicos = Array.from(
+      new Map(todosNumeros.map(n => [n.numeroMedidorId, n])).values()
+    );
+
+    // Asegurar que los números de medidor se devuelvan correctamente sin modificaciones
+    const resultado = numerosUnicos.map(n => {
+      const numeroOriginal = n.numeroMedidor || '';
+      const numeroLimpio = numeroOriginal.trim();
+      return {
+        ...n,
+        numeroMedidor: numeroLimpio
+      };
+    });
+
+    return resultado;
   }
 
   async findByInstalacion(instalacionId: number): Promise<NumeroMedidor[]> {
@@ -259,13 +294,24 @@ export class NumerosMedidorService {
   async liberarDeTecnico(numerosMedidorIds: number[]): Promise<NumeroMedidor[]> {
     const numerosMedidor = await this.numerosMedidorRepository.find({
       where: { numeroMedidorId: In(numerosMedidorIds) },
+      relations: ['inventarioTecnico', 'usuario'],
     });
 
     const resultados: NumeroMedidor[] = [];
     for (const numero of numerosMedidor) {
-      numero.estado = EstadoNumeroMedidor.DISPONIBLE;
-      numero.usuarioId = null;
-      numero.inventarioTecnicoId = null;
+      // Solo liberar si no está en una instalación
+      // Si está en instalación, mantener el estado pero limpiar referencias de técnico
+      if (numero.instalacionId || numero.instalacionMaterialId) {
+        // Si está en instalación, solo limpiar referencias de técnico pero mantener estado de instalación
+        numero.usuarioId = null;
+        numero.inventarioTecnicoId = null;
+      } else {
+        // Si no está en instalación, liberar completamente a disponible
+        numero.estado = EstadoNumeroMedidor.DISPONIBLE;
+        numero.usuarioId = null;
+        numero.inventarioTecnicoId = null;
+      }
+      
       resultados.push(await this.numerosMedidorRepository.save(numero));
     }
 
@@ -275,13 +321,29 @@ export class NumerosMedidorService {
   async liberarDeInstalacion(numerosMedidorIds: number[]): Promise<NumeroMedidor[]> {
     const numerosMedidor = await this.numerosMedidorRepository.find({
       where: { numeroMedidorId: In(numerosMedidorIds) },
+      relations: ['inventarioTecnico', 'usuario'],
     });
 
     const resultados: NumeroMedidor[] = [];
     for (const numero of numerosMedidor) {
-      numero.estado = EstadoNumeroMedidor.DISPONIBLE;
+      // Determinar el estado anterior basado en si tenía inventarioTecnicoId o usuarioId
+      // Si tenía inventarioTecnicoId o usuarioId, devolverlo al técnico
+      // Si no, devolverlo a disponible
+      if (numero.inventarioTecnicoId || numero.usuarioId) {
+        // Devolver al técnico (mantener inventarioTecnicoId y usuarioId si existen)
+        numero.estado = EstadoNumeroMedidor.ASIGNADO_TECNICO;
+        // No limpiar inventarioTecnicoId ni usuarioId para mantener la trazabilidad
+      } else {
+        // Devolver a disponible (sin asignación)
+        numero.estado = EstadoNumeroMedidor.DISPONIBLE;
+        numero.inventarioTecnicoId = null;
+        numero.usuarioId = null;
+      }
+      
+      // Limpiar referencias de instalación
       numero.instalacionId = null;
       numero.instalacionMaterialId = null;
+      
       resultados.push(await this.numerosMedidorRepository.save(numero));
     }
 

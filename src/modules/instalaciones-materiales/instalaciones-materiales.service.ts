@@ -67,27 +67,38 @@ export class InstalacionesMaterialesService {
           const numerosMedidorIds: number[] = [];
           
           for (const numeroMedidor of createDto.numerosMedidor) {
+            // Asegurar que el número de medidor se guarde correctamente sin modificaciones
+            const numeroMedidorParaGuardar = numeroMedidor?.trim() || numeroMedidor;
+            
             // Buscar si ya existe este número de medidor
-            let numeroMedidorEntity = await this.numerosMedidorService.findByNumero(numeroMedidor);
+            let numeroMedidorEntity = await this.numerosMedidorService.findByNumero(numeroMedidorParaGuardar);
             
             if (!numeroMedidorEntity) {
               // Crear nuevo número de medidor si no existe
               numeroMedidorEntity = await this.numerosMedidorService.create({
                 materialId: createDto.materialId,
-                numeroMedidor: numeroMedidor,
+                numeroMedidor: numeroMedidorParaGuardar,
                 estado: 'en_instalacion' as any,
                 instalacionId: createDto.instalacionId,
                 instalacionMaterialId: materialGuardado.instalacionMaterialId,
               });
             } else {
               // Actualizar número de medidor existente
-              numeroMedidorEntity = await this.numerosMedidorService.update(numeroMedidorEntity.numeroMedidorId, {
+              // Preservar usuarioId e inventarioTecnicoId si existen para mantener trazabilidad
+              const updateData: any = {
                 estado: 'en_instalacion' as any,
                 instalacionId: createDto.instalacionId,
                 instalacionMaterialId: materialGuardado.instalacionMaterialId,
-                usuarioId: null,
-                inventarioTecnicoId: null,
-              });
+              };
+              
+              // Solo limpiar usuarioId e inventarioTecnicoId si no existían previamente
+              // Esto mantiene la trazabilidad de dónde vino el número
+              if (!numeroMedidorEntity.usuarioId && !numeroMedidorEntity.inventarioTecnicoId) {
+                updateData.usuarioId = null;
+                updateData.inventarioTecnicoId = null;
+              }
+              
+              numeroMedidorEntity = await this.numerosMedidorService.update(numeroMedidorEntity.numeroMedidorId, updateData);
             }
             
             numerosMedidorIds.push(numeroMedidorEntity.numeroMedidorId);
@@ -187,11 +198,38 @@ export class InstalacionesMaterialesService {
       relations: ['material', 'material.categoria', 'material.unidadMedida', 'numerosMedidor'],
     });
     
+    // Obtener todos los números de medidor de la instalación para asegurar que se incluyan todos
+    const todosNumerosMedidor = await this.numerosMedidorService.findByInstalacion(instalacionId);
+    
     // Transformar los números de medidor a un array de strings para facilitar el uso en el frontend
     return materiales.map(material => {
-      const numerosMedidorStrings = material.numerosMedidor 
-        ? material.numerosMedidor.map((num: any) => num.numeroMedidor || num)
-        : [];
+      // Primero intentar obtener de la relación cargada
+      let numerosMedidorStrings: string[] = [];
+      
+      if (material.numerosMedidor && Array.isArray(material.numerosMedidor)) {
+        // Filtrar por instalacionMaterialId para asegurar que solo se incluyan los números de este material
+        const numerosFiltrados = material.numerosMedidor.filter((num: any) => {
+          return num.instalacionMaterialId === material.instalacionMaterialId;
+        });
+        
+        numerosMedidorStrings = numerosFiltrados.map((num: any) => {
+          // Asegurar que se obtenga el número correcto
+          return (num.numeroMedidor || (typeof num === 'string' ? num : '')).trim();
+        }).filter((num: string) => num && num !== '');
+      }
+      
+      // Si no se encontraron números en la relación, buscar en todosNumerosMedidor
+      if (numerosMedidorStrings.length === 0) {
+        const numerosDelMaterial = todosNumerosMedidor.filter(
+          n => n.instalacionMaterialId === material.instalacionMaterialId
+        );
+        
+        if (numerosDelMaterial.length > 0) {
+          numerosMedidorStrings = numerosDelMaterial
+            .map(n => (n.numeroMedidor || '').trim())
+            .filter(n => n && n !== '');
+        }
+      }
       
       return {
         ...material,
@@ -373,6 +411,7 @@ export class InstalacionesMaterialesService {
       );
       
       if (numerosDelMaterial.length > 0) {
+        // Liberar de instalación primero (esto devolverá al técnico si venían del técnico, o a disponible)
         await this.numerosMedidorService.liberarDeInstalacion(
           numerosDelMaterial.map(n => n.numeroMedidorId)
         );
@@ -389,6 +428,39 @@ export class InstalacionesMaterialesService {
   }
 
   async removeByInstalacion(instalacionId: number): Promise<void> {
+    // Obtener todos los materiales de la instalación antes de eliminarlos
+    const materiales = await this.instalacionMaterialRepository.find({
+      where: { instalacionId },
+    });
+    
+    // Liberar números de medidor de todos los materiales
+    for (const material of materiales) {
+      try {
+        const numerosMedidorInstalacion = await this.numerosMedidorService.findByInstalacion(instalacionId);
+        const numerosDelMaterial = numerosMedidorInstalacion.filter(
+          n => n.materialId === material.materialId && n.instalacionMaterialId === material.instalacionMaterialId
+        );
+        
+        if (numerosDelMaterial.length > 0) {
+          await this.numerosMedidorService.liberarDeInstalacion(
+            numerosDelMaterial.map(n => n.numeroMedidorId)
+          );
+        }
+      } catch (error) {
+        console.error(`Error al liberar números de medidor al eliminar material ${material.instalacionMaterialId}:`, error);
+        // Continuar con la eliminación aunque falle la liberación
+      }
+      
+      // Devolver el material al inventario del técnico
+      try {
+        await this.devolverMaterialAlTecnico(instalacionId, material.materialId, material.cantidad);
+      } catch (error) {
+        console.error(`Error al devolver material ${material.materialId} al técnico:`, error);
+        // Continuar con la eliminación aunque falle la devolución
+      }
+    }
+    
+    // Eliminar todos los materiales de la instalación
     await this.instalacionMaterialRepository.delete({ instalacionId });
   }
 
