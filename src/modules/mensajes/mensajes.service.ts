@@ -1,10 +1,12 @@
-import { Injectable, Inject, forwardRef } from '@nestjs/common';
+import { Injectable, Inject, forwardRef, BadRequestException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { Mensaje } from './mensaje.entity';
 import { ChatGateway } from '../chat/chat.gateway';
 import { NotificacionesService } from '../notificaciones/notificaciones.service';
 import { UsuariosGruposService } from '../usuarios-grupos/usuarios-grupos.service';
+import { UsersService } from '../users/users.service';
+import { GruposService } from '../grupos/grupos.service';
 
 @Injectable()
 export class MensajesService {
@@ -17,9 +19,24 @@ export class MensajesService {
     private notificacionesService: NotificacionesService,
     @Inject(forwardRef(() => UsuariosGruposService))
     private usuariosGruposService: UsuariosGruposService,
+    @Inject(forwardRef(() => UsersService))
+    private usersService: UsersService,
+    @Inject(forwardRef(() => GruposService))
+    private gruposService: GruposService,
   ) {}
 
   async enviarMensaje(grupoId: number, usuarioId: number, texto: string, mensajeRespuestaId?: number): Promise<Mensaje> {
+    // Validar que el usuario esté activo
+    const usuario = await this.usersService.findOne(usuarioId);
+    if (!usuario || !usuario.usuarioEstado) {
+      throw new BadRequestException('No puedes enviar mensajes. Tu cuenta está bloqueada o inactiva.');
+    }
+
+    // Validar que el grupo esté activo
+    const grupo = await this.gruposService.obtenerGrupoPorId(grupoId);
+    if (!grupo.grupoActivo) {
+      throw new BadRequestException('Este chat ha sido cerrado y ya no permite nuevos mensajes.');
+    }
     const mensaje = this.mensajesRepository.create({
       grupoId,
       usuarioId,

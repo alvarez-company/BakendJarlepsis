@@ -119,6 +119,9 @@ export class MovimientoInventario {
   @Column({ type: 'enum', enum: ['bodega', 'tecnico'], nullable: true })
   origenTipo: 'bodega' | 'tecnico';
 
+  @Column({ type: 'json', nullable: true })
+  numerosMedidor?: string[]; // Números de medidor específicos para este movimiento
+
   @CreateDateColumn()
   fechaCreacion: Date;
 

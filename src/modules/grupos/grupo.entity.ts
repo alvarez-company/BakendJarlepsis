@@ -10,7 +10,6 @@ import {
 export enum TipoGrupo {
   GENERAL = 'general',
   SEDE = 'sede',
-  OFICINA = 'oficina',
   BODEGA = 'bodega',
   INSTALACION = 'instalacion',
   DIRECTO = 'directo',
@@ -35,7 +34,7 @@ export class Grupo {
   tipoGrupo: TipoGrupo;
 
   @Column({ nullable: true })
-  entidadId: number; // ID de la oficina, bodega o instalación
+  entidadId: number; // ID de la sede, bodega o instalación
 
   @Column({ default: true })
   grupoActivo: boolean;

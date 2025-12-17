@@ -6,6 +6,8 @@ import { Mensaje } from './mensaje.entity';
 import { ChatModule } from '../chat/chat.module';
 import { NotificacionesModule } from '../notificaciones/notificaciones.module';
 import { UsuariosGruposModule } from '../usuarios-grupos/usuarios-grupos.module';
+import { UsersModule } from '../users/users.module';
+import { GruposModule } from '../grupos/grupos.module';
 
 @Module({
   imports: [
@@ -13,6 +15,8 @@ import { UsuariosGruposModule } from '../usuarios-grupos/usuarios-grupos.module'
     forwardRef(() => ChatModule),
     forwardRef(() => NotificacionesModule),
     forwardRef(() => UsuariosGruposModule),
+    forwardRef(() => UsersModule),
+    forwardRef(() => GruposModule),
   ],
   controllers: [MensajesController],
   providers: [MensajesService],

@@ -14,12 +14,14 @@ import { ClientesService } from '../clientes/clientes.service';
 import { Cliente, EstadoCliente } from '../clientes/cliente.entity';
 import { TipoMovimiento, EstadoMovimiento } from '../movimientos/movimiento-inventario.entity';
 import { GruposService } from '../grupos/grupos.service';
+import { TipoGrupo } from '../grupos/grupo.entity';
 import { AuditoriaService } from '../auditoria/auditoria.service';
 import { TipoEntidad } from '../auditoria/auditoria.entity';
 import { EstadosInstalacionService } from '../estados-instalacion/estados-instalacion.service';
 import { InstalacionesMaterialesService } from '../instalaciones-materiales/instalaciones-materiales.service';
 import { InventarioTecnicoService } from '../inventario-tecnico/inventario-tecnico.service';
 import { UsersService } from '../users/users.service';
+import { NumerosMedidorService } from '../numeros-medidor/numeros-medidor.service';
 
 @Injectable()
 export class InstalacionesService {
@@ -54,6 +56,8 @@ export class InstalacionesService {
     private inventarioTecnicoService: InventarioTecnicoService,
     @Inject(forwardRef(() => UsersService))
     private usersService: UsersService,
+    @Inject(forwardRef(() => NumerosMedidorService))
+    private numerosMedidorService: NumerosMedidorService,
   ) {}
 
   private async generarIdentificadorUnico(): Promise<string> {
@@ -115,11 +119,11 @@ export class InstalacionesService {
         estadoInstalacionId = estadoAsignacion.estadoInstalacionId;
         estadoInicial = EstadoInstalacion.ASIGNACION;
       } catch {
-        // Si no existe el estado asignacion, usar en_proceso
+        // Si no existe el estado asignacion, usar pendiente
         try {
-          const estadoEnProceso = await this.estadosInstalacionService.findByCodigo('en_proceso');
-          estadoInstalacionId = estadoEnProceso.estadoInstalacionId;
-          estadoInicial = EstadoInstalacion.EN_PROCESO;
+          const estadoPendiente = await this.estadosInstalacionService.findByCodigo('pendiente');
+          estadoInstalacionId = estadoPendiente.estadoInstalacionId;
+          estadoInicial = EstadoInstalacion.PENDIENTE;
         } catch {
           // Si no existe ningún estado, dejar null y usar el enum por defecto
         }
@@ -619,8 +623,8 @@ export class InstalacionesService {
     // Verificar si los materiales cambiaron (para actualizar salidas)
     const materialesCambiaron = instalacionData.materialesInstalados || instalacionData.instalacionProyectos;
     
-    // Si los materiales cambiaron y la instalación está finalizada, actualizar las salidas
-    if (materialesCambiaron && estadoAnterior === EstadoInstalacion.FINALIZADA && usuarioId) {
+    // Si los materiales cambiaron y la instalación está completada, actualizar las salidas
+    if (materialesCambiaron && (estadoAnterior === EstadoInstalacion.COMPLETADA || estadoAnterior === EstadoInstalacion.FINALIZADA) && usuarioId) {
       // Buscar y eliminar salidas existentes asociadas a esta instalación
       const salidasExistentes = await this.movimientosService.findByInstalacion(id);
       const salidasCompletadas = salidasExistentes.filter(
@@ -658,9 +662,9 @@ export class InstalacionesService {
           nuevoEstado = EstadoInstalacion.ASIGNACION;
         } catch {
           try {
-            const estadoEnProceso = await this.estadosInstalacionService.findByCodigo('en_proceso');
-            nuevoEstadoInstalacionId = estadoEnProceso.estadoInstalacionId;
-            nuevoEstado = EstadoInstalacion.EN_PROCESO;
+            const estadoPendiente = await this.estadosInstalacionService.findByCodigo('pendiente');
+            nuevoEstadoInstalacionId = estadoPendiente.estadoInstalacionId;
+            nuevoEstado = EstadoInstalacion.PENDIENTE;
           } catch {
             // Si no existe ningún estado, mantener el estado actual
           }
@@ -720,6 +724,19 @@ export class InstalacionesService {
       throw error; // Lanzar el error para detener la eliminación si falla
     }
 
+    // Liberar números de medidor asignados a esta instalación antes de eliminar
+    try {
+      const numerosMedidorInstalacion = await this.numerosMedidorService.findByInstalacion(id);
+      if (numerosMedidorInstalacion.length > 0) {
+        await this.numerosMedidorService.liberarDeInstalacion(
+          numerosMedidorInstalacion.map(n => n.numeroMedidorId)
+        );
+      }
+    } catch (error) {
+      console.error(`Error al liberar números de medidor al eliminar instalación ${id}:`, error);
+      // Continuar con la eliminación aunque falle la liberación
+    }
+
     // Buscar y eliminar todas las salidas asociadas a esta instalación
     try {
       const movimientosAsociados = await this.movimientosService.findByInstalacion(id);
@@ -738,6 +755,14 @@ export class InstalacionesService {
     } catch (error) {
       console.error('Error al buscar y eliminar salidas asociadas:', error);
       // Continuar con la eliminación aunque falle la eliminación de salidas
+    }
+    
+    // Eliminar todos los materiales de instalación (esto también liberará números de medidor)
+    try {
+      await this.instalacionesMaterialesService.removeByInstalacion(id);
+    } catch (error) {
+      console.error(`Error al eliminar materiales de instalación ${id}:`, error);
+      // Continuar con la eliminación aunque falle
     }
 
     // Actualizar cantidad de instalaciones del cliente
@@ -770,28 +795,43 @@ export class InstalacionesService {
     const instalacion = await this.findOne(instalacionId);
     const estadoAnterior = instalacion.estado;
     
-    // Validar que el estado sea uno de los valores válidos del enum
-    const estadosValidos = Object.values(EstadoInstalacion);
-    if (!estadosValidos.includes(nuevoEstado)) {
-      throw new Error(`Estado inválido: ${nuevoEstado}. Valores válidos: ${estadosValidos.join(', ')}`);
+    // Mapear estados legacy a los nuevos estados
+    let estadoNormalizado: EstadoInstalacion = nuevoEstado;
+    if (nuevoEstado === EstadoInstalacion.FINALIZADA) {
+      estadoNormalizado = EstadoInstalacion.COMPLETADA;
+    } else if (nuevoEstado === EstadoInstalacion.CANCELADA) {
+      estadoNormalizado = EstadoInstalacion.ANULADA;
+    } else if (nuevoEstado === EstadoInstalacion.EN_PROCESO) {
+      // EN_PROCESO se mapea a ASIGNACION si hay técnicos, sino a PENDIENTE
+      if (instalacion.usuariosAsignados && instalacion.usuariosAsignados.length > 0) {
+        estadoNormalizado = EstadoInstalacion.ASIGNACION;
+      } else {
+        estadoNormalizado = EstadoInstalacion.PENDIENTE;
+      }
     }
     
-    instalacion.estado = nuevoEstado;
+    // Validar que el estado sea uno de los valores válidos del enum
+    const estadosValidos = Object.values(EstadoInstalacion);
+    if (!estadosValidos.includes(estadoNormalizado)) {
+      throw new Error(`Estado inválido: ${estadoNormalizado}. Valores válidos: ${estadosValidos.join(', ')}`);
+    }
     
-    // Sincronizar estadoInstalacionId con el estado enum
-    const estadoInstalacion = await this.estadosInstalacionService.findByCodigo(nuevoEstado);
+    instalacion.estado = estadoNormalizado;
+    
+    // Sincronizar estadoInstalacionId con el estado enum (usar el estado normalizado)
+    const estadoInstalacion = await this.estadosInstalacionService.findByCodigo(estadoNormalizado);
     if (estadoInstalacion) {
       instalacion.estadoInstalacionId = estadoInstalacion.estadoInstalacionId;
     }
     
-    // Establecer fechas específicas según el estado
+    // Establecer fechas específicas según el estado (usar el estado normalizado)
     const ahora = new Date();
     
-    if (nuevoEstado === EstadoInstalacion.ASIGNACION && !instalacion.fechaAsignacion) {
+    if (estadoNormalizado === EstadoInstalacion.ASIGNACION && !instalacion.fechaAsignacion) {
       instalacion.fechaAsignacion = ahora as any;
     }
     
-    if (nuevoEstado === EstadoInstalacion.CONSTRUCCION) {
+    if (estadoNormalizado === EstadoInstalacion.CONSTRUCCION) {
       if (!instalacion.fechaConstruccion) {
         instalacion.fechaConstruccion = ahora as any;
       }
@@ -801,31 +841,23 @@ export class InstalacionesService {
       }
     }
     
-    if (nuevoEstado === EstadoInstalacion.CERTIFICACION && !instalacion.fechaCertificacion) {
+    if (estadoNormalizado === EstadoInstalacion.CERTIFICACION && !instalacion.fechaCertificacion) {
       instalacion.fechaCertificacion = ahora as any;
       
       // NO descontar aquí - los materiales ya se descontaron cuando el técnico los registró
       // Esto evita descuentos duplicados que causan que el inventario quede en 0 incorrectamente
     }
     
-    if (nuevoEstado === EstadoInstalacion.NOVEDAD && !instalacion.fechaNovedad) {
+    if (estadoNormalizado === EstadoInstalacion.NOVEDAD && !instalacion.fechaNovedad) {
       instalacion.fechaNovedad = ahora as any;
     }
     
-    if (nuevoEstado === EstadoInstalacion.ANULADA && !instalacion.fechaAnulacion) {
+    if (estadoNormalizado === EstadoInstalacion.ANULADA && !instalacion.fechaAnulacion) {
       instalacion.fechaAnulacion = ahora as any;
     }
     
-    if (nuevoEstado === EstadoInstalacion.FINALIZADA && !instalacion.fechaFinalizacion) {
+    if (estadoNormalizado === EstadoInstalacion.COMPLETADA && !instalacion.fechaFinalizacion) {
       instalacion.fechaFinalizacion = ahora as any;
-    }
-    
-    // Si cambia a "en_proceso", actualizar fecha si es necesario
-    if (nuevoEstado === EstadoInstalacion.EN_PROCESO) {
-      // Actualizar fecha si no está establecida
-      if (!instalacion.instalacionFecha) {
-        instalacion.instalacionFecha = ahora as any;
-      }
     }
     
     const instalacionActualizada = await this.instalacionesRepository.save(instalacion);
@@ -837,16 +869,14 @@ export class InstalacionesService {
     if (instalacionCompleta.clienteId) {
       let nuevoEstadoCliente: EstadoCliente;
       
-      // Determinar el estado del cliente según el estado de la instalación
-      if (nuevoEstado === EstadoInstalacion.ASIGNACION) {
+      // Determinar el estado del cliente según el estado de la instalación (usar estadoNormalizado)
+      if (estadoNormalizado === EstadoInstalacion.ASIGNACION) {
         nuevoEstadoCliente = EstadoCliente.INSTALACION_ASIGNADA;
-      } else if (nuevoEstado === EstadoInstalacion.CONSTRUCCION || nuevoEstado === EstadoInstalacion.CERTIFICACION) {
+      } else if (estadoNormalizado === EstadoInstalacion.CONSTRUCCION || estadoNormalizado === EstadoInstalacion.CERTIFICACION) {
         nuevoEstadoCliente = EstadoCliente.REALIZANDO_INSTALACION;
       } else if (
-        nuevoEstado === EstadoInstalacion.COMPLETADA || 
-        nuevoEstado === EstadoInstalacion.FINALIZADA ||
-        nuevoEstado === EstadoInstalacion.CANCELADA ||
-        nuevoEstado === EstadoInstalacion.ANULADA
+        estadoNormalizado === EstadoInstalacion.COMPLETADA ||
+        estadoNormalizado === EstadoInstalacion.ANULADA
       ) {
         // Verificar si hay otras instalaciones activas
         const instalacionesClienteRaw = await this.instalacionesRepository.query(
@@ -857,7 +887,6 @@ export class InstalacionesService {
         const tieneOtrasInstalacionesActivas = instalacionesClienteRaw.some(
           (inst: any) => inst.instalacionId !== instalacionId && 
                   (inst.estado === EstadoInstalacion.PENDIENTE || 
-                   inst.estado === EstadoInstalacion.EN_PROCESO ||
                    inst.estado === EstadoInstalacion.ASIGNACION ||
                    inst.estado === EstadoInstalacion.CONSTRUCCION ||
                    inst.estado === EstadoInstalacion.CERTIFICACION)
@@ -866,7 +895,7 @@ export class InstalacionesService {
         // Si no tiene otras instalaciones activas, cambiar el estado del cliente a ACTIVO
         nuevoEstadoCliente = tieneOtrasInstalacionesActivas ? EstadoCliente.REALIZANDO_INSTALACION : EstadoCliente.ACTIVO;
       } else {
-        // Para otros estados (PENDIENTE, EN_PROCESO, NOVEDAD), mantener el estado actual o usar ACTIVO
+        // Para otros estados (PENDIENTE, NOVEDAD), mantener el estado actual o usar ACTIVO
         nuevoEstadoCliente = EstadoCliente.ACTIVO;
       }
       
@@ -901,10 +930,27 @@ export class InstalacionesService {
       }
     }
 
-    // Enviar notificaciones según el estado
-    if (nuevoEstado === EstadoInstalacion.COMPLETADA || nuevoEstado === EstadoInstalacion.FINALIZADA) {
-      // Si cambia a FINALIZADA, crear salidas automáticas si no existen (y completarlas inmediatamente)
-      if (nuevoEstado === EstadoInstalacion.FINALIZADA && estadoAnterior !== EstadoInstalacion.FINALIZADA) {
+    // Marcar números de medidor como instalados cuando la instalación se completa o certifica
+    const estadosFinales = [
+      EstadoInstalacion.COMPLETADA,
+      EstadoInstalacion.CERTIFICACION
+    ];
+    
+    if (estadosFinales.includes(estadoNormalizado) && !estadosFinales.includes(estadoAnterior as any)) {
+      try {
+        await this.numerosMedidorService.marcarComoInstalados(instalacionId);
+      } catch (error) {
+        console.error(`Error al marcar números de medidor como instalados para instalación ${instalacionId}:`, error);
+        // No lanzar error para no interrumpir el proceso de actualización de estado
+      }
+    }
+
+    // Enviar notificaciones según el estado (usar estadoNormalizado)
+    // Usar switch para mejor inferencia de tipos de TypeScript
+    switch (estadoNormalizado) {
+    case EstadoInstalacion.COMPLETADA: {
+      // Si cambia a COMPLETADA, crear salidas automáticas si no existen (y completarlas inmediatamente)
+      if (estadoAnterior !== EstadoInstalacion.COMPLETADA && estadoAnterior !== EstadoInstalacion.FINALIZADA) {
         // Verificar si ya existen salidas para esta instalación
         const salidasExistentes = await this.movimientosService.findByInstalacion(instalacionId);
         const tieneSalidas = salidasExistentes.some(
@@ -927,8 +973,8 @@ export class InstalacionesService {
         }
       }
       
-      // Actualizar materiales cuando la instalación se completa o finaliza
-      // Solo actualizar si el estado anterior no era COMPLETADA o FINALIZADA para evitar duplicados
+      // Actualizar materiales cuando la instalación se completa
+      // Solo actualizar si el estado anterior no era COMPLETADA para evitar duplicados
       if (estadoAnterior !== EstadoInstalacion.COMPLETADA && estadoAnterior !== EstadoInstalacion.FINALIZADA) {
         await this.actualizarMaterialesInstalacion(instalacionId);
       }
@@ -958,37 +1004,64 @@ export class InstalacionesService {
           usuarioId,
         },
       );
-    } else if (nuevoEstado === EstadoInstalacion.EN_PROCESO) {
-      // Notificar a los usuarios asignados
+
+      // Enviar mensaje automático al chat de la instalación
+      try {
+        const grupo = await this.gruposService.obtenerGrupoPorEntidad(
+          TipoGrupo.INSTALACION,
+          instalacionId
+        );
+        if (grupo && grupo.grupoActivo) {
+          await this.gruposService.crearMensajeSistema(
+            grupo.grupoId,
+            `✅ La instalación ha sido completada. El chat de esta instalación se cerrará automáticamente.`
+          );
+          // Cerrar el chat
+          await this.gruposService.cerrarChat(
+            TipoGrupo.INSTALACION,
+            instalacionId,
+            'Chat cerrado: La instalación ha sido completada.'
+          );
+        }
+      } catch (error) {
+        console.error(`[InstalacionesService] Error al enviar mensaje/cerrar chat para instalación ${instalacionId}:`, error);
+      }
+      break;
+    }
+    case EstadoInstalacion.PENDIENTE: {
+      // Notificar cuando cambia a pendiente (EN_PROCESO sin técnicos se mapea a PENDIENTE)
       const clienteNombreCompleto = instalacionCompleta.cliente
         ? instalacionCompleta.cliente.nombreUsuario || 'Cliente sin nombre'
         : 'Cliente';
       
       this.chatGateway.emitirEventoInstalacion(
         usuariosIds.filter(id => id !== usuarioId),
-        'instalacion_en_proceso',
+        'instalacion_pendiente',
         {
           instalacionId,
           instalacionCodigo: instalacionCompleta.identificadorUnico || `INST-${instalacionId}`,
           clienteNombre: clienteNombreCompleto,
         },
       );
-    } else if (nuevoEstado === EstadoInstalacion.CANCELADA) {
-      // Notificar a los usuarios asignados
-      const clienteNombreCompleto = instalacionCompleta.cliente
-        ? instalacionCompleta.cliente.nombreUsuario || 'Cliente sin nombre'
-        : 'Cliente';
-      
-      this.chatGateway.emitirEventoInstalacion(
-        usuariosIds,
-        'instalacion_cancelada',
-        {
-          instalacionId,
-          instalacionCodigo: instalacionCompleta.identificadorUnico || `INST-${instalacionId}`,
-          clienteNombre: clienteNombreCompleto,
-        },
-      );
-    } else if (nuevoEstado === EstadoInstalacion.ASIGNACION) {
+
+      // Enviar mensaje automático al chat de la instalación
+      try {
+        const grupo = await this.gruposService.obtenerGrupoPorEntidad(
+          TipoGrupo.INSTALACION,
+          instalacionId
+        );
+        if (grupo && grupo.grupoActivo) {
+          await this.gruposService.crearMensajeSistema(
+            grupo.grupoId,
+            `⏳ La instalación está pendiente de asignación.`
+          );
+        }
+      } catch (error) {
+        console.error(`[InstalacionesService] Error al enviar mensaje para instalación ${instalacionId}:`, error);
+      }
+      break;
+    }
+    case EstadoInstalacion.ASIGNACION: {
       // Notificar a los usuarios asignados cuando cambia a asignación
       const clienteNombreCompleto = instalacionCompleta.cliente
         ? instalacionCompleta.cliente.nombreUsuario || 'Cliente sin nombre'
@@ -1013,7 +1086,25 @@ export class InstalacionesService {
           clienteNombre: clienteNombreCompleto,
         },
       );
-    } else if (nuevoEstado === EstadoInstalacion.CONSTRUCCION) {
+
+      // Enviar mensaje automático al chat de la instalación
+      try {
+        const grupo = await this.gruposService.obtenerGrupoPorEntidad(
+          TipoGrupo.INSTALACION,
+          instalacionId
+        );
+        if (grupo && grupo.grupoActivo) {
+          await this.gruposService.crearMensajeSistema(
+            grupo.grupoId,
+            `📋 La instalación ha sido asignada. El trabajo puede comenzar.`
+          );
+        }
+      } catch (error) {
+        console.error(`[InstalacionesService] Error al enviar mensaje para instalación ${instalacionId}:`, error);
+      }
+      break;
+    }
+    case EstadoInstalacion.CONSTRUCCION: {
       // Notificar a los usuarios asignados cuando cambia a construcción
       const clienteNombreCompleto = instalacionCompleta.cliente
         ? instalacionCompleta.cliente.nombreUsuario || 'Cliente sin nombre'
@@ -1061,7 +1152,25 @@ export class InstalacionesService {
           clienteNombre: clienteNombreCompleto,
         },
       );
-    } else if (nuevoEstado === EstadoInstalacion.CERTIFICACION) {
+
+      // Enviar mensaje automático al chat de la instalación
+      try {
+        const grupo = await this.gruposService.obtenerGrupoPorEntidad(
+          TipoGrupo.INSTALACION,
+          instalacionId
+        );
+        if (grupo && grupo.grupoActivo) {
+          await this.gruposService.crearMensajeSistema(
+            grupo.grupoId,
+            `🔨 La instalación está en construcción.`
+          );
+        }
+      } catch (error) {
+        console.error(`[InstalacionesService] Error al enviar mensaje para instalación ${instalacionId}:`, error);
+      }
+      break;
+    }
+    case EstadoInstalacion.CERTIFICACION: {
       // Notificar a los usuarios asignados cuando cambia a certificación
       const clienteNombreCompleto = instalacionCompleta.cliente
         ? instalacionCompleta.cliente.nombreUsuario || 'Cliente sin nombre'
@@ -1109,7 +1218,25 @@ export class InstalacionesService {
           clienteNombre: clienteNombreCompleto,
         },
       );
-    } else if (nuevoEstado === EstadoInstalacion.NOVEDAD) {
+
+      // Enviar mensaje automático al chat de la instalación
+      try {
+        const grupo = await this.gruposService.obtenerGrupoPorEntidad(
+          TipoGrupo.INSTALACION,
+          instalacionId
+        );
+        if (grupo && grupo.grupoActivo) {
+          await this.gruposService.crearMensajeSistema(
+            grupo.grupoId,
+            `📝 La instalación está en proceso de certificación.`
+          );
+        }
+      } catch (error) {
+        console.error(`[InstalacionesService] Error al enviar mensaje para instalación ${instalacionId}:`, error);
+      }
+      break;
+    }
+    case EstadoInstalacion.NOVEDAD: {
       // Notificar a los usuarios asignados cuando hay una novedad técnica
       const clienteNombreCompleto = instalacionCompleta.cliente
         ? instalacionCompleta.cliente.nombreUsuario || 'Cliente sin nombre'
@@ -1163,7 +1290,25 @@ export class InstalacionesService {
           motivo: motivoNovedad,
         },
       );
-    } else if (nuevoEstado === EstadoInstalacion.ANULADA) {
+
+      // Enviar mensaje automático al chat de la instalación
+      try {
+        const grupo = await this.gruposService.obtenerGrupoPorEntidad(
+          TipoGrupo.INSTALACION,
+          instalacionId
+        );
+        if (grupo && grupo.grupoActivo) {
+          await this.gruposService.crearMensajeSistema(
+            grupo.grupoId,
+            `⚠️ Se ha reportado una novedad técnica en la instalación.${motivoNovedad ? ` Motivo: ${motivoNovedad}` : ''}`
+          );
+        }
+      } catch (error) {
+        console.error(`[InstalacionesService] Error al enviar mensaje para instalación ${instalacionId}:`, error);
+      }
+      break;
+    }
+    case EstadoInstalacion.ANULADA: {
       // Notificar a los usuarios asignados cuando se anula la instalación
       const clienteNombreCompleto = instalacionCompleta.cliente
         ? instalacionCompleta.cliente.nombreUsuario || 'Cliente sin nombre'
@@ -1193,6 +1338,57 @@ export class InstalacionesService {
           motivo: motivoAnulacion,
         },
       );
+
+      // Enviar mensaje automático al chat de la instalación y cerrarlo
+      try {
+        const grupo = await this.gruposService.obtenerGrupoPorEntidad(
+          TipoGrupo.INSTALACION,
+          instalacionId
+        );
+        if (grupo && grupo.grupoActivo) {
+          await this.gruposService.crearMensajeSistema(
+            grupo.grupoId,
+            `❌ La instalación ha sido anulada. El chat de esta instalación se cerrará automáticamente.${motivoAnulacion ? ` Motivo: ${motivoAnulacion}` : ''}`
+          );
+          // Cerrar el chat
+          await this.gruposService.cerrarChat(
+            TipoGrupo.INSTALACION,
+            instalacionId,
+            'Chat cerrado: La instalación ha sido anulada.'
+          );
+        }
+      } catch (error) {
+        console.error(`[InstalacionesService] Error al enviar mensaje/cerrar chat para instalación ${instalacionId}:`, error);
+      }
+      break;
+    }
+    default:
+      // Para otros estados, enviar mensaje automático al chat si existe
+      try {
+        const grupo = await this.gruposService.obtenerGrupoPorEntidad(
+          TipoGrupo.INSTALACION,
+          instalacionId
+        );
+        if (grupo && grupo.grupoActivo) {
+          const estadoLabels: Record<string, string> = {
+            'pendiente': 'Pendiente',
+            'asignacion': 'Asignación',
+            'construccion': 'Construcción',
+            'certificacion': 'Certificación',
+            'novedad': 'Novedad',
+            'anulada': 'Anulada',
+            'completada': 'Completada'
+          };
+          const estadoTexto = estadoLabels[estadoNormalizado] || estadoNormalizado;
+          await this.gruposService.crearMensajeSistema(
+            grupo.grupoId,
+            `📋 El estado de la instalación ha cambiado a: ${estadoTexto}`
+          );
+        }
+      } catch (error) {
+        console.error(`[InstalacionesService] Error al enviar mensaje para instalación ${instalacionId}:`, error);
+      }
+      break;
     }
 
     return instalacionActualizada;
@@ -1340,11 +1536,11 @@ export class InstalacionesService {
   }
 
   private async actualizarCantidadInstalacionesCliente(clienteId: number): Promise<void> {
-    // Contar solo las instalaciones finalizadas del cliente
+    // Contar solo las instalaciones completadas del cliente
     const cantidadFinalizadas = await this.instalacionesRepository.count({
       where: { 
         clienteId,
-        estado: EstadoInstalacion.FINALIZADA
+        estado: EstadoInstalacion.COMPLETADA
       }
     });
     

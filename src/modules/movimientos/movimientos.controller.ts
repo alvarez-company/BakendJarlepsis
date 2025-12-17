@@ -19,6 +19,7 @@ import { ExportacionService } from '../exportacion/exportacion.service';
 import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard';
 import { RolesGuard } from '../../common/guards/roles.guard';
 import { Roles } from '../../common/decorators/roles.decorator';
+import { PaginationDto } from '../../common/dto/pagination.dto';
 
 @ApiTags('movimientos')
 @ApiBearerAuth()
@@ -40,11 +41,11 @@ export class MovimientosController {
   @Get()
   @Roles('superadmin', 'admin', 'tecnico', 'entradas', 'salidas', 'devoluciones', 'traslados')
   @ApiOperation({ summary: 'Get all movimientos' })
-  findAll(@Query('instalacionId') instalacionId?: string) {
+  findAll(@Query('instalacionId') instalacionId?: string, @Query() paginationDto?: PaginationDto) {
     if (instalacionId) {
       return this.movimientosService.findByInstalacion(+instalacionId);
     }
-    return this.movimientosService.findAll();
+    return this.movimientosService.findAll(paginationDto);
   }
 
   @Get('codigo/:codigo')
@@ -90,9 +91,10 @@ export class MovimientosController {
   @ApiQuery({ name: 'dateEnd', required: false, type: String })
   async exportToExcel(@Res() res: Response, @Query('filters') filters?: string, @Query('instalacionId') instalacionId?: string, @Query('dateStart') dateStart?: string, @Query('dateEnd') dateEnd?: string) {
     try {
-      const movimientos = instalacionId 
+      const resultado = instalacionId 
         ? await this.movimientosService.findByInstalacion(+instalacionId)
         : await this.movimientosService.findAll();
+      const movimientos = Array.isArray(resultado) ? resultado : resultado.data;
       
       let filteredData = movimientos;
       
@@ -173,9 +175,10 @@ export class MovimientosController {
   @ApiQuery({ name: 'dateEnd', required: false, type: String })
   async exportToPdf(@Res() res: Response, @Query('filters') filters?: string, @Query('instalacionId') instalacionId?: string, @Query('dateStart') dateStart?: string, @Query('dateEnd') dateEnd?: string) {
     try {
-      const movimientos = instalacionId 
+      const resultado = instalacionId 
         ? await this.movimientosService.findByInstalacion(+instalacionId)
-        : await this.movimientosService.findAll();
+        : await this.movimientosService.findAll({ page: 1, limit: 10000 });
+      const movimientos = Array.isArray(resultado) ? resultado : resultado.data;
       
       let filteredData = movimientos;
       
@@ -265,8 +268,13 @@ export class MovimientosController {
   @Delete(':id')
   @Roles('superadmin')
   @ApiOperation({ summary: 'Delete a movimiento' })
-  remove(@Param('id') id: string, @Request() req) {
-    return this.movimientosService.remove(+id, req.user.usuarioId);
+  async remove(@Param('id') id: string, @Request() req) {
+    try {
+      await this.movimientosService.remove(+id, req.user.usuarioId);
+      return { message: 'Movimiento eliminado correctamente', success: true };
+    } catch (error) {
+      throw error;
+    }
   }
 }
 

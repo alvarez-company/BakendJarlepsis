@@ -1,5 +1,5 @@
 import { ApiProperty } from '@nestjs/swagger';
-import { IsNumber, IsOptional, IsString, Min } from 'class-validator';
+import { IsNumber, IsOptional, IsString, Min, IsArray } from 'class-validator';
 
 export class CreateInstalacionMaterialDto {
   @ApiProperty({ example: 1 })
@@ -19,6 +19,12 @@ export class CreateInstalacionMaterialDto {
   @IsString()
   @IsOptional()
   observaciones?: string;
+
+  @ApiProperty({ required: false, description: 'Números de medidor específicos utilizados en la instalación (desde miniapp)', type: [String] })
+  @IsArray()
+  @IsString({ each: true })
+  @IsOptional()
+  numerosMedidor?: string[]; // Números de medidor específicos que el técnico utilizó
 }
 
 export class UpdateInstalacionMaterialDto {
@@ -40,6 +46,7 @@ export class AssignMaterialesToInstalacionDto {
     materialId: number;
     cantidad: number;
     observaciones?: string;
+    numerosMedidor?: string[]; // Números de medidor específicos
   }>;
 }
 

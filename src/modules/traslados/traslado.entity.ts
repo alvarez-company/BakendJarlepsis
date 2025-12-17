@@ -56,6 +56,9 @@ export class Traslado {
   @Column({ nullable: true, unique: true })
   identificadorUnico: string; // TRA-1, TRA-2, etc.
 
+  @Column({ type: 'json', nullable: true })
+  numerosMedidor: string[]; // Números de medidor específicos para este traslado
+
   @Column()
   usuarioId: number;
 

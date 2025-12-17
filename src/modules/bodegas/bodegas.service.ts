@@ -6,6 +6,7 @@ import { CreateBodegaDto } from './dto/create-bodega.dto';
 import { UpdateBodegaDto } from './dto/update-bodega.dto';
 import { HasRelatedEntitiesException } from '../../common/exceptions/business.exception';
 import { GruposService } from '../grupos/grupos.service';
+import { TipoGrupo } from '../grupos/grupo.entity';
 import { UsersService } from '../users/users.service';
 import { RolesService } from '../roles/roles.service';
 
@@ -140,8 +141,24 @@ export class BodegasService {
 
   async update(id: number, updateBodegaDto: UpdateBodegaDto): Promise<Bodega> {
     const bodega = await this.findOne(id);
+    const estadoAnterior = bodega.bodegaEstado;
     Object.assign(bodega, updateBodegaDto);
-    return this.bodegasRepository.save(bodega);
+    const bodegaActualizada = await this.bodegasRepository.save(bodega);
+
+    // Si la bodega se desactiva, cerrar su chat
+    if (estadoAnterior && !bodegaActualizada.bodegaEstado) {
+      try {
+        await this.gruposService.cerrarChat(
+          TipoGrupo.BODEGA,
+          id,
+          `Chat cerrado: La bodega "${bodegaActualizada.bodegaNombre}" ha sido desactivada.`
+        );
+      } catch (error) {
+        console.error(`[BodegasService] Error al cerrar chat de bodega ${id}:`, error);
+      }
+    }
+
+    return bodegaActualizada;
   }
 
   async remove(id: number): Promise<void> {

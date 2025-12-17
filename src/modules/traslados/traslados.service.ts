@@ -11,6 +11,8 @@ import { BodegasService } from '../bodegas/bodegas.service';
 import { TipoMovimiento } from '../movimientos/movimiento-inventario.entity';
 import { AuditoriaService } from '../auditoria/auditoria.service';
 import { TipoEntidad } from '../auditoria/auditoria.entity';
+import { NumerosMedidorService } from '../numeros-medidor/numeros-medidor.service';
+import { EstadoNumeroMedidor } from '../numeros-medidor/numero-medidor.entity';
 
 @Injectable()
 export class TrasladosService {
@@ -27,6 +29,8 @@ export class TrasladosService {
     private bodegasService: BodegasService,
     @Inject(forwardRef(() => AuditoriaService))
     private auditoriaService: AuditoriaService,
+    @Inject(forwardRef(() => NumerosMedidorService))
+    private numerosMedidorService: NumerosMedidorService,
   ) {}
 
   private async generarIdentificadorUnico(): Promise<string> {
@@ -82,6 +86,7 @@ export class TrasladosService {
         trasladoCodigo: trasladoCodigo,
         identificadorUnico: identificadorUnico, // Identificador único autogenerado para cada traslado
         trasladoEstado: EstadoTraslado.PENDIENTE,
+        numerosMedidor: materialDto.numerosMedidor || null, // Guardar números de medidor si se proporcionaron
       });
       const trasladoGuardado = await this.trasladosRepository.save(traslado);
       trasladosCreados.push(trasladoGuardado);
@@ -90,16 +95,39 @@ export class TrasladosService {
     return trasladosCreados;
   }
 
-  async findAll(): Promise<Traslado[]> {
+  async findAll(paginationDto?: any): Promise<{ data: Traslado[]; total: number; page: number; limit: number }> {
     try {
-      return await this.trasladosRepository.find({
-        relations: ['material', 'bodegaOrigen', 'bodegaDestino', 'usuario'],
-      });
+      const page = paginationDto?.page || 1;
+      const limit = paginationDto?.limit || 10;
+      const skip = (page - 1) * limit;
+
+      const queryBuilder = this.trasladosRepository
+        .createQueryBuilder('traslado')
+        .leftJoinAndSelect('traslado.material', 'material')
+        .leftJoinAndSelect('traslado.bodegaOrigen', 'bodegaOrigen')
+        .leftJoinAndSelect('traslado.bodegaDestino', 'bodegaDestino')
+        .leftJoinAndSelect('traslado.usuario', 'usuario')
+        .orderBy('traslado.fechaCreacion', 'DESC')
+        .skip(skip)
+        .take(limit);
+
+      const [data, total] = await queryBuilder.getManyAndCount();
+
+      return {
+        data,
+        total,
+        page,
+        limit,
+      };
     } catch (error: any) {
       console.error('Error en findAll de traslados:', error);
       console.error('Mensaje:', error.message);
       // Si el error es por una columna que no existe, usar query builder
       if (error.message?.includes('trasladoCodigo') || error.message?.includes('materialPadreId')) {
+        const page = paginationDto?.page || 1;
+        const limit = paginationDto?.limit || 10;
+        const skip = (page - 1) * limit;
+
         // Usar query builder y seleccionar explícitamente las columnas
         const queryBuilder = this.trasladosRepository
           .createQueryBuilder('traslado')
@@ -118,13 +146,22 @@ export class TrasladosService {
           .leftJoinAndSelect('traslado.material', 'material')
           .leftJoinAndSelect('traslado.bodegaOrigen', 'bodegaOrigen')
           .leftJoinAndSelect('traslado.bodegaDestino', 'bodegaDestino')
-          .leftJoinAndSelect('traslado.usuario', 'usuario');
+          .leftJoinAndSelect('traslado.usuario', 'usuario')
+          .orderBy('traslado.fechaCreacion', 'DESC')
+          .skip(skip)
+          .take(limit);
         
         // Incluir trasladoCodigo en el select (si la columna existe en BD, funcionará; si no, el error se manejará)
         queryBuilder.addSelect('traslado.trasladoCodigo', 'traslado_trasladoCodigo');
         
         try {
-          return await queryBuilder.getMany();
+          const [data, total] = await queryBuilder.getManyAndCount();
+          return {
+            data,
+            total,
+            page,
+            limit,
+          };
         } catch (retryError: any) {
           // Si el error persiste, intentar sin trasladoCodigo
           if (retryError.message?.includes('trasladoCodigo')) {
@@ -145,8 +182,17 @@ export class TrasladosService {
               .leftJoinAndSelect('traslado.material', 'material')
               .leftJoinAndSelect('traslado.bodegaOrigen', 'bodegaOrigen')
               .leftJoinAndSelect('traslado.bodegaDestino', 'bodegaDestino')
-              .leftJoinAndSelect('traslado.usuario', 'usuario');
-            return await queryBuilderFallback.getMany();
+              .leftJoinAndSelect('traslado.usuario', 'usuario')
+              .orderBy('traslado.fechaCreacion', 'DESC')
+              .skip(skip)
+              .take(limit);
+            const [data, total] = await queryBuilderFallback.getManyAndCount();
+            return {
+              data,
+              total,
+              page,
+              limit,
+            };
           }
           throw retryError;
         }
@@ -308,10 +354,12 @@ export class TrasladosService {
         }
 
         // Crear movimiento de entrada en bodega destino
+        // Pasar números de medidor si están guardados en el traslado
         await this.movimientosService.create({
           materiales: [{
             materialId: t.materialId,
             movimientoCantidad: t.trasladoCantidad,
+            numerosMedidor: t.numerosMedidor || undefined, // Pasar números de medidor guardados
           }],
           movimientoTipo: TipoMovimiento.ENTRADA,
           usuarioId: t.usuarioId,
@@ -351,10 +399,12 @@ export class TrasladosService {
     );
 
     // Crear movimiento de entrada en bodega destino
+    // Pasar números de medidor si están guardados en el traslado
     await this.movimientosService.create({
       materiales: [{
         materialId: traslado.materialId,
         movimientoCantidad: traslado.trasladoCantidad,
+        numerosMedidor: traslado.numerosMedidor || undefined, // Pasar números de medidor guardados
       }],
       movimientoTipo: TipoMovimiento.ENTRADA,
       usuarioId: traslado.usuarioId,
@@ -402,23 +452,104 @@ export class TrasladosService {
       fechaActualizacion: traslado.fechaActualizacion,
     };
 
-    // Si el traslado está completado, buscar y eliminar los movimientos asociados
-    if (traslado.trasladoEstado === EstadoTraslado.COMPLETADO && traslado.trasladoCodigo) {
+    // Si el traslado está completado, revertir todo
+    if (traslado.trasladoEstado === EstadoTraslado.COMPLETADO) {
       try {
-        // Buscar todos los movimientos con el mismo código de traslado
-        const movimientosAsociados = await this.movimientosService.findByCodigo(traslado.trasladoCodigo);
-        
-        // Eliminar cada movimiento (esto revertirá los stocks automáticamente)
-        for (const movimiento of movimientosAsociados) {
+        // 1. Revertir stock en bodega origen (sumar de vuelta)
+        // Los traslados ajustan el stock directamente sin crear movimiento de salida
+        // Entonces necesitamos revertir el stock en la bodega origen
+        try {
+          const inventarioOrigen = await this.inventariosService.findByBodega(traslado.bodegaOrigenId);
+          if (inventarioOrigen && inventarioOrigen.bodegaId) {
+            // Verificar que el material existe
+            const material = await this.materialesService.findOne(traslado.materialId);
+            
+            if (material) {
+              // Revertir stock en bodega origen (sumar la cantidad trasladada)
+              await this.materialesService.ajustarStock(
+                traslado.materialId,
+                Number(traslado.trasladoCantidad),
+                inventarioOrigen.bodegaId
+              );
+            }
+          }
+        } catch (error) {
+          console.error('Error al revertir stock en bodega origen:', error);
+        }
+
+        // 2. Buscar y eliminar movimientos de entrada asociados
+        // Esto revertirá el stock en la bodega destino
+        if (traslado.trasladoCodigo) {
           try {
-            await this.movimientosService.remove(movimiento.movimientoId, usuarioId);
+            const movimientosAsociados = await this.movimientosService.findByCodigo(traslado.trasladoCodigo);
+            
+            // Eliminar cada movimiento de entrada (esto revertirá los stocks en destino automáticamente)
+            for (const movimiento of movimientosAsociados) {
+              try {
+                // Verificar que el movimiento corresponde a este traslado
+                if (movimiento.materialId === traslado.materialId &&
+                    Math.abs(Number(movimiento.movimientoCantidad) - Number(traslado.trasladoCantidad)) < 0.01) {
+                  await this.movimientosService.remove(movimiento.movimientoId, usuarioId);
+                }
+              } catch (error) {
+                console.error(`Error al eliminar movimiento ${movimiento.movimientoId} asociado a traslado ${id}:`, error);
+              }
+            }
           } catch (error) {
-            console.error(`Error al eliminar movimiento ${movimiento.movimientoId} asociado a traslado ${id}:`, error);
+            console.error('Error al buscar y eliminar movimientos asociados al traslado:', error);
           }
         }
+
+        // 3. Revertir números de medidor a la bodega de origen si el material es medidor
+        try {
+          const material = await this.materialesService.findOne(traslado.materialId);
+          if (material && material.materialEsMedidor && traslado.numerosMedidor) {
+            // Parsear números de medidor si viene como string (JSON)
+            let numerosMedidorArray: string[] = [];
+            if (typeof traslado.numerosMedidor === 'string') {
+              try {
+                numerosMedidorArray = JSON.parse(traslado.numerosMedidor);
+              } catch {
+                numerosMedidorArray = [];
+              }
+            } else if (Array.isArray(traslado.numerosMedidor)) {
+              numerosMedidorArray = traslado.numerosMedidor;
+            }
+
+            if (numerosMedidorArray && numerosMedidorArray.length > 0) {
+              // Los números de medidor deben volver a estar disponibles
+              // No necesitamos moverlos físicamente de bodega porque los números de medidor
+              // no tienen una bodega asignada directamente, solo están en inventarios
+              // Cuando se elimina el movimiento de entrada, los números ya se eliminan o liberan
+              // Pero si queremos ser explícitos, podemos marcarlos como disponibles
+              const numerosMedidorIds: number[] = [];
+              for (const numeroStr of numerosMedidorArray) {
+                try {
+                  const numeroEntity = await this.numerosMedidorService.findByNumero(numeroStr);
+                  if (numeroEntity && numeroEntity.materialId === traslado.materialId) {
+                    numerosMedidorIds.push(numeroEntity.numeroMedidorId);
+                  }
+                } catch (error) {
+                  console.warn(`No se encontró número de medidor: ${numeroStr}`);
+                }
+              }
+
+              // Liberar números de medidor (marcarlos como disponibles)
+              if (numerosMedidorIds.length > 0) {
+                // Liberar de instalación si estaban instalados
+                await this.numerosMedidorService.liberarDeInstalacion(numerosMedidorIds);
+                // Liberar de técnico si estaban asignados
+                await this.numerosMedidorService.liberarDeTecnico(numerosMedidorIds);
+              }
+            }
+          }
+        } catch (error) {
+          console.error('Error al revertir números de medidor:', error);
+        }
+
       } catch (error) {
-        console.error('Error al buscar y eliminar movimientos asociados al traslado:', error);
-        // Continuar con la eliminación aunque falle la eliminación de movimientos
+        console.error('Error durante la reversión del traslado:', error);
+        // Continuar con la eliminación aunque haya errores
       }
     }
 

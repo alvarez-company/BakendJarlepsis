@@ -29,6 +29,7 @@ export class AsignacionTecnico {
   materiales: Array<{
     materialId: number;
     cantidad: number;
+    numerosMedidor?: string[]; // Números de medidor asignados en esta asignación
   }>; // Lista de materiales asignados
 
   @Column({ type: 'text', nullable: true })

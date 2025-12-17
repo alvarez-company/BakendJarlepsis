@@ -9,6 +9,7 @@ export enum TipoEntidad {
   MOVIMIENTO = 'movimiento',
   INSTALACION = 'instalacion',
   TRASLADO = 'traslado',
+  ASIGNACION = 'asignacion',
 }
 
 @Entity('auditoria_eliminaciones')

@@ -6,6 +6,7 @@ import { MensajesService } from '../mensajes/mensajes.service';
 import { UsersService } from '../users/users.service';
 import { UsuariosGruposService } from '../usuarios-grupos/usuarios-grupos.service';
 import { NotificacionesService } from '../notificaciones/notificaciones.service';
+import { ChatGateway } from '../chat/chat.gateway';
 
 @Injectable()
 export class GruposService {
@@ -22,6 +23,8 @@ export class GruposService {
     private usuariosGruposService: UsuariosGruposService,
     @Inject(forwardRef(() => NotificacionesService))
     private notificacionesService: NotificacionesService,
+    @Inject(forwardRef(() => ChatGateway))
+    private chatGateway: ChatGateway,
   ) {}
 
   async crearGrupoSede(sedeId: number, sedeNombre: string): Promise<Grupo> {
@@ -55,36 +58,6 @@ export class GruposService {
     return savedGrupo;
   }
 
-  async crearGrupoOficina(oficinaId: number, oficinaNombre: string): Promise<Grupo> {
-    // Verificar si ya existe un grupo para esta oficina
-    const grupoExistente = await this.obtenerGrupoPorEntidad(TipoGrupo.OFICINA, oficinaId);
-    if (grupoExistente) {
-      return grupoExistente;
-    }
-
-    const grupo = this.gruposRepository.create({
-      grupoNombre: `Oficina ${oficinaNombre}`,
-      grupoDescripcion: `Grupo de chat de la oficina ${oficinaNombre}`,
-      tipoGrupo: TipoGrupo.OFICINA,
-      entidadId: oficinaId,
-    });
-    const savedGrupo = await this.gruposRepository.save(grupo);
-    
-    // Asignar usuarios al grupo (superadmins y usuarios con esta oficina)
-    await this.asignarUsuariosAGrupo(savedGrupo.grupoId, TipoGrupo.OFICINA, oficinaId);
-    
-    // Crear mensaje automático de bienvenida
-    try {
-      await this.crearMensajeSistema(
-        savedGrupo.grupoId,
-        `🏛️ Grupo creado para la oficina "${oficinaNombre}". Este es el espacio de comunicación para coordinar actividades relacionadas con esta oficina.`
-      );
-    } catch (error) {
-      console.error(`[GruposService] Error al crear mensaje automático para oficina:`, error);
-    }
-    
-    return savedGrupo;
-  }
 
   async crearGrupoBodega(bodegaId: number, bodegaNombre: string): Promise<Grupo> {
     // Verificar si ya existe un grupo para esta bodega
@@ -236,20 +209,34 @@ export class GruposService {
       let usuario1, usuario2;
       try {
         usuario1 = await this.usersService.findOne(usuarioId1);
+        // Validar que el usuario esté activo
+        if (!usuario1 || !usuario1.usuarioEstado) {
+          throw new BadRequestException(`No se puede crear un chat con un usuario bloqueado o inactivo`);
+        }
       } catch (error) {
         console.error(`[GruposService] Error al buscar usuario ${usuarioId1}:`, error);
         if (error instanceof NotFoundException) {
           throw new NotFoundException(`Usuario con ID ${usuarioId1} no encontrado`);
+        }
+        if (error instanceof BadRequestException) {
+          throw error;
         }
         throw error;
       }
 
       try {
         usuario2 = await this.usersService.findOne(usuarioId2);
+        // Validar que el usuario esté activo
+        if (!usuario2 || !usuario2.usuarioEstado) {
+          throw new BadRequestException(`No se puede crear un chat con un usuario bloqueado o inactivo`);
+        }
       } catch (error) {
         console.error(`[GruposService] Error al buscar usuario ${usuarioId2}:`, error);
         if (error instanceof NotFoundException) {
           throw new NotFoundException(`Usuario con ID ${usuarioId2} no encontrado`);
+        }
+        if (error instanceof BadRequestException) {
+          throw error;
         }
         throw error;
       }
@@ -349,12 +336,10 @@ export class GruposService {
           return true;
         }
         
-        // Para grupos de sede, oficina, bodega: verificar que el usuario esté asignado a esa entidad
+        // Para grupos de sede y bodega: verificar que el usuario esté asignado a esa entidad
         if (grupo.tipoGrupo === TipoGrupo.SEDE && grupo.entidadId) {
           return usuario?.usuarioSede === grupo.entidadId;
         }
-        
-        // TipoGrupo.OFICINA eliminado - las bodegas ahora pertenecen directamente a sedes
         
         if (grupo.tipoGrupo === TipoGrupo.BODEGA && grupo.entidadId) {
           return usuario?.usuarioBodega === grupo.entidadId;
@@ -465,7 +450,6 @@ export class GruposService {
           } else if (tipoGrupo === TipoGrupo.BODEGA && usuario.usuarioBodega === entidadId) {
             debeAsignar = true;
           }
-          // TipoGrupo.OFICINA eliminado - las bodegas ahora pertenecen directamente a sedes
           
           if (debeAsignar) {
             usuariosParaAsignar.push(usuario.usuarioId);
@@ -525,7 +509,7 @@ export class GruposService {
     }
   }
 
-  private async crearMensajeSistema(grupoId: number, texto: string): Promise<void> {
+  async crearMensajeSistema(grupoId: number, texto: string): Promise<void> {
     try {
       const sistemaUsuarioId = await this.obtenerUsuarioSistema();
       await this.mensajesService.enviarMensaje(grupoId, sistemaUsuarioId, texto);
@@ -533,6 +517,43 @@ export class GruposService {
       console.error('[GruposService] Error al crear mensaje del sistema:', error);
       throw error;
     }
+  }
+
+  async cerrarChat(tipoGrupo: TipoGrupo, entidadId: number, motivo: string): Promise<void> {
+    try {
+      const grupo = await this.obtenerGrupoPorEntidad(tipoGrupo, entidadId);
+      if (!grupo || !grupo.grupoActivo) {
+        return; // Ya está cerrado
+      }
+
+      // Desactivar el grupo
+      grupo.grupoActivo = false;
+      await this.gruposRepository.save(grupo);
+
+      // Enviar mensaje automático de cierre
+      try {
+        await this.crearMensajeSistema(grupo.grupoId, `🔒 ${motivo}`);
+      } catch (error) {
+        console.error('[GruposService] Error al crear mensaje de cierre:', error);
+      }
+
+      // Notificar a los usuarios del grupo que el chat se cerró
+      const usuariosDelGrupo = await this.obtenerUsuariosDelGrupo(grupo.grupoId);
+      if (usuariosDelGrupo.length > 0) {
+        this.chatGateway.emitirCierreChat(grupo.grupoId, usuariosDelGrupo, motivo);
+      }
+    } catch (error) {
+      console.error(`[GruposService] Error al cerrar chat ${tipoGrupo} ${entidadId}:`, error);
+      throw error;
+    }
+  }
+
+  private async obtenerUsuariosDelGrupo(grupoId: number): Promise<number[]> {
+    const resultado = await this.gruposRepository.query(
+      'SELECT DISTINCT usuarioId FROM usuarios_grupos WHERE grupoId = ? AND activo = true',
+      [grupoId]
+    );
+    return resultado.map((row: any) => row.usuarioId);
   }
 
   async sincronizarGruposYUsuarios(): Promise<{ gruposSincronizados: number; usuariosAsignados: number; errores: string[] }> {
@@ -578,20 +599,7 @@ export class GruposService {
                 }
               }
             }
-          } 
-          // TipoGrupo.OFICINA eliminado - las bodegas ahora pertenecen directamente a sedes
-          // else if (grupo.tipoGrupo === TipoGrupo.OFICINA && grupo.entidadId) {
-          //   for (const usuario of todosLosUsuarios) {
-          //     if (usuario.usuarioOficina === grupo.entidadId) {
-          //       try {
-          //         await this.usuariosGruposService.agregarUsuarioGrupo(grupo.grupoId, usuario.usuarioId);
-          //         usuariosAsignados++;
-          //       } catch (error) {
-          //         // Ignorar si ya está asignado
-          //       }
-          //     }
-          //   }
-          // }
+          }
           else if (grupo.tipoGrupo === TipoGrupo.BODEGA && grupo.entidadId) {
             for (const usuario of todosLosUsuarios) {
               if (usuario.usuarioBodega === grupo.entidadId) {

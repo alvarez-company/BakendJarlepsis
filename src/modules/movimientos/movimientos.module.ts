@@ -10,6 +10,7 @@ import { UsersModule } from '../users/users.module';
 import { AuditoriaModule } from '../auditoria/auditoria.module';
 import { ExportacionModule } from '../exportacion/exportacion.module';
 import { InventarioTecnicoModule } from '../inventario-tecnico/inventario-tecnico.module';
+import { NumerosMedidorModule } from '../numeros-medidor/numeros-medidor.module';
 
 @Module({
   imports: [
@@ -21,6 +22,7 @@ import { InventarioTecnicoModule } from '../inventario-tecnico/inventario-tecnic
     AuditoriaModule,
     ExportacionModule,
     forwardRef(() => InventarioTecnicoModule),
+    forwardRef(() => NumerosMedidorModule),
   ],
   controllers: [MovimientosController],
   providers: [MovimientosService],

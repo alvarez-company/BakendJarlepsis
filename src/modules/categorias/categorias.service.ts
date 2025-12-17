@@ -5,7 +5,6 @@ import { Categoria } from './categoria.entity';
 import { CreateCategoriaDto } from './dto/create-categoria.dto';
 import { UpdateCategoriaDto } from './dto/update-categoria.dto';
 import { 
-  HasSubcategoriesException, 
   HasMaterialsException 
 } from '../../common/exceptions/business.exception';
 
@@ -23,22 +22,15 @@ export class CategoriasService {
 
   async findAll(): Promise<Categoria[]> {
     return this.categoriasRepository.find({
-      relations: ['materiales', 'subcategorias', 'categoriaPadre'],
-      where: { categoriaPadreId: null },
-    });
-  }
-
-  async findSubcategorias(categoriaPadreId: number): Promise<Categoria[]> {
-    return this.categoriasRepository.find({
-      where: { categoriaPadreId },
-      relations: ['materiales', 'subcategorias'],
+      relations: ['materiales'],
+      order: { categoriaNombre: 'ASC' },
     });
   }
 
   async findOne(id: number): Promise<Categoria> {
     const categoria = await this.categoriasRepository.findOne({
       where: { categoriaId: id },
-      relations: ['materiales', 'subcategorias', 'categoriaPadre'],
+      relations: ['materiales'],
     });
     if (!categoria) {
       throw new NotFoundException(`Categoría con ID ${id} no encontrada`);
@@ -54,11 +46,6 @@ export class CategoriasService {
 
   async remove(id: number): Promise<void> {
     const categoria = await this.findOne(id);
-    
-    // Validar que no tenga subcategorías
-    if (categoria.subcategorias && categoria.subcategorias.length > 0) {
-      throw new HasSubcategoriesException(categoria.categoriaNombre, categoria.subcategorias.length);
-    }
     
     // Validar que no tenga materiales
     if (categoria.materiales && categoria.materiales.length > 0) {

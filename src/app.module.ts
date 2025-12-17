@@ -9,7 +9,6 @@ import { PaisesModule } from './modules/paises/paises.module';
 import { DepartamentosModule } from './modules/departamentos/departamentos.module';
 import { MunicipiosModule } from './modules/municipios/municipios.module';
 import { SedesModule } from './modules/sedes/sedes.module';
-// import { OficinasModule } from './modules/oficinas/oficinas.module'; // Oficinas eliminado
 import { BodegasModule } from './modules/bodegas/bodegas.module';
 import { CategoriasModule } from './modules/categorias/categorias.module';
 import { ProveedoresModule } from './modules/proveedores/proveedores.module';
@@ -45,6 +44,8 @@ import { EstadosClienteModule } from './modules/estados-cliente/estados-cliente.
 import { EstadosMovimientoModule } from './modules/estados-movimiento/estados-movimiento.module';
 import { EstadosTrasladoModule } from './modules/estados-traslado/estados-traslado.module';
 import { HealthModule } from './modules/health/health.module';
+import { NumerosMedidorModule } from './modules/numeros-medidor/numeros-medidor.module';
+import { SearchModule } from './modules/search/search.module';
 
 @Module({
   imports: [
@@ -99,7 +100,6 @@ import { HealthModule } from './modules/health/health.module';
     DepartamentosModule,
     MunicipiosModule,
     SedesModule,
-    // OficinasModule, // Oficinas eliminado
     BodegasModule,
     CategoriasModule,
     ProveedoresModule,
@@ -134,6 +134,8 @@ import { HealthModule } from './modules/health/health.module';
     EstadosMovimientoModule,
     EstadosTrasladoModule,
     HealthModule,
+    NumerosMedidorModule,
+    SearchModule,
   ],
 })
 export class AppModule {}

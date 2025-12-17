@@ -44,13 +44,6 @@ export class CategoriasController {
     return this.categoriasService.findOne(+id);
   }
 
-  @Get(':id/subcategorias')
-  @Roles('superadmin', 'admin', 'tecnico')
-  @ApiOperation({ summary: 'Get subcategorias of a categoria' })
-  findSubcategorias(@Param('id') id: string) {
-    return this.categoriasService.findSubcategorias(+id);
-  }
-
   @Patch(':id')
   @Roles('superadmin', 'admin')
   @ApiOperation({ summary: 'Update a categoria' })

@@ -6,6 +6,7 @@ import { CreateSedeDto } from './dto/create-sede.dto';
 import { UpdateSedeDto } from './dto/update-sede.dto';
 import { HasRelatedEntitiesException } from '../../common/exceptions/business.exception';
 import { GruposService } from '../grupos/grupos.service';
+import { TipoGrupo } from '../grupos/grupo.entity';
 import { UsersService } from '../users/users.service';
 import { RolesService } from '../roles/roles.service';
 
@@ -131,8 +132,24 @@ export class SedesService {
 
   async update(id: number, updateSedeDto: UpdateSedeDto): Promise<Sede> {
     const sede = await this.findOne(id);
+    const estadoAnterior = sede.sedeEstado;
     Object.assign(sede, updateSedeDto);
-    return this.sedesRepository.save(sede);
+    const sedeActualizada = await this.sedesRepository.save(sede);
+
+    // Si la sede se desactiva, cerrar su chat
+    if (estadoAnterior && !sedeActualizada.sedeEstado) {
+      try {
+        await this.gruposService.cerrarChat(
+          TipoGrupo.SEDE,
+          id,
+          `Chat cerrado: La sede "${sedeActualizada.sedeNombre}" ha sido desactivada.`
+        );
+      } catch (error) {
+        console.error(`[SedesService] Error al cerrar chat de sede ${id}:`, error);
+      }
+    }
+
+    return sedeActualizada;
   }
 
   async remove(id: number): Promise<void> {

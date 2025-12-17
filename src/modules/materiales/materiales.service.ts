@@ -7,6 +7,7 @@ import { CreateMaterialDto } from './dto/create-material.dto';
 import { UpdateMaterialDto } from './dto/update-material.dto';
 import { InventariosService } from '../inventarios/inventarios.service';
 import { InventarioTecnicoService } from '../inventario-tecnico/inventario-tecnico.service';
+import { NumerosMedidorService } from '../numeros-medidor/numeros-medidor.service';
 
 @Injectable()
 export class MaterialesService {
@@ -18,6 +19,8 @@ export class MaterialesService {
     private inventariosService: InventariosService,
     @Inject(forwardRef(() => InventarioTecnicoService))
     private inventarioTecnicoService: InventarioTecnicoService,
+    @Inject(forwardRef(() => NumerosMedidorService))
+    private numerosMedidorService: NumerosMedidorService,
   ) {}
 
   async create(createMaterialDto: CreateMaterialDto, usuarioId?: number): Promise<Material> {
@@ -519,5 +522,6 @@ export class MaterialesService {
 
     return this.create(materialDuplicado as CreateMaterialDto, usuarioId);
   }
+
 }
 

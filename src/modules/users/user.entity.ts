@@ -109,6 +109,9 @@ export class User {
   @OneToMany('AsignacionTecnico', 'usuarioAsignador')
   asignacionesRealizadas: any[];
 
+  @OneToMany('NumeroMedidor', 'usuario')
+  numerosMedidor: any[];
+
   @CreateDateColumn()
   fechaCreacion: Date;
 

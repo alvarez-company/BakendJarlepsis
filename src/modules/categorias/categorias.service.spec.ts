@@ -4,7 +4,7 @@ import { Repository } from 'typeorm';
 import { NotFoundException } from '@nestjs/common';
 import { CategoriasService } from './categorias.service';
 import { Categoria } from './categoria.entity';
-import { HasSubcategoriesException, HasMaterialsException } from '../../common/exceptions/business.exception';
+import { HasMaterialsException } from '../../common/exceptions/business.exception';
 
 describe('CategoriasService', () => {
   let service: CategoriasService;
@@ -38,23 +38,10 @@ describe('CategoriasService', () => {
   });
 
   describe('remove', () => {
-    it('should throw HasSubcategoriesException when category has subcategories', async () => {
-      const mockCategoria = {
-        categoriaId: 1,
-        categoriaNombre: 'Test',
-        subcategorias: [{ categoriaId: 2 }, { categoriaId: 3 }],
-        materiales: [],
-      };
-      mockRepository.findOne.mockResolvedValue(mockCategoria);
-
-      await expect(service.remove(1)).rejects.toThrow(HasSubcategoriesException);
-    });
-
     it('should throw HasMaterialsException when category has materials', async () => {
       const mockCategoria = {
         categoriaId: 1,
         categoriaNombre: 'Test',
-        subcategorias: [],
         materiales: [{ materialId: 1 }, { materialId: 2 }],
       };
       mockRepository.findOne.mockResolvedValue(mockCategoria);
@@ -66,7 +53,6 @@ describe('CategoriasService', () => {
       const mockCategoria = {
         categoriaId: 1,
         categoriaNombre: 'Test',
-        subcategorias: [],
         materiales: [],
       };
       mockRepository.findOne.mockResolvedValue(mockCategoria);

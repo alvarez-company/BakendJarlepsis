@@ -9,6 +9,7 @@ import { AsignacionesTecnicosModule } from '../asignaciones-tecnicos/asignacione
 import { MaterialesModule } from '../materiales/materiales.module';
 import { NotificacionesModule } from '../notificaciones/notificaciones.module';
 import { UsersModule } from '../users/users.module';
+import { NumerosMedidorModule } from '../numeros-medidor/numeros-medidor.module';
 
 @Module({
   imports: [
@@ -19,6 +20,7 @@ import { UsersModule } from '../users/users.module';
     forwardRef(() => MaterialesModule),
     forwardRef(() => NotificacionesModule),
     forwardRef(() => UsersModule),
+    forwardRef(() => NumerosMedidorModule),
   ],
   controllers: [InventarioTecnicoController],
   providers: [InventarioTecnicoService],
