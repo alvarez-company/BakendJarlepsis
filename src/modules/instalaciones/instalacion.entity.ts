@@ -51,10 +51,10 @@ export class Instalacion {
   instalacionSelloRegulador: string;
 
   @Column({ type: 'date', nullable: true })
-  instalacionFecha: Date;
+  instalacionFecha: Date; // Opcional
 
-  @Column({ type: 'date', nullable: true })
-  fechaAsignacionMetrogas: Date;
+  @Column({ type: 'date', nullable: false })
+  fechaAsignacionMetrogas: Date; // Obligatorio
 
   // Fechas de estados legacy
   @Column({ type: 'datetime', nullable: true })

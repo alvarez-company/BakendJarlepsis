@@ -35,46 +35,47 @@ export class MaterialesController {
   ) {}
 
   @Post()
-  @Roles('superadmin', 'admin')
+  @Roles('superadmin', 'almacenista')
   @ApiOperation({ summary: 'Create a new material' })
   create(@Body() createMaterialDto: CreateMaterialDto, @Request() req) {
     return this.materialesService.create(createMaterialDto, req.user.usuarioId);
   }
 
   @Get()
-  @Roles('superadmin', 'admin', 'tecnico', 'bodega', 'inventario')
+  @Roles('superadmin', 'admin', 'administrador', 'almacenista', 'tecnico', 'soldador', 'bodega', 'bodega-internas', 'bodega-redes', 'inventario')
   @ApiOperation({ summary: 'Get all materiales' })
   findAll(@Request() req) {
     return this.materialesService.findAll(req.user);
   }
 
   @Get(':id')
-  @Roles('superadmin', 'admin', 'tecnico')
+  @Roles('superadmin', 'admin', 'administrador', 'almacenista', 'tecnico', 'soldador', 'bodega', 'bodega-internas', 'bodega-redes')
   @ApiOperation({ summary: 'Get a material by ID' })
   findOne(@Param('id') id: string) {
     return this.materialesService.findOne(+id);
   }
 
   @Patch(':id')
-  @Roles('superadmin', 'admin')
+  @Roles('superadmin', 'almacenista')
   @ApiOperation({ summary: 'Update a material' })
-  update(@Param('id') id: string, @Body() updateMaterialDto: UpdateMaterialDto) {
-    return this.materialesService.update(+id, updateMaterialDto);
+  update(@Param('id') id: string, @Body() updateMaterialDto: UpdateMaterialDto, @Request() req) {
+    return this.materialesService.update(+id, updateMaterialDto, req.user.usuarioId);
   }
 
   @Post(':id/ajustar-stock')
-  @Roles('superadmin', 'admin', 'tecnico')
+  @Roles('superadmin', 'admin', 'tecnico', 'almacenista')
   @ApiOperation({ summary: 'Ajustar stock de un material' })
-  ajustarStock(@Param('id') id: string, @Body() ajustarStockDto: AjustarStockDto) {
+  ajustarStock(@Param('id') id: string, @Body() ajustarStockDto: AjustarStockDto, @Request() req) {
     return this.materialesService.ajustarStock(
       +id,
       ajustarStockDto.cantidad,
       ajustarStockDto.bodegaId,
+      req.user.usuarioId,
     );
   }
 
   @Post(':id/duplicate')
-  @Roles('superadmin', 'admin')
+  @Roles('superadmin', 'almacenista')
   @ApiOperation({ summary: 'Duplicar un material' })
   duplicate(@Param('id') id: string, @Request() req) {
     return this.materialesService.duplicate(+id, req.user.usuarioId);

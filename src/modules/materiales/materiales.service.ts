@@ -1,4 +1,4 @@
-import { Injectable, NotFoundException, Inject, forwardRef } from '@nestjs/common';
+import { Injectable, NotFoundException, ConflictException, Inject, forwardRef } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { Material } from './material.entity';
@@ -8,6 +8,8 @@ import { UpdateMaterialDto } from './dto/update-material.dto';
 import { InventariosService } from '../inventarios/inventarios.service';
 import { InventarioTecnicoService } from '../inventario-tecnico/inventario-tecnico.service';
 import { NumerosMedidorService } from '../numeros-medidor/numeros-medidor.service';
+import { AuditoriaInventarioService } from '../auditoria-inventario/auditoria-inventario.service';
+import { TipoCambioInventario } from '../auditoria-inventario/auditoria-inventario.entity';
 
 @Injectable()
 export class MaterialesService {
@@ -21,6 +23,7 @@ export class MaterialesService {
     private inventarioTecnicoService: InventarioTecnicoService,
     @Inject(forwardRef(() => NumerosMedidorService))
     private numerosMedidorService: NumerosMedidorService,
+    private auditoriaService: AuditoriaInventarioService,
   ) {}
 
   async create(createMaterialDto: CreateMaterialDto, usuarioId?: number): Promise<Material> {
@@ -30,6 +33,18 @@ export class MaterialesService {
     
     try {
       const { bodegas = [], materialStock, inventarioId, ...rest } = createMaterialDto;
+
+      // Validar que el código del material no esté duplicado
+      const materialExistentePorCodigo = await this.findByCodigo(rest.materialCodigo);
+      if (materialExistentePorCodigo) {
+        throw new ConflictException(`El código de material '${rest.materialCodigo}' ya está en uso. Los códigos deben ser únicos.`);
+      }
+
+      // Validar que el nombre del material no esté duplicado
+      const materialExistentePorNombre = await this.findByNombre(rest.materialNombre);
+      if (materialExistentePorNombre) {
+        throw new ConflictException(`El nombre de material '${rest.materialNombre}' ya está en uso. Los nombres deben ser únicos.`);
+      }
 
       const materialData: any = {
         ...rest,
@@ -101,6 +116,24 @@ export class MaterialesService {
 
       await this.applyBodegaDistribution(savedMaterial.materialId, bodegas, materialStock, finalInventarioId || null);
 
+      // Registrar en auditoría
+      if (usuarioId) {
+        await this.auditoriaService.registrarCambio({
+          materialId: savedMaterial.materialId,
+          tipoCambio: TipoCambioInventario.CREACION_MATERIAL,
+          usuarioId,
+          descripcion: `Creación de material: ${rest.materialNombre}`,
+          datosNuevos: {
+            materialCodigo: rest.materialCodigo,
+            materialNombre: rest.materialNombre,
+            materialStock: materialStock || 0,
+            categoriaId: rest.categoriaId,
+            proveedorId: rest.proveedorId,
+          },
+          cantidadNueva: materialStock || 0,
+        });
+      }
+
       return this.findOne(savedMaterial.materialId);
     } catch (error) {
       console.error('Error al crear material:', error);
@@ -111,36 +144,68 @@ export class MaterialesService {
 
   async findAll(user?: any): Promise<Material[]> {
     try {
+      // Los materiales se comparten entre todos los centros operativos
+      // Todos los usuarios ven los mismos materiales, pero el stock se calcula por centro operativo
       const allMateriales = await this.materialesRepository.find({
         relations: ['categoria', 'proveedor', 'inventario', 'materialBodegas', 'materialBodegas.bodega', 'materialBodegas.bodega.sede', 'unidadMedida'],
       });
     
-      // SuperAdmin ve todo
-      if (user?.usuarioRol?.rolTipo === 'superadmin' || user?.role === 'superadmin') {
-        return allMateriales;
+      // Si hay un usuario, calcular el stock por su centro operativo
+      if (user?.usuarioSede) {
+        // Calcular stock para cada material de forma asíncrona
+        const materialesConStock = await Promise.all(
+          allMateriales.map(async (material) => {
+            // Calcular stock del material en el centro operativo del usuario
+            const stockEnCentroOperativo = await this.calculateStockBySede(material, user.usuarioSede);
+            
+            // Crear una copia del material con el stock ajustado
+            return {
+              ...material,
+              materialStock: stockEnCentroOperativo,
+              // Mantener materialBodegas para referencia, pero el stock total ya está calculado
+            };
+          })
+        );
+        
+        return materialesConStock;
       }
       
-      // Admin ve materiales de su bodega
-      if (user?.usuarioRol?.rolTipo === 'admin' || user?.role === 'admin') {
-        return allMateriales.filter(material => {
-          // Verificar si el material tiene stock en la bodega del usuario
-          if (material.materialBodegas && material.materialBodegas.length > 0) {
-            return material.materialBodegas.some(mb => mb.bodegaId === user.usuarioBodega);
-          }
-          return material.inventario?.bodegaId === user.usuarioBodega;
-        });
-      }
-      
-      // Usuario Bodega ve solo materiales de su bodega
-      if (user?.usuarioRol?.rolTipo === 'bodega' || user?.role === 'bodega') {
-        return allMateriales.filter(material => material.inventario?.bodegaId === user.usuarioBodega);
-      }
-      
+      // Si no hay usuario o es superadmin, devolver todos los materiales con su stock total
       return allMateriales;
     } catch (error) {
       console.error('Error al obtener materiales:', error);
       throw error;
     }
+  }
+
+  /**
+   * Calcula el stock de un material en un centro operativo específico
+   * Suma el stock de todas las bodegas del centro operativo + stock en técnicos del centro operativo
+   */
+  private async calculateStockBySede(material: Material, sedeId: number): Promise<number> {
+    let stockTotal = 0;
+
+    // Sumar stock de bodegas del centro operativo
+    if (material.materialBodegas && material.materialBodegas.length > 0) {
+      const stockBodegas = material.materialBodegas
+        .filter(mb => mb.bodega?.sedeId === sedeId)
+        .reduce((sum, mb) => sum + Number(mb.stock || 0), 0);
+      stockTotal += stockBodegas;
+    }
+
+    // Sumar stock en técnicos del centro operativo
+    try {
+      const inventariosTecnicos = await this.inventarioTecnicoService.findByMaterial(material.materialId);
+      const stockTecnicos = inventariosTecnicos
+        .filter(inv => inv.usuario?.usuarioSede === sedeId)
+        .reduce((sum, inv) => sum + Number(inv.cantidad || 0), 0);
+      stockTotal += stockTecnicos;
+    } catch (error) {
+      console.error(`Error al calcular stock en técnicos para material ${material.materialId} y sede ${sedeId}:`, error);
+      // Continuar con stockTecnicos = 0 si hay error
+    }
+    
+    return stockTotal;
   }
 
   async findOne(id: number): Promise<Material> {
@@ -161,9 +226,33 @@ export class MaterialesService {
     });
   }
 
-  async update(id: number, updateMaterialDto: UpdateMaterialDto): Promise<Material> {
+  async findByNombre(nombre: string): Promise<Material | null> {
+    return this.materialesRepository.findOne({
+      where: { materialNombre: nombre },
+      relations: ['categoria', 'proveedor', 'inventario'],
+    });
+  }
+
+  async update(id: number, updateMaterialDto: UpdateMaterialDto, usuarioId?: number): Promise<Material> {
     const material = await this.findOne(id);
+    const materialAnterior = { ...material };
     const { bodegas, materialStock, inventarioId, ...rest } = updateMaterialDto;
+
+    // Validar que el código del material no esté duplicado (si se está cambiando)
+    if (rest.materialCodigo && rest.materialCodigo !== material.materialCodigo) {
+      const materialExistentePorCodigo = await this.findByCodigo(rest.materialCodigo);
+      if (materialExistentePorCodigo && materialExistentePorCodigo.materialId !== id) {
+        throw new ConflictException(`El código de material '${rest.materialCodigo}' ya está en uso. Los códigos deben ser únicos.`);
+      }
+    }
+
+    // Validar que el nombre del material no esté duplicado (si se está cambiando)
+    if (rest.materialNombre && rest.materialNombre !== material.materialNombre) {
+      const materialExistentePorNombre = await this.findByNombre(rest.materialNombre);
+      if (materialExistentePorNombre && materialExistentePorNombre.materialId !== id) {
+        throw new ConflictException(`El nombre de material '${rest.materialNombre}' ya está en uso. Los nombres deben ser únicos.`);
+      }
+    }
 
     const updateData: any = {
       ...rest,
@@ -187,21 +276,78 @@ export class MaterialesService {
 
     if (bodegas) {
       await this.materialesBodegasRepository.delete({ materialId: material.materialId });
-      await this.applyBodegaDistribution(material.materialId, bodegas, materialStock, updateData.inventarioId || null);
+      await this.applyBodegaDistribution(material.materialId, bodegas, materialStock, updateData.inventarioId || null, usuarioId);
     } else if (materialStock !== undefined) {
       await this.syncMaterialStock(material.materialId);
+    }
+
+    // Registrar en auditoría
+    if (usuarioId) {
+      const materialActualizado = await this.findOne(material.materialId);
+      await this.auditoriaService.registrarCambio({
+        materialId: material.materialId,
+        tipoCambio: TipoCambioInventario.ACTUALIZACION_MATERIAL,
+        usuarioId,
+        descripcion: `Actualización de material: ${material.materialNombre}`,
+        datosAnteriores: {
+          materialCodigo: materialAnterior.materialCodigo,
+          materialNombre: materialAnterior.materialNombre,
+          materialStock: materialAnterior.materialStock,
+          materialPrecio: materialAnterior.materialPrecio,
+          materialEstado: materialAnterior.materialEstado,
+        },
+        datosNuevos: {
+          materialCodigo: materialActualizado.materialCodigo,
+          materialNombre: materialActualizado.materialNombre,
+          materialStock: materialActualizado.materialStock,
+          materialPrecio: materialActualizado.materialPrecio,
+          materialEstado: materialActualizado.materialEstado,
+        },
+        cantidadAnterior: materialAnterior.materialStock,
+        cantidadNueva: materialActualizado.materialStock,
+        diferencia: Number(materialActualizado.materialStock) - Number(materialAnterior.materialStock),
+      });
     }
 
     return this.findOne(material.materialId);
   }
 
-  async ajustarStock(id: number, cantidad: number, bodegaId?: number): Promise<Material> {
+  async ajustarStock(id: number, cantidad: number, bodegaId?: number, usuarioId?: number): Promise<Material> {
     if (!bodegaId) {
       throw new Error('Debe especificar la bodega para ajustar el stock.');
     }
+    
+    const materialAntes = await this.findOne(id);
+    const stockBodegaAntes = await this.materialesBodegasRepository.findOne({
+      where: { materialId: id, bodegaId },
+    });
+    const cantidadAnterior = stockBodegaAntes ? Number(stockBodegaAntes.stock) : 0;
+    
     await this.adjustStockForBodega(id, bodegaId, cantidad);
     await this.syncMaterialStock(id);
-    return this.findOne(id);
+    
+    const materialDespues = await this.findOne(id);
+    const stockBodegaDespues = await this.materialesBodegasRepository.findOne({
+      where: { materialId: id, bodegaId },
+    });
+    const cantidadNueva = stockBodegaDespues ? Number(stockBodegaDespues.stock) : 0;
+    
+    // Registrar en auditoría
+    if (usuarioId) {
+      await this.auditoriaService.registrarCambio({
+        materialId: id,
+        tipoCambio: TipoCambioInventario.AJUSTE_STOCK,
+        usuarioId,
+        descripcion: `Ajuste de stock: ${cantidad > 0 ? '+' : ''}${cantidad} unidades`,
+        cantidadAnterior,
+        cantidadNueva,
+        diferencia: cantidad,
+        bodegaId,
+        observaciones: `Stock ajustado manualmente en bodega`,
+      });
+    }
+    
+    return materialDespues;
   }
 
   /**
@@ -342,6 +488,7 @@ export class MaterialesService {
     bodegas: CreateMaterialDto['bodegas'] | undefined,
     fallbackStock?: number,
     inventarioId?: number | null,
+    usuarioId?: number,
   ): Promise<void> {
     let distribution = bodegas || [];
 
@@ -394,9 +541,12 @@ export class MaterialesService {
           where: { materialId, bodegaId: entry.bodegaId },
         });
 
+        const cantidadAnterior = existingRecord ? Number(existingRecord.stock) : 0;
+        const cantidadNueva = Number(entry.stock ?? 0);
+
         if (existingRecord) {
           // Actualizar el registro existente
-          existingRecord.stock = Number(entry.stock ?? 0);
+          existingRecord.stock = cantidadNueva;
           existingRecord.precioPromedio =
             entry.precioPromedio !== undefined ? Number(entry.precioPromedio) : null;
           await this.materialesBodegasRepository.save(existingRecord);
@@ -405,11 +555,26 @@ export class MaterialesService {
           const record = this.materialesBodegasRepository.create({
             materialId,
             bodegaId: entry.bodegaId,
-            stock: Number(entry.stock ?? 0),
+            stock: cantidadNueva,
             precioPromedio:
               entry.precioPromedio !== undefined ? Number(entry.precioPromedio) : null,
           });
           await this.materialesBodegasRepository.save(record);
+        }
+
+        // Registrar en auditoría si hay cambio y usuarioId
+        if (usuarioId && cantidadAnterior !== cantidadNueva) {
+          await this.auditoriaService.registrarCambio({
+            materialId,
+            tipoCambio: TipoCambioInventario.DISTRIBUCION_BODEGA,
+            usuarioId,
+            descripcion: `Distribución de stock en bodega: ${cantidadNueva} unidades`,
+            cantidadAnterior,
+            cantidadNueva,
+            diferencia: cantidadNueva - cantidadAnterior,
+            bodegaId: entry.bodegaId,
+            observaciones: `Stock distribuido en bodega`,
+          });
         }
       } catch (error) {
         console.error(`Error al guardar distribución de bodega ${entry.bodegaId} para material ${materialId}:`, error);

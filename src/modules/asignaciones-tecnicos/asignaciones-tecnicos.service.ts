@@ -73,7 +73,15 @@ export class AsignacionesTecnicosService {
     return `ASIG-${Date.now()}`;
   }
 
-  async create(createDto: CreateAsignacionTecnicoDto): Promise<AsignacionTecnico> {
+  async create(createDto: CreateAsignacionTecnicoDto, user?: any): Promise<AsignacionTecnico> {
+    // Validar que bodega-internas y bodega-redes no puedan asignar material
+    if (user) {
+      const rolTipo = user.usuarioRol?.rolTipo || user.role;
+      if (rolTipo === 'bodega-internas' || rolTipo === 'bodega-redes') {
+        throw new BadRequestException('Los roles de Bodega Internas y Bodega Redes no pueden asignar material');
+      }
+    }
+    
     // Si no se proporciona código, generar uno automáticamente
     if (!createDto.asignacionCodigo) {
       createDto.asignacionCodigo = await this.generarCodigoAsignacion();

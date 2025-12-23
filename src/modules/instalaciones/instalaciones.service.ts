@@ -1,4 +1,4 @@
-import { Injectable, NotFoundException, ConflictException, Inject, forwardRef } from '@nestjs/common';
+import { Injectable, NotFoundException, ConflictException, BadRequestException, Inject, forwardRef } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository, In } from 'typeorm';
 import { Instalacion, EstadoInstalacion } from './instalacion.entity';
@@ -90,8 +90,37 @@ export class InstalacionesService {
     }
   }
 
-  async create(createInstalacionDto: CreateInstalacionDto, usuarioId: number): Promise<Instalacion> {
+  async create(createInstalacionDto: CreateInstalacionDto, usuarioId: number, user?: any): Promise<Instalacion> {
     const { usuariosAsignados, instalacionCodigo, ...instalacionData } = createInstalacionDto;
+    
+    // Validar tipo de instalación según el rol
+    if (user) {
+      const userRole = user?.usuarioRol?.rolTipo || user?.role;
+      
+      if (userRole === 'bodega-internas' || userRole === 'bodega-redes') {
+        // Cargar el tipo de instalación para validar
+        const tipoInstalacionRaw = await this.instalacionesRepository.query(
+          `SELECT tipoInstalacionId, tipoInstalacionNombre 
+           FROM tipos_instalacion 
+           WHERE tipoInstalacionId = ?`,
+          [createInstalacionDto.tipoInstalacionId]
+        );
+        
+        if (!tipoInstalacionRaw || tipoInstalacionRaw.length === 0) {
+          throw new BadRequestException('Tipo de instalación no encontrado');
+        }
+        
+        const tipoNombre = tipoInstalacionRaw[0].tipoInstalacionNombre?.toLowerCase() || '';
+        
+        if (userRole === 'bodega-internas' && !tipoNombre.includes('internas')) {
+          throw new BadRequestException('El rol "Bodega Internas" solo puede crear instalaciones de tipo "Internas"');
+        }
+        
+        if (userRole === 'bodega-redes' && !tipoNombre.includes('redes')) {
+          throw new BadRequestException('El rol "Bodega Redes" solo puede crear instalaciones de tipo "Redes"');
+        }
+      }
+    }
     
     // Usar el código de instalación del cliente como identificador único
     // Si no se proporciona, generar uno automáticamente
@@ -235,7 +264,7 @@ export class InstalacionesService {
       });
     }
     
-    // Cargar usuarios asignados y sus relaciones
+    // Cargar usuarios asignados y sus relaciones (solo activos)
     const usuariosAsignadosMap = new Map<number, any[]>();
     if (instalacionIds.length > 0) {
       const usuariosAsignadosRaw = await this.instalacionesRepository.query(
@@ -244,6 +273,7 @@ export class InstalacionesService {
           iu.instalacionId,
           iu.usuarioId,
           iu.rolEnInstalacion,
+          iu.activo,
           u.usuarioId as u_usuarioId,
           u.usuarioNombre,
           u.usuarioApellido,
@@ -258,7 +288,8 @@ export class InstalacionesService {
          FROM instalaciones_usuarios iu
          LEFT JOIN usuarios u ON iu.usuarioId = u.usuarioId
          LEFT JOIN roles r ON u.usuarioRolId = r.rolId
-         WHERE iu.instalacionId IN (${instalacionIds.map(() => '?').join(',')})`,
+         WHERE iu.instalacionId IN (${instalacionIds.map(() => '?').join(',')})
+         AND iu.activo = 1`,
         instalacionIds
       );
       
@@ -272,6 +303,7 @@ export class InstalacionesService {
           instalacionId: row.instalacionId,
           usuarioId: row.usuarioId,
           rolEnInstalacion: row.rolEnInstalacion,
+          activo: row.activo !== undefined ? Boolean(row.activo) : true,
           usuario: row.u_usuarioId ? {
             usuarioId: row.u_usuarioId,
             usuarioNombre: row.usuarioNombre,
@@ -407,18 +439,60 @@ export class InstalacionesService {
       );
     }
     
-    // Técnico ve solo sus instalaciones asignadas
+    // Técnico ve solo sus instalaciones asignadas (solo asignaciones activas)
     if (user?.usuarioRol?.rolTipo === 'tecnico' || user?.role === 'tecnico') {
       return allInstalaciones.filter(inst => {
-        // Verificar si el técnico está asignado a esta instalación
+        // Verificar si el técnico está asignado activamente a esta instalación
         if (inst.usuariosAsignados && Array.isArray(inst.usuariosAsignados)) {
           return inst.usuariosAsignados.some((ua: any) => {
             const usuarioId = ua.usuarioId || ua.usuario?.usuarioId;
-            return usuarioId === user.usuarioId;
+            const activo = ua.activo !== undefined ? ua.activo : true;
+            return usuarioId === user.usuarioId && activo === true;
           });
         }
-        // Si no hay usuarios asignados, también mostrar las que el técnico registró
-        return inst.usuarioRegistra === user.usuarioId;
+        // No mostrar instalaciones que el técnico registró pero no tiene asignadas activamente
+        return false;
+      });
+    }
+    
+    // Soldador ve solo sus instalaciones asignadas (solo asignaciones activas)
+    if (user?.usuarioRol?.rolTipo === 'soldador' || user?.role === 'soldador') {
+      return allInstalaciones.filter(inst => {
+        if (inst.usuariosAsignados && Array.isArray(inst.usuariosAsignados)) {
+          return inst.usuariosAsignados.some((ua: any) => {
+            const usuarioId = ua.usuarioId || ua.usuario?.usuarioId;
+            const activo = ua.activo !== undefined ? ua.activo : true;
+            return usuarioId === user.usuarioId && activo === true;
+          });
+        }
+        // No mostrar instalaciones que el soldador registró pero no tiene asignadas activamente
+        return false;
+      });
+    }
+    
+    // Almacenista puede ver todas las instalaciones (solo lectura)
+    if (user?.usuarioRol?.rolTipo === 'almacenista' || user?.role === 'almacenista') {
+      return allInstalaciones;
+    }
+    
+    // Administrador (Centro Operativo) puede ver todas las instalaciones (solo lectura)
+    if (user?.usuarioRol?.rolTipo === 'administrador' || user?.role === 'administrador') {
+      return allInstalaciones;
+    }
+    
+    // Bodega Internas solo ve instalaciones de tipo "internas"
+    if (user?.usuarioRol?.rolTipo === 'bodega-internas' || user?.role === 'bodega-internas') {
+      return allInstalaciones.filter(inst => {
+        const tipoNombre = inst.tipoInstalacion?.tipoInstalacionNombre?.toLowerCase() || '';
+        return tipoNombre.includes('internas');
+      });
+    }
+    
+    // Bodega Redes solo ve instalaciones de tipo "redes"
+    if (user?.usuarioRol?.rolTipo === 'bodega-redes' || user?.role === 'bodega-redes') {
+      return allInstalaciones.filter(inst => {
+        const tipoNombre = inst.tipoInstalacion?.tipoInstalacionNombre?.toLowerCase() || '';
+        return tipoNombre.includes('redes');
       });
     }
     
@@ -591,7 +665,15 @@ export class InstalacionesService {
     return instalacion;
   }
 
-  async update(id: number, updateInstalacionDto: UpdateInstalacionDto, usuarioId?: number): Promise<Instalacion> {
+  async update(id: number, updateInstalacionDto: UpdateInstalacionDto, usuarioId?: number, user?: any): Promise<Instalacion> {
+    // Validar que almacenista no pueda editar instalaciones
+    if (user) {
+      const rolTipo = user.usuarioRol?.rolTipo || user.role;
+      if (rolTipo === 'almacenista' || rolTipo === 'administrador') {
+        throw new BadRequestException('No tienes permisos para editar instalaciones');
+      }
+    }
+    
     const { usuariosAsignados, instalacionCodigo, ...instalacionData } = updateInstalacionDto;
     
     const instalacion = await this.findOne(id);
@@ -700,7 +782,15 @@ export class InstalacionesService {
     return this.findOne(id);
   }
 
-  async remove(id: number, usuarioId: number): Promise<void> {
+  async remove(id: number, usuarioId: number, user?: any): Promise<void> {
+    // Validar que almacenista no pueda eliminar instalaciones
+    if (user) {
+      const rolTipo = user.usuarioRol?.rolTipo || user.role;
+      if (rolTipo === 'almacenista' || rolTipo === 'administrador') {
+        throw new BadRequestException('No tienes permisos para eliminar instalaciones');
+      }
+    }
+    
     const instalacion = await this.findOne(id);
     
     // Guardar datos completos para auditoría
@@ -791,7 +881,14 @@ export class InstalacionesService {
     await this.instalacionesRepository.remove(instalacion);
   }
 
-  async actualizarEstado(instalacionId: number, nuevoEstado: EstadoInstalacion, usuarioId: number): Promise<Instalacion> {
+  async actualizarEstado(instalacionId: number, nuevoEstado: EstadoInstalacion, usuarioId: number, user?: any): Promise<Instalacion> {
+    // Validar que almacenista no pueda cambiar estado de instalaciones
+    if (user) {
+      const rolTipo = user.usuarioRol?.rolTipo || user.role;
+      if (rolTipo === 'almacenista' || rolTipo === 'administrador') {
+        throw new BadRequestException('No tienes permisos para cambiar el estado de instalaciones');
+      }
+    }
     const instalacion = await this.findOne(instalacionId);
     const estadoAnterior = instalacion.estado;
     

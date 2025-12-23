@@ -27,9 +27,16 @@ export class NotificacionesController {
   }
 
   @Get('contar-no-leidas')
-  @Roles('superadmin', 'admin', 'tecnico', 'empleado')
+  @Roles('superadmin', 'admin', 'tecnico', 'empleado', 'almacenista', 'soldador', 'bodega-internas', 'bodega-redes', 'administrador')
   async contarNoLeidas(@Request() req) {
     const count = await this.notificacionesService.contarNoLeidas(req.user.usuarioId);
+    return count;
+  }
+
+  @Get('contar-mensajes-no-leidos')
+  @Roles('superadmin', 'admin', 'tecnico', 'empleado', 'almacenista', 'soldador', 'bodega-internas', 'bodega-redes', 'administrador')
+  async contarMensajesNoLeidos(@Request() req) {
+    const count = await this.notificacionesService.contarMensajesNoLeidos(req.user.usuarioId);
     return count;
   }
 

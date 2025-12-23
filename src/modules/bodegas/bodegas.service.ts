@@ -125,6 +125,26 @@ export class BodegasService {
       return allBodegas.filter(bodega => bodega.bodegaId === user.usuarioBodega);
     }
     
+    // Bodega Internas - solo ve bodegas de tipo internas
+    if (user?.usuarioRol?.rolTipo === 'bodega-internas' || user?.role === 'bodega-internas') {
+      // Filtrar por tipo de bodega (necesitarías agregar un campo bodegaTipo a la entidad)
+      // Por ahora, filtrar por sede si el usuario tiene una sede asignada
+      if (user.usuarioSede) {
+        return allBodegas.filter(bodega => bodega.sedeId === user.usuarioSede);
+      }
+      return allBodegas;
+    }
+    
+    // Bodega Redes - solo ve bodegas de tipo redes
+    if (user?.usuarioRol?.rolTipo === 'bodega-redes' || user?.role === 'bodega-redes') {
+      // Filtrar por tipo de bodega (necesitarías agregar un campo bodegaTipo a la entidad)
+      // Por ahora, filtrar por sede si el usuario tiene una sede asignada
+      if (user.usuarioSede) {
+        return allBodegas.filter(bodega => bodega.sedeId === user.usuarioSede);
+      }
+      return allBodegas;
+    }
+    
     return allBodegas;
   }
 

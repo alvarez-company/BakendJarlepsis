@@ -315,6 +315,23 @@ export class NotificacionesService {
     });
   }
 
+  async contarMensajesNoLeidos(usuarioId: number): Promise<number> {
+    try {
+      const count = await this.notificacionesRepository.count({
+        where: { 
+          usuarioId, 
+          leida: false,
+          tipoNotificacion: TipoNotificacion.MENSAJE_NUEVO,
+        },
+      });
+      return count;
+    } catch (error) {
+      console.error('Error al contar mensajes no leídos:', error);
+      // Retornar 0 en caso de error para no bloquear la aplicación
+      return 0;
+    }
+  }
+
   async eliminarNotificacion(notificacionId: number, usuarioId: number): Promise<void> {
     const result = await this.notificacionesRepository.delete({
       notificacionId,

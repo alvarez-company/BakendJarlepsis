@@ -33,14 +33,14 @@ export class TrasladosController {
   ) {}
 
   @Post()
-  @Roles('superadmin', 'admin', 'traslados')
+  @Roles('superadmin', 'admin', 'almacenista', 'traslados')
   @ApiOperation({ summary: 'Create a new traslado' })
   create(@Body() createTrasladoDto: CreateTrasladoDto) {
     return this.trasladosService.create(createTrasladoDto);
   }
 
   @Get()
-  @Roles('superadmin', 'admin', 'traslados')
+  @Roles('superadmin', 'admin', 'administrador', 'almacenista', 'traslados')
   @ApiOperation({ summary: 'Get all traslados' })
   findAll(@Query() paginationDto?: PaginationDto) {
     return this.trasladosService.findAll(paginationDto);
@@ -54,14 +54,14 @@ export class TrasladosController {
   }
 
   @Get(':id')
-  @Roles('superadmin', 'admin', 'tecnico')
+  @Roles('superadmin', 'admin', 'administrador', 'almacenista', 'tecnico')
   @ApiOperation({ summary: 'Get a traslado by ID' })
   findOne(@Param('id') id: string) {
     return this.trasladosService.findOne(+id);
   }
 
   @Post(':id/completar')
-  @Roles('superadmin', 'admin', 'traslados')
+  @Roles('superadmin', 'admin', 'almacenista', 'traslados')
   @ApiOperation({ summary: 'Completar traslado (crea movimientos automáticamente)' })
   completarTraslado(@Param('id') id: string) {
     return this.trasladosService.completarTraslado(+id);
@@ -122,7 +122,8 @@ export class TrasladosController {
             const search = filterObj.search.toLowerCase();
             filteredData = filteredData.filter((t: any) =>
               t.trasladoCodigo?.toLowerCase().includes(search) ||
-              t.material?.materialNombre?.toLowerCase().includes(search)
+              t.material?.materialNombre?.toLowerCase().includes(search) ||
+              t.material?.materialCodigo?.toLowerCase().includes(search)
             );
           }
         } catch (e) {}
@@ -196,7 +197,8 @@ export class TrasladosController {
             const search = filterObj.search.toLowerCase();
             filteredData = filteredData.filter((t: any) =>
               t.trasladoCodigo?.toLowerCase().includes(search) ||
-              t.material?.materialNombre?.toLowerCase().includes(search)
+              t.material?.materialNombre?.toLowerCase().includes(search) ||
+              t.material?.materialCodigo?.toLowerCase().includes(search)
             );
           }
         } catch (e) {}

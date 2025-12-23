@@ -32,14 +32,14 @@ export class MovimientosController {
   ) {}
 
   @Post()
-  @Roles('superadmin', 'admin', 'tecnico', 'entradas', 'salidas', 'devoluciones')
+  @Roles('superadmin', 'admin', 'almacenista', 'tecnico', 'entradas', 'salidas', 'devoluciones')
   @ApiOperation({ summary: 'Create a new movimiento (Entrada, Salida o Devolución)' })
   create(@Body() createMovimientoDto: CreateMovimientoDto) {
     return this.movimientosService.create(createMovimientoDto);
   }
 
   @Get()
-  @Roles('superadmin', 'admin', 'tecnico', 'entradas', 'salidas', 'devoluciones', 'traslados')
+  @Roles('superadmin', 'admin', 'administrador', 'almacenista', 'tecnico', 'entradas', 'salidas', 'devoluciones', 'traslados')
   @ApiOperation({ summary: 'Get all movimientos' })
   findAll(@Query('instalacionId') instalacionId?: string, @Query() paginationDto?: PaginationDto) {
     if (instalacionId) {
@@ -49,35 +49,35 @@ export class MovimientosController {
   }
 
   @Get('codigo/:codigo')
-  @Roles('superadmin', 'admin', 'tecnico', 'entradas', 'salidas', 'devoluciones')
+  @Roles('superadmin', 'admin', 'almacenista', 'tecnico', 'entradas', 'salidas', 'devoluciones')
   @ApiOperation({ summary: 'Get movimientos by código' })
   findByCodigo(@Param('codigo') codigo: string) {
     return this.movimientosService.findByCodigo(codigo);
   }
 
   @Get('material/:materialId')
-  @Roles('superadmin', 'admin', 'tecnico', 'bodega', 'inventario')
+  @Roles('superadmin', 'admin', 'administrador', 'almacenista', 'tecnico', 'soldador', 'bodega', 'bodega-internas', 'bodega-redes', 'inventario')
   @ApiOperation({ summary: 'Get movimientos by material ID with stock history' })
   findByMaterial(@Param('materialId') materialId: string) {
     return this.movimientosService.findByMaterial(+materialId);
   }
 
   @Get('bodega/:bodegaId/historial')
-  @Roles('superadmin', 'admin', 'bodega', 'inventario')
+  @Roles('superadmin', 'admin', 'administrador', 'almacenista', 'bodega', 'bodega-internas', 'bodega-redes', 'inventario')
   @ApiOperation({ summary: 'Get stock history by bodega ID' })
   findByBodega(@Param('bodegaId') bodegaId: string) {
     return this.movimientosService.findByBodega(+bodegaId);
   }
 
   @Get('sede/:sedeId/historial')
-  @Roles('superadmin', 'admin', 'bodega', 'inventario')
+  @Roles('superadmin', 'admin', 'administrador', 'almacenista', 'bodega', 'bodega-internas', 'bodega-redes', 'inventario')
   @ApiOperation({ summary: 'Get stock history by sede ID' })
   findBySede(@Param('sedeId') sedeId: string) {
     return this.movimientosService.findBySede(+sedeId);
   }
 
   @Get('tecnico/:usuarioId/historial')
-  @Roles('superadmin', 'admin', 'tecnico', 'bodega', 'inventario')
+  @Roles('superadmin', 'admin', 'administrador', 'almacenista', 'tecnico', 'soldador', 'bodega', 'bodega-internas', 'bodega-redes', 'inventario')
   @ApiOperation({ summary: 'Get stock history by tecnico (usuario) ID' })
   findByTecnico(@Param('usuarioId') usuarioId: string) {
     return this.movimientosService.findByTecnico(+usuarioId);
@@ -119,7 +119,8 @@ export class MovimientosController {
             const search = filterObj.search.toLowerCase();
             filteredData = filteredData.filter((m: any) =>
               m.movimientoCodigo?.toLowerCase().includes(search) ||
-              m.material?.materialNombre?.toLowerCase().includes(search)
+              m.material?.materialNombre?.toLowerCase().includes(search) ||
+              m.material?.materialCodigo?.toLowerCase().includes(search)
             );
           }
           // Filtrar por tipo de movimiento si se proporciona
@@ -203,7 +204,8 @@ export class MovimientosController {
             const search = filterObj.search.toLowerCase();
             filteredData = filteredData.filter((m: any) =>
               m.movimientoCodigo?.toLowerCase().includes(search) ||
-              m.material?.materialNombre?.toLowerCase().includes(search)
+              m.material?.materialNombre?.toLowerCase().includes(search) ||
+              m.material?.materialCodigo?.toLowerCase().includes(search)
             );
           }
           // Filtrar por tipo de movimiento si se proporciona
@@ -252,14 +254,14 @@ export class MovimientosController {
   }
 
   @Get(':id')
-  @Roles('superadmin', 'admin', 'tecnico')
+  @Roles('superadmin', 'admin', 'administrador', 'almacenista', 'tecnico')
   @ApiOperation({ summary: 'Get a movimiento by ID' })
   findOne(@Param('id') id: string) {
     return this.movimientosService.findOne(+id);
   }
 
   @Patch(':id')
-  @Roles('superadmin', 'admin', 'tecnico', 'entradas', 'salidas', 'devoluciones')
+  @Roles('superadmin', 'admin', 'almacenista', 'tecnico', 'entradas', 'salidas', 'devoluciones')
   @ApiOperation({ summary: 'Update a movimiento' })
   update(@Param('id') id: string, @Body() updateMovimientoDto: CreateMovimientoDto) {
     return this.movimientosService.update(+id, updateMovimientoDto);

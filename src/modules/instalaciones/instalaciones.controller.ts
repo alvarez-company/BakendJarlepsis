@@ -34,14 +34,14 @@ export class InstalacionesController {
   ) {}
 
   @Post()
-  @Roles('superadmin', 'admin', 'tecnico')
+  @Roles('superadmin', 'admin', 'tecnico', 'bodega-internas', 'bodega-redes')
   @ApiOperation({ summary: 'Create a new instalacion' })
   create(@Body() createInstalacionDto: CreateInstalacionDto, @Request() req) {
-    return this.instalacionesService.create(createInstalacionDto, req.user.usuarioId);
+    return this.instalacionesService.create(createInstalacionDto, req.user.usuarioId, req.user);
   }
 
   @Get()
-  @Roles('superadmin', 'admin', 'tecnico', 'instalaciones')
+  @Roles('superadmin', 'admin', 'administrador', 'almacenista', 'tecnico', 'soldador', 'bodega-internas', 'bodega-redes', 'instalaciones')
   @ApiOperation({ summary: 'Get all instalaciones' })
   async findAll(@Request() req) {
     try {
@@ -55,7 +55,7 @@ export class InstalacionesController {
   }
 
   @Get(':id')
-  @Roles('superadmin', 'admin', 'tecnico')
+  @Roles('superadmin', 'admin', 'administrador', 'almacenista', 'tecnico', 'soldador', 'bodega-internas', 'bodega-redes')
   @ApiOperation({ summary: 'Get an instalacion by ID' })
   findOne(@Param('id') id: string) {
     const instalacionId = parseInt(id, 10);
@@ -66,24 +66,24 @@ export class InstalacionesController {
   }
 
   @Patch(':id')
-  @Roles('superadmin', 'admin', 'tecnico')
+  @Roles('superadmin', 'admin', 'tecnico', 'bodega-internas', 'bodega-redes')
   @ApiOperation({ summary: 'Update an instalacion' })
   update(@Param('id') id: string, @Body() updateInstalacionDto: UpdateInstalacionDto, @Request() req) {
-    return this.instalacionesService.update(+id, updateInstalacionDto, req.user.usuarioId);
+    return this.instalacionesService.update(+id, updateInstalacionDto, req.user.usuarioId, req.user);
   }
 
   @Delete(':id')
-  @Roles('superadmin')
+  @Roles('superadmin', 'bodega-internas', 'bodega-redes')
   @ApiOperation({ summary: 'Delete an instalacion' })
   remove(@Param('id') id: string, @Request() req) {
-    return this.instalacionesService.remove(+id, req.user.usuarioId);
+    return this.instalacionesService.remove(+id, req.user.usuarioId, req.user);
   }
 
   @Post(':id/actualizar-estado')
-  @Roles('superadmin', 'admin', 'tecnico')
+  @Roles('superadmin', 'admin', 'tecnico', 'bodega-internas', 'bodega-redes')
   @ApiOperation({ summary: 'Update instalacion status' })
   actualizarEstado(@Param('id') id: string, @Body() updateEstadoDto: UpdateEstadoDto, @Request() req) {
-    return this.instalacionesService.actualizarEstado(+id, updateEstadoDto.estado, req.user.usuarioId);
+    return this.instalacionesService.actualizarEstado(+id, updateEstadoDto.estado, req.user.usuarioId, req.user);
   }
 
   @Get('export/excel')

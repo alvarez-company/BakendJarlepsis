@@ -116,6 +116,11 @@ export class SedesService {
       return allSedes.filter(sede => sede.departamentoId === user.usuarioSede);
     }
     
+    // Administrador (Centro Operativo) - solo lectura, ve todas las sedes
+    if (user?.usuarioRol?.rolTipo === 'administrador' || user?.role === 'administrador') {
+      return allSedes;
+    }
+    
     return allSedes;
   }
 

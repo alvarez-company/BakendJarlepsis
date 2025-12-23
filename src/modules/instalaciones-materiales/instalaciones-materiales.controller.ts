@@ -38,7 +38,7 @@ export class InstalacionesMaterialesController {
   }
 
   @Get('instalacion/:instalacionId')
-  @Roles('superadmin', 'admin', 'tecnico', 'empleado', 'instalaciones')
+  @Roles('superadmin', 'admin', 'administrador', 'almacenista', 'tecnico', 'soldador', 'empleado', 'instalaciones')
   @ApiOperation({ summary: 'Obtener materiales utilizados en una instalación específica' })
   findByInstalacion(@Param('instalacionId') instalacionId: string) {
     return this.service.findByInstalacion(+instalacionId);
@@ -87,7 +87,7 @@ export class InstalacionesMaterialesController {
   }
 
   @Post(':id/aprobar')
-  @Roles('superadmin', 'admin', 'tecnico', 'instalaciones')
+  @Roles('superadmin', 'admin', 'almacenista', 'tecnico', 'instalaciones')
   @ApiOperation({ summary: 'Aprobar o desaprobar un material utilizado' })
   aprobarMaterial(
     @Param('id') id: string,

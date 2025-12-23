@@ -31,8 +31,8 @@ export class UsersController {
   constructor(private readonly usersService: UsersService) {}
 
   @Post()
-  @Roles('superadmin', 'admin')
-  @ApiOperation({ summary: 'Create a new user (Admin/SuperAdmin only)' })
+  @Roles('superadmin', 'admin', 'bodega-internas', 'bodega-redes')
+  @ApiOperation({ summary: 'Create a new user' })
   create(@Body() createUserDto: CreateUserDto, @Request() req) {
     return this.usersService.create(createUserDto, req.user.usuarioId);
   }
@@ -69,7 +69,7 @@ export class UsersController {
   }
 
   @Get()
-  @Roles('superadmin', 'admin')
+  @Roles('superadmin', 'admin', 'administrador', 'bodega-internas', 'bodega-redes')
   @ApiOperation({ summary: 'Get all users with pagination' })
   @ApiQuery({ name: 'page', required: false, type: Number })
   @ApiQuery({ name: 'limit', required: false, type: Number })
@@ -79,7 +79,7 @@ export class UsersController {
   }
 
   @Get(':id')
-  @Roles('superadmin', 'admin')
+  @Roles('superadmin', 'admin', 'administrador', 'bodega-internas', 'bodega-redes')
   @ApiOperation({ summary: 'Get a user by ID' })
   findOne(@Param('id') id: string) {
     return this.usersService.findOne(+id);
@@ -108,8 +108,8 @@ export class UsersController {
   }
 
   @Patch(':id')
-  @Roles('superadmin', 'admin')
-  @ApiOperation({ summary: 'Update a user (Admin/SuperAdmin only)' })
+  @Roles('superadmin', 'admin', 'bodega-internas', 'bodega-redes')
+  @ApiOperation({ summary: 'Update a user' })
   update(@Param('id') id: string, @Body() updateUserDto: UpdateUserDto) {
     return this.usersService.update(+id, updateUserDto);
   }

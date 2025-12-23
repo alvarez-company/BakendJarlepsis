@@ -46,6 +46,7 @@ import { EstadosTrasladoModule } from './modules/estados-traslado/estados-trasla
 import { HealthModule } from './modules/health/health.module';
 import { NumerosMedidorModule } from './modules/numeros-medidor/numeros-medidor.module';
 import { SearchModule } from './modules/search/search.module';
+import { AuditoriaInventarioModule } from './modules/auditoria-inventario/auditoria-inventario.module';
 
 @Module({
   imports: [
@@ -136,6 +137,7 @@ import { SearchModule } from './modules/search/search.module';
     HealthModule,
     NumerosMedidorModule,
     SearchModule,
+    AuditoriaInventarioModule,
   ],
 })
 export class AppModule {}

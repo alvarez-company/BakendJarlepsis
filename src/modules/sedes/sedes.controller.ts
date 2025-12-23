@@ -32,14 +32,14 @@ export class SedesController {
   }
 
   @Get()
-  @Roles('superadmin', 'admin')
+  @Roles('superadmin', 'admin', 'administrador')
   @ApiOperation({ summary: 'Get all sedes' })
   findAll(@Request() req) {
     return this.sedesService.findAll(req.user);
   }
 
   @Get(':id')
-  @Roles('superadmin', 'admin')
+  @Roles('superadmin', 'admin', 'administrador')
   @ApiOperation({ summary: 'Get a sede by ID' })
   findOne(@Param('id') id: string) {
     return this.sedesService.findOne(+id);
