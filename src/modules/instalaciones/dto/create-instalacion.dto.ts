@@ -29,15 +29,14 @@ export class CreateInstalacionDto {
   @IsOptional()
   instalacionSelloRegulador?: string;
 
-  @ApiProperty({ required: false })
+  @ApiProperty({ required: false, description: 'Fecha de instalación (opcional)' })
   @IsDateString()
   @IsOptional()
   instalacionFecha?: string;
 
-  @ApiProperty({ required: false, description: 'Fecha de asignación Metrogas' })
+  @ApiProperty({ description: 'Fecha de asignación Metrogas (obligatorio)' })
   @IsDateString()
-  @IsOptional()
-  fechaAsignacionMetrogas?: string;
+  fechaAsignacionMetrogas: string;
 
   @ApiProperty({ required: false, description: 'JSON con materiales instalados' })
   @IsOptional()

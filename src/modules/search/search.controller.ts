@@ -18,7 +18,7 @@ export class SearchController {
   constructor(private readonly searchService: SearchService) {}
 
   @Get()
-  @Roles('superadmin', 'admin', 'tecnico', 'bodega')
+  @Roles('superadmin', 'admin', 'administrador', 'almacenista', 'tecnico', 'soldador', 'bodega', 'bodega-internas', 'bodega-redes')
   @ApiOperation({ summary: 'Global search across all entities' })
   @ApiQuery({ name: 'q', required: true, description: 'Search query' })
   async globalSearch(@Query('q') query: string) {

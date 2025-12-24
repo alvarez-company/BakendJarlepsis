@@ -8,6 +8,7 @@ import { InventariosModule } from '../inventarios/inventarios.module';
 import { ExportacionModule } from '../exportacion/exportacion.module';
 import { InventarioTecnicoModule } from '../inventario-tecnico/inventario-tecnico.module';
 import { NumerosMedidorModule } from '../numeros-medidor/numeros-medidor.module';
+import { AuditoriaInventarioModule } from '../auditoria-inventario/auditoria-inventario.module';
 
 @Module({
   imports: [
@@ -16,6 +17,7 @@ import { NumerosMedidorModule } from '../numeros-medidor/numeros-medidor.module'
     ExportacionModule,
     forwardRef(() => InventarioTecnicoModule),
     forwardRef(() => NumerosMedidorModule),
+    AuditoriaInventarioModule,
   ],
   controllers: [MaterialesController],
   providers: [MaterialesService],

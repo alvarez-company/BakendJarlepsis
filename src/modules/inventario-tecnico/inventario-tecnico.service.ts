@@ -373,7 +373,7 @@ export class InventarioTecnicoService {
   async findByMaterial(materialId: number): Promise<InventarioTecnico[]> {
     return this.inventarioTecnicoRepository.find({
       where: { materialId },
-      relations: ['usuario'],
+      relations: ['usuario', 'material'],
     });
   }
 

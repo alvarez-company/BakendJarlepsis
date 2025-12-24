@@ -5,12 +5,14 @@ import { AsignacionesTecnicosService } from './asignaciones-tecnicos.service';
 import { CreateAsignacionTecnicoDto } from './dto/create-asignacion-tecnico.dto';
 import { UpdateAsignacionTecnicoDto } from './dto/update-asignacion-tecnico.dto';
 import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard';
+import { RolesGuard } from '../../common/guards/roles.guard';
+import { Roles } from '../../common/decorators/roles.decorator';
 import { ExportacionService } from '../exportacion/exportacion.service';
 import { PaginationDto } from '../../common/dto/pagination.dto';
 
 @ApiTags('asignaciones-tecnicos')
 @Controller('asignaciones-tecnicos')
-@UseGuards(JwtAuthGuard)
+@UseGuards(JwtAuthGuard, RolesGuard)
 @ApiBearerAuth()
 export class AsignacionesTecnicosController {
   constructor(
@@ -19,48 +21,56 @@ export class AsignacionesTecnicosController {
   ) {}
 
   @Post()
+  @Roles('superadmin', 'admin', 'almacenista')
   @ApiOperation({ summary: 'Crear una nueva asignación' })
-  create(@Body() createDto: CreateAsignacionTecnicoDto) {
-    return this.service.create(createDto);
+  create(@Body() createDto: CreateAsignacionTecnicoDto, @Request() req) {
+    return this.service.create(createDto, req.user);
   }
 
   @Get()
+  @Roles('superadmin', 'admin', 'administrador', 'almacenista', 'bodega-internas', 'bodega-redes')
   @ApiOperation({ summary: 'Obtener todas las asignaciones' })
   findAll(@Query() paginationDto?: PaginationDto) {
     return this.service.findAll(paginationDto);
   }
 
   @Get(':id')
+  @Roles('superadmin', 'admin', 'administrador', 'almacenista', 'bodega-internas', 'bodega-redes')
   @ApiOperation({ summary: 'Obtener una asignación por ID' })
   findOne(@Param('id') id: string) {
     return this.service.findOne(+id);
   }
 
   @Get('usuario/:usuarioId')
+  @Roles('superadmin', 'admin', 'administrador', 'almacenista', 'bodega-internas', 'bodega-redes', 'tecnico')
   @ApiOperation({ summary: 'Obtener asignaciones de un técnico' })
   findByUsuario(@Param('usuarioId') usuarioId: string) {
     return this.service.findByUsuario(+usuarioId);
   }
 
   @Put(':id')
+  @Roles('superadmin', 'admin', 'almacenista')
   @ApiOperation({ summary: 'Actualizar una asignación' })
   update(@Param('id') id: string, @Body() updateDto: UpdateAsignacionTecnicoDto) {
     return this.service.update(+id, updateDto);
   }
 
   @Patch(':id/aprobar')
+  @Roles('superadmin', 'admin', 'almacenista')
   @ApiOperation({ summary: 'Aprobar una asignación' })
   aprobar(@Param('id') id: string) {
     return this.service.aprobar(+id);
   }
 
   @Patch(':id/rechazar')
+  @Roles('superadmin', 'admin', 'almacenista')
   @ApiOperation({ summary: 'Rechazar una asignación' })
   rechazar(@Param('id') id: string) {
     return this.service.rechazar(+id);
   }
 
   @Delete(':id')
+  @Roles('superadmin', 'admin', 'almacenista')
   @ApiOperation({ summary: 'Eliminar una asignación' })
   remove(@Param('id') id: string, @Request() req) {
     return this.service.remove(+id, req.user.usuarioId);

@@ -30,6 +30,7 @@ export enum TipoNotificacion {
 @Entity('notificaciones')
 @Index(['usuarioId', 'leida'])
 @Index(['usuarioId', 'fechaCreacion'])
+@Index('IDX_notificaciones_mensajes_no_leidos', ['usuarioId', 'leida', 'tipoNotificacion'])
 export class Notificacion {
   @PrimaryGeneratedColumn()
   notificacionId: number;

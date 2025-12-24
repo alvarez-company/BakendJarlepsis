@@ -13,31 +13,31 @@ export class ProyectosController {
   constructor(private readonly service: ProyectosService) {}
 
   @Post()
-  @Roles('superadmin', 'admin')
+  @Roles('superadmin', 'admin', 'bodega-internas', 'bodega-redes')
   create(@Body() data: any, @Request() req) {
     return this.service.create(data, req.user.usuarioId);
   }
 
   @Get()
-  @Roles('superadmin', 'admin', 'tecnico')
+  @Roles('superadmin', 'admin', 'administrador', 'almacenista', 'tecnico', 'soldador', 'bodega-internas', 'bodega-redes')
   findAll() {
     return this.service.findAll();
   }
 
   @Get(':id')
-  @Roles('superadmin', 'admin', 'tecnico')
+  @Roles('superadmin', 'admin', 'administrador', 'almacenista', 'tecnico', 'soldador', 'bodega-internas', 'bodega-redes')
   findOne(@Param('id') id: string) {
     return this.service.findOne(+id);
   }
 
   @Patch(':id')
-  @Roles('superadmin', 'admin')
+  @Roles('superadmin', 'admin', 'bodega-internas', 'bodega-redes')
   update(@Param('id') id: string, @Body() data: any) {
     return this.service.update(+id, data);
   }
 
   @Delete(':id')
-  @Roles('superadmin')
+  @Roles('superadmin', 'bodega-internas', 'bodega-redes')
   remove(@Param('id') id: string) {
     return this.service.remove(+id);
   }

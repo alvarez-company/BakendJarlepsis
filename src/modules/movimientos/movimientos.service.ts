@@ -9,10 +9,20 @@ import { ProveedoresService } from '../proveedores/proveedores.service';
 import { UsersService } from '../users/users.service';
 import { AuditoriaService } from '../auditoria/auditoria.service';
 import { TipoEntidad } from '../auditoria/auditoria.entity';
+import { AuditoriaInventarioService } from '../auditoria-inventario/auditoria-inventario.service';
+import { TipoCambioInventario } from '../auditoria-inventario/auditoria-inventario.entity';
 import { InventarioTecnicoService } from '../inventario-tecnico/inventario-tecnico.service';
 import { NumerosMedidorService } from '../numeros-medidor/numeros-medidor.service';
 import { EstadoNumeroMedidor } from '../numeros-medidor/numero-medidor.entity';
 import { PaginationDto } from '../../common/dto/pagination.dto';
+
+// Función auxiliar para obtener etiqueta del tipo de movimiento
+function getTipoLabel(tipo: TipoMovimiento): string {
+  if (tipo === TipoMovimiento.ENTRADA) return 'Entrada';
+  if (tipo === TipoMovimiento.SALIDA) return 'Salida';
+  if (tipo === TipoMovimiento.DEVOLUCION) return 'Devolución';
+  return String(tipo);
+}
 
 @Injectable()
 export class MovimientosService {
@@ -29,6 +39,7 @@ export class MovimientosService {
     private usersService: UsersService,
     @Inject(forwardRef(() => AuditoriaService))
     private auditoriaService: AuditoriaService,
+    private auditoriaInventarioService: AuditoriaInventarioService,
     @Inject(forwardRef(() => InventarioTecnicoService))
     private inventarioTecnicoService: InventarioTecnicoService,
     @Inject(forwardRef(() => NumerosMedidorService))
@@ -304,6 +315,47 @@ export class MovimientosService {
       // Obtener el movimiento guardado para agregarlo a la lista
       // Usar solo los datos necesarios para evitar problemas de serialización
       if (movimientoGuardado) {
+        // Registrar en auditoría de inventario
+        try {
+          const tipoMovimiento = createMovimientoDto.movimientoTipo;
+          let tipoCambio: TipoCambioInventario;
+          if (tipoMovimiento === TipoMovimiento.ENTRADA) {
+            tipoCambio = TipoCambioInventario.MOVIMIENTO_ENTRADA;
+          } else if (tipoMovimiento === TipoMovimiento.SALIDA) {
+            tipoCambio = TipoCambioInventario.MOVIMIENTO_SALIDA;
+          } else {
+            tipoCambio = TipoCambioInventario.MOVIMIENTO_DEVOLUCION;
+          }
+
+          // Obtener información de bodega si existe
+          let bodegaId: number | undefined = undefined;
+          if (movimientoGuardado.inventarioId) {
+            try {
+              const inventario = await this.inventariosService.findOne(movimientoGuardado.inventarioId);
+              bodegaId = inventario.bodegaId || inventario.bodega?.bodegaId;
+            } catch (error) {
+              // Error silencioso
+            }
+          }
+
+          await this.auditoriaInventarioService.registrarCambio({
+            materialId: materialIdFinal,
+            tipoCambio,
+            usuarioId: createMovimientoDto.usuarioId,
+            descripcion: `${getTipoLabel(tipoMovimiento)}: ${materialDto.movimientoCantidad} unidades`,
+            cantidadNueva: materialDto.movimientoCantidad,
+            diferencia: tipoMovimiento === TipoMovimiento.ENTRADA 
+              ? materialDto.movimientoCantidad 
+              : -materialDto.movimientoCantidad,
+            bodegaId,
+            movimientoId: movimientoGuardado.movimientoId,
+            observaciones: movimientoGuardado.movimientoObservaciones || createMovimientoDto.movimientoObservaciones,
+          });
+        } catch (error) {
+          console.error('Error al registrar movimiento en auditoría:', error);
+          // No lanzar error para no interrumpir el proceso
+        }
+
         movimientosCreados.push({
           movimientoId: movimientoGuardado.movimientoId,
           materialId: movimientoGuardado.materialId,
