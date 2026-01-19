@@ -48,15 +48,15 @@ export class SedesController {
   @Patch(':id')
   @Roles('superadmin', 'admin')
   @ApiOperation({ summary: 'Update a sede' })
-  update(@Param('id') id: string, @Body() updateSedeDto: UpdateSedeDto) {
-    return this.sedesService.update(+id, updateSedeDto);
+  update(@Param('id') id: string, @Body() updateSedeDto: UpdateSedeDto, @Request() req) {
+    return this.sedesService.update(+id, updateSedeDto, req.user);
   }
 
   @Delete(':id')
   @Roles('superadmin')
   @ApiOperation({ summary: 'Delete a sede' })
-  remove(@Param('id') id: string) {
-    return this.sedesService.remove(+id);
+  remove(@Param('id') id: string, @Request() req) {
+    return this.sedesService.remove(+id, req.user);
   }
 }
 

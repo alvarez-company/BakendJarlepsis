@@ -197,8 +197,16 @@ export class UsersService {
       updateUserDto.usuarioBodega = null;
     }
 
+    // Actualizar explícitamente el rol si viene en el DTO
+    if (updateUserDto.usuarioRolId !== undefined) {
+      user.usuarioRolId = updateUserDto.usuarioRolId;
+    }
+
     Object.assign(user, updateUserDto);
-    return this.usersRepository.save(user);
+    const savedUser = await this.usersRepository.save(user);
+    
+    // Recargar el usuario con sus relaciones para asegurar que el cambio se refleje
+    return this.findOne(savedUser.usuarioId);
   }
 
   async changeRole(id: number, newRoleId: number): Promise<User> {

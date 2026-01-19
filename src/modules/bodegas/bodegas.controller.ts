@@ -48,15 +48,15 @@ export class BodegasController {
   @Patch(':id')
   @Roles('superadmin', 'admin')
   @ApiOperation({ summary: 'Update a bodega' })
-  update(@Param('id') id: string, @Body() updateBodegaDto: UpdateBodegaDto) {
-    return this.bodegasService.update(+id, updateBodegaDto);
+  update(@Param('id') id: string, @Body() updateBodegaDto: UpdateBodegaDto, @Request() req) {
+    return this.bodegasService.update(+id, updateBodegaDto, req.user);
   }
 
   @Delete(':id')
   @Roles('superadmin')
   @ApiOperation({ summary: 'Delete a bodega' })
-  remove(@Param('id') id: string) {
-    return this.bodegasService.remove(+id);
+  remove(@Param('id') id: string, @Request() req) {
+    return this.bodegasService.remove(+id, req.user);
   }
 }
 

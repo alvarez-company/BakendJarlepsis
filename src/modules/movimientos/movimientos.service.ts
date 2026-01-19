@@ -727,23 +727,98 @@ export class MovimientosService {
     }
   }
 
-  async findAll(paginationDto?: PaginationDto): Promise<{ data: any[]; total: number; page: number; limit: number }> {
+  async findAll(paginationDto?: PaginationDto, user?: any): Promise<{ data: any[]; total: number; page: number; limit: number }> {
     try {
       const page = paginationDto?.page || 1;
       // Si no se especifica límite o es muy grande, usar un valor razonable o sin límite
       const limit = paginationDto?.limit || 10;
       const skip = (page - 1) * limit;
 
-      // Obtener el total de registros
-      const totalResult = await this.movimientosRepository.query(
-        `SELECT COUNT(*) as total FROM movimientos_inventario`
-      );
+      // Construir condiciones de filtrado según el rol del usuario
+      let whereConditions = '';
+      const queryParams: any[] = [];
+
+      if (user) {
+        const rolTipo = user.usuarioRol?.rolTipo || user.role;
+        
+        // SuperAdmin ve todo - no agregar condiciones
+        if (rolTipo !== 'superadmin') {
+          // Admin ve movimientos de su sede
+          if (rolTipo === 'admin' && user.usuarioSede) {
+            whereConditions = `
+              WHERE EXISTS (
+                SELECT 1 FROM inventarios i
+                INNER JOIN bodegas b ON i.bodegaId = b.bodegaId
+                WHERE i.inventarioId = movimientos_inventario.inventarioId
+                  AND b.sedeId = ?
+              )
+            `;
+            queryParams.push(user.usuarioSede);
+          }
+          // Almacenista ve movimientos de su sede
+          else if (rolTipo === 'almacenista' && user.usuarioSede) {
+            whereConditions = `
+              WHERE EXISTS (
+                SELECT 1 FROM inventarios i
+                INNER JOIN bodegas b ON i.bodegaId = b.bodegaId
+                WHERE i.inventarioId = movimientos_inventario.inventarioId
+                  AND b.sedeId = ?
+              )
+            `;
+            queryParams.push(user.usuarioSede);
+          }
+          // Bodega Internas ve movimientos de bodegas de tipo internas
+          else if (rolTipo === 'bodega-internas') {
+            whereConditions = `
+              WHERE EXISTS (
+                SELECT 1 FROM inventarios i
+                INNER JOIN bodegas b ON i.bodegaId = b.bodegaId
+                WHERE i.inventarioId = movimientos_inventario.inventarioId
+                  AND (b.bodegaTipo = 'internas' OR b.bodegaId = ?)
+              )
+            `;
+            queryParams.push(user.usuarioBodega || 0);
+          }
+          // Bodega Redes ve movimientos de bodegas de tipo redes
+          else if (rolTipo === 'bodega-redes') {
+            whereConditions = `
+              WHERE EXISTS (
+                SELECT 1 FROM inventarios i
+                INNER JOIN bodegas b ON i.bodegaId = b.bodegaId
+                WHERE i.inventarioId = movimientos_inventario.inventarioId
+                  AND (b.bodegaTipo = 'redes' OR b.bodegaId = ?)
+              )
+            `;
+            queryParams.push(user.usuarioBodega || 0);
+          }
+          // Técnico y Soldador ven solo movimientos de instalaciones asignadas a ellos
+          else if ((rolTipo === 'tecnico' || rolTipo === 'soldador') && user.usuarioId) {
+            whereConditions = `
+              WHERE (
+                movimientos_inventario.usuarioId = ?
+                OR movimientos_inventario.tecnicoOrigenId = ?
+                OR EXISTS (
+                  SELECT 1 FROM instalaciones_usuarios iu
+                  WHERE iu.instalacionId = movimientos_inventario.instalacionId
+                    AND iu.usuarioId = ?
+                    AND iu.activo = 1
+                )
+              )
+            `;
+            queryParams.push(user.usuarioId, user.usuarioId, user.usuarioId);
+          }
+        }
+      }
+
+      // Obtener el total de registros con filtros
+      const totalQuery = `SELECT COUNT(*) as total FROM movimientos_inventario ${whereConditions}`;
+      const totalResult = await this.movimientosRepository.query(totalQuery, queryParams);
       const total = totalResult[0]?.total || 0;
 
       // Primero intentar con query raw para evitar problemas con TypeORM y relaciones
       // Asegurar que se incluyan origenTipo y tecnicoOrigenId explícitamente
-      const rawMovimientos = await this.movimientosRepository.query(
-        `SELECT 
+      const selectQuery = `
+        SELECT 
           movimientoId,
           materialId,
           movimientoTipo,
@@ -763,9 +838,13 @@ export class MovimientosService {
           fechaCreacion,
           fechaActualizacion
         FROM movimientos_inventario 
+        ${whereConditions}
         ORDER BY fechaCreacion DESC
-        LIMIT ? OFFSET ?`,
-        [limit, skip]
+        LIMIT ? OFFSET ?
+      `;
+      const rawMovimientos = await this.movimientosRepository.query(
+        selectQuery,
+        [...queryParams, limit, skip]
       );
 
       // Si hay movimientos, cargar relaciones manualmente

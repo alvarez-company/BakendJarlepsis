@@ -37,6 +37,9 @@ export class Bodega {
   @Column({ default: true })
   bodegaEstado: boolean;
 
+  @Column({ nullable: true })
+  bodegaTipo: string; // 'internas' | 'redes' | null
+
   @Column()
   sedeId: number;
 
