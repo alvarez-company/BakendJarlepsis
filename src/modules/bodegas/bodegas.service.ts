@@ -1,4 +1,4 @@
-import { Injectable, NotFoundException, Inject, forwardRef } from '@nestjs/common';
+import { Injectable, NotFoundException, BadRequestException, Inject, forwardRef } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { Bodega } from './bodega.entity';
@@ -120,28 +120,42 @@ export class BodegasService {
       return allBodegas.filter(bodega => bodega.sedeId === user.usuarioSede);
     }
     
+    // Administrador (Centro Operativo) - solo lectura, ve todas las bodegas
+    if (user?.usuarioRol?.rolTipo === 'administrador' || user?.role === 'administrador') {
+      return allBodegas;
+    }
+    
     // Usuario Bodega ve solo su bodega
     if (user?.usuarioRol?.rolTipo === 'bodega' || user?.role === 'bodega') {
       return allBodegas.filter(bodega => bodega.bodegaId === user.usuarioBodega);
     }
     
-    // Bodega Internas - solo ve bodegas de tipo internas
+    // Bodega Internas - solo ve bodegas de tipo internas (y su propia bodega si está asignada)
     if (user?.usuarioRol?.rolTipo === 'bodega-internas' || user?.role === 'bodega-internas') {
-      // Filtrar por tipo de bodega (necesitarías agregar un campo bodegaTipo a la entidad)
-      // Por ahora, filtrar por sede si el usuario tiene una sede asignada
-      if (user.usuarioSede) {
-        return allBodegas.filter(bodega => bodega.sedeId === user.usuarioSede);
-      }
-      return allBodegas;
+      return allBodegas.filter(bodega => {
+        // Si tiene bodega asignada, puede ver su bodega
+        if (user.usuarioBodega && bodega.bodegaId === user.usuarioBodega) {
+          return true;
+        }
+        // Solo puede ver bodegas de tipo 'internas'
+        return bodega.bodegaTipo === 'internas';
+      });
     }
     
-    // Bodega Redes - solo ve bodegas de tipo redes
+    // Bodega Redes - solo ve bodegas de tipo redes (y su propia bodega si está asignada)
     if (user?.usuarioRol?.rolTipo === 'bodega-redes' || user?.role === 'bodega-redes') {
-      // Filtrar por tipo de bodega (necesitarías agregar un campo bodegaTipo a la entidad)
-      // Por ahora, filtrar por sede si el usuario tiene una sede asignada
-      if (user.usuarioSede) {
-        return allBodegas.filter(bodega => bodega.sedeId === user.usuarioSede);
-      }
+      return allBodegas.filter(bodega => {
+        // Si tiene bodega asignada, puede ver su bodega
+        if (user.usuarioBodega && bodega.bodegaId === user.usuarioBodega) {
+          return true;
+        }
+        // Solo puede ver bodegas de tipo 'redes'
+        return bodega.bodegaTipo === 'redes';
+      });
+    }
+    
+    // Almacenista ve todas las bodegas
+    if (user?.usuarioRol?.rolTipo === 'almacenista' || user?.role === 'almacenista') {
       return allBodegas;
     }
     
@@ -159,8 +173,24 @@ export class BodegasService {
     return bodega;
   }
 
-  async update(id: number, updateBodegaDto: UpdateBodegaDto): Promise<Bodega> {
+  async update(id: number, updateBodegaDto: UpdateBodegaDto, user?: any): Promise<Bodega> {
     const bodega = await this.findOne(id);
+    
+    // Validar permisos
+    if (user) {
+      const rolTipo = user.usuarioRol?.rolTipo || user.role;
+      
+      // Solo superadmin y admin pueden editar bodegas
+      if (rolTipo !== 'superadmin' && rolTipo !== 'admin') {
+        throw new BadRequestException('No tienes permisos para editar bodegas');
+      }
+      
+      // Admin solo puede editar bodegas de su sede
+      if (rolTipo === 'admin' && bodega.sedeId !== user.usuarioSede) {
+        throw new BadRequestException('No tienes permisos para editar bodegas de otras sedes');
+      }
+    }
+    
     const estadoAnterior = bodega.bodegaEstado;
     Object.assign(bodega, updateBodegaDto);
     const bodegaActualizada = await this.bodegasRepository.save(bodega);
@@ -181,8 +211,16 @@ export class BodegasService {
     return bodegaActualizada;
   }
 
-  async remove(id: number): Promise<void> {
+  async remove(id: number, user?: any): Promise<void> {
     const bodega = await this.findOne(id);
+    
+    // Validar permisos - solo superadmin puede eliminar
+    if (user) {
+      const rolTipo = user.usuarioRol?.rolTipo || user.role;
+      if (rolTipo !== 'superadmin') {
+        throw new BadRequestException('No tienes permisos para eliminar bodegas');
+      }
+    }
     
     const relations: { [key: string]: number } = {};
     

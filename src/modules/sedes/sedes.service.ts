@@ -1,4 +1,4 @@
-import { Injectable, NotFoundException, Inject, forwardRef } from '@nestjs/common';
+import { Injectable, NotFoundException, BadRequestException, Inject, forwardRef } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { Sede } from './sede.entity';
@@ -111,14 +111,34 @@ export class SedesService {
       return allSedes;
     }
     
-    // Admin ve solo sedes de su departamento/oficina
+    // Admin ve solo sedes de su centro operativo (sede asignada)
     if (user?.usuarioRol?.rolTipo === 'admin' || user?.role === 'admin') {
-      return allSedes.filter(sede => sede.departamentoId === user.usuarioSede);
+      if (user.usuarioSede) {
+        return allSedes.filter(sede => sede.sedeId === user.usuarioSede);
+      }
+      return [];
     }
     
     // Administrador (Centro Operativo) - solo lectura, ve todas las sedes
     if (user?.usuarioRol?.rolTipo === 'administrador' || user?.role === 'administrador') {
       return allSedes;
+    }
+    
+    // Almacenista ve solo su sede asignada
+    if (user?.usuarioRol?.rolTipo === 'almacenista' || user?.role === 'almacenista') {
+      if (user.usuarioSede) {
+        return allSedes.filter(sede => sede.sedeId === user.usuarioSede);
+      }
+      return [];
+    }
+    
+    // Técnico y Soldador ven solo su sede asignada
+    if ((user?.usuarioRol?.rolTipo === 'tecnico' || user?.role === 'tecnico') ||
+        (user?.usuarioRol?.rolTipo === 'soldador' || user?.role === 'soldador')) {
+      if (user.usuarioSede) {
+        return allSedes.filter(sede => sede.sedeId === user.usuarioSede);
+      }
+      return [];
     }
     
     return allSedes;
@@ -135,8 +155,24 @@ export class SedesService {
     return sede;
   }
 
-  async update(id: number, updateSedeDto: UpdateSedeDto): Promise<Sede> {
+  async update(id: number, updateSedeDto: UpdateSedeDto, user?: any): Promise<Sede> {
     const sede = await this.findOne(id);
+    
+    // Validar permisos
+    if (user) {
+      const rolTipo = user.usuarioRol?.rolTipo || user.role;
+      
+      // Solo superadmin y admin pueden editar sedes
+      if (rolTipo !== 'superadmin' && rolTipo !== 'admin') {
+        throw new BadRequestException('No tienes permisos para editar sedes');
+      }
+      
+      // Admin solo puede editar su propia sede
+      if (rolTipo === 'admin' && sede.sedeId !== user.usuarioSede) {
+        throw new BadRequestException('No tienes permisos para editar otras sedes');
+      }
+    }
+    
     const estadoAnterior = sede.sedeEstado;
     Object.assign(sede, updateSedeDto);
     const sedeActualizada = await this.sedesRepository.save(sede);
@@ -157,8 +193,16 @@ export class SedesService {
     return sedeActualizada;
   }
 
-  async remove(id: number): Promise<void> {
+  async remove(id: number, user?: any): Promise<void> {
     const sede = await this.findOne(id);
+    
+    // Validar permisos - solo superadmin puede eliminar
+    if (user) {
+      const rolTipo = user.usuarioRol?.rolTipo || user.role;
+      if (rolTipo !== 'superadmin') {
+        throw new BadRequestException('No tienes permisos para eliminar sedes');
+      }
+    }
     
     const relations: { [key: string]: number } = {};
     

@@ -666,17 +666,48 @@ export class InstalacionesService {
   }
 
   async update(id: number, updateInstalacionDto: UpdateInstalacionDto, usuarioId?: number, user?: any): Promise<Instalacion> {
-    // Validar que almacenista no pueda editar instalaciones
-    if (user) {
-      const rolTipo = user.usuarioRol?.rolTipo || user.role;
-      if (rolTipo === 'almacenista' || rolTipo === 'administrador') {
-        throw new BadRequestException('No tienes permisos para editar instalaciones');
-      }
-    }
-    
     const { usuariosAsignados, instalacionCodigo, ...instalacionData } = updateInstalacionDto;
     
     const instalacion = await this.findOne(id);
+    
+    // Validar permisos
+    if (user) {
+      const rolTipo = user.usuarioRol?.rolTipo || user.role;
+      
+      // Almacenista y administrador no pueden editar instalaciones
+      if (rolTipo === 'almacenista' || rolTipo === 'administrador') {
+        throw new BadRequestException('No tienes permisos para editar instalaciones');
+      }
+      
+      // Bodega Internas solo puede editar instalaciones de tipo "internas"
+      if (rolTipo === 'bodega-internas') {
+        const tipoNombre = instalacion.tipoInstalacion?.tipoInstalacionNombre?.toLowerCase() || '';
+        if (!tipoNombre.includes('internas')) {
+          throw new BadRequestException('El rol "Bodega Internas" solo puede editar instalaciones de tipo "Internas"');
+        }
+      }
+      
+      // Bodega Redes solo puede editar instalaciones de tipo "redes"
+      if (rolTipo === 'bodega-redes') {
+        const tipoNombre = instalacion.tipoInstalacion?.tipoInstalacionNombre?.toLowerCase() || '';
+        if (!tipoNombre.includes('redes')) {
+          throw new BadRequestException('El rol "Bodega Redes" solo puede editar instalaciones de tipo "Redes"');
+        }
+      }
+      
+      // Técnico solo puede editar instalaciones asignadas a él
+      if (rolTipo === 'tecnico' || rolTipo === 'soldador') {
+        const tieneAsignacion = instalacion.usuariosAsignados?.some((ua: any) => {
+          const usuarioId = ua.usuarioId || ua.usuario?.usuarioId;
+          const activo = ua.activo !== undefined ? ua.activo : true;
+          return usuarioId === user.usuarioId && activo === true;
+        });
+        if (!tieneAsignacion) {
+          throw new BadRequestException('No tienes permisos para editar esta instalación. Solo puedes editar instalaciones asignadas a ti.');
+        }
+      }
+    }
+    
     const estadoAnterior = instalacion.estado;
     
     // Si se está actualizando el código de instalación, verificar que no esté duplicado
@@ -783,15 +814,33 @@ export class InstalacionesService {
   }
 
   async remove(id: number, usuarioId: number, user?: any): Promise<void> {
-    // Validar que almacenista no pueda eliminar instalaciones
+    const instalacion = await this.findOne(id);
+    
+    // Validar permisos
     if (user) {
       const rolTipo = user.usuarioRol?.rolTipo || user.role;
+      
+      // Almacenista y administrador no pueden eliminar instalaciones
       if (rolTipo === 'almacenista' || rolTipo === 'administrador') {
         throw new BadRequestException('No tienes permisos para eliminar instalaciones');
       }
+      
+      // Bodega Internas solo puede eliminar instalaciones de tipo "internas"
+      if (rolTipo === 'bodega-internas') {
+        const tipoNombre = instalacion.tipoInstalacion?.tipoInstalacionNombre?.toLowerCase() || '';
+        if (!tipoNombre.includes('internas')) {
+          throw new BadRequestException('El rol "Bodega Internas" solo puede eliminar instalaciones de tipo "Internas"');
+        }
+      }
+      
+      // Bodega Redes solo puede eliminar instalaciones de tipo "redes"
+      if (rolTipo === 'bodega-redes') {
+        const tipoNombre = instalacion.tipoInstalacion?.tipoInstalacionNombre?.toLowerCase() || '';
+        if (!tipoNombre.includes('redes')) {
+          throw new BadRequestException('El rol "Bodega Redes" solo puede eliminar instalaciones de tipo "Redes"');
+        }
+      }
     }
-    
-    const instalacion = await this.findOne(id);
     
     // Guardar datos completos para auditoría
     const datosEliminados = {

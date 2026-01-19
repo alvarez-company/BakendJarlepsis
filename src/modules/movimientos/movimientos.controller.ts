@@ -39,13 +39,13 @@ export class MovimientosController {
   }
 
   @Get()
-  @Roles('superadmin', 'admin', 'administrador', 'almacenista', 'tecnico', 'entradas', 'salidas', 'devoluciones', 'traslados')
+  @Roles('superadmin', 'admin', 'administrador', 'almacenista', 'tecnico', 'soldador', 'bodega-internas', 'bodega-redes', 'entradas', 'salidas', 'devoluciones', 'traslados')
   @ApiOperation({ summary: 'Get all movimientos' })
-  findAll(@Query('instalacionId') instalacionId?: string, @Query() paginationDto?: PaginationDto) {
+  findAll(@Query('instalacionId') instalacionId?: string, @Query() paginationDto?: PaginationDto, @Request() req?: any) {
     if (instalacionId) {
       return this.movimientosService.findByInstalacion(+instalacionId);
     }
-    return this.movimientosService.findAll(paginationDto);
+    return this.movimientosService.findAll(paginationDto, req?.user);
   }
 
   @Get('codigo/:codigo')
