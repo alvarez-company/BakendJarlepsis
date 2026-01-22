@@ -29,4 +29,3 @@ export class EstadoClienteEntity {
   @UpdateDateColumn()
   fechaActualizacion: Date;
 }
-

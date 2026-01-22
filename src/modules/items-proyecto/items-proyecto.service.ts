@@ -23,10 +23,14 @@ export class ItemsProyectoService {
       insertValues.itemCodigo = data.itemCodigo;
     }
     // Solo incluir itemDescripcion si viene y no está vacío
-    if (data.itemDescripcion !== undefined && data.itemDescripcion !== null && data.itemDescripcion !== '') {
+    if (
+      data.itemDescripcion !== undefined &&
+      data.itemDescripcion !== null &&
+      data.itemDescripcion !== ''
+    ) {
       insertValues.itemDescripcion = data.itemDescripcion;
     }
-    
+
     const insertResult = await this.itemsProyectoRepository
       .createQueryBuilder()
       .insert()
@@ -35,7 +39,7 @@ export class ItemsProyectoService {
       .execute();
 
     const itemProyectoId = insertResult.identifiers[0].itemProyectoId;
-    
+
     // Obtener el item creado usando QueryBuilder para evitar problemas de tipo
     const item = await this.itemsProyectoRepository
       .createQueryBuilder('item')
@@ -52,11 +56,11 @@ export class ItemsProyectoService {
       ])
       .where('item.itemProyectoId = :id', { id: itemProyectoId })
       .getOne();
-    
+
     if (!item) {
       throw new NotFoundException(`Item de proyecto con ID ${itemProyectoId} no encontrado`);
     }
-    
+
     return item;
   }
 
@@ -90,4 +94,3 @@ export class ItemsProyectoService {
     await this.itemsProyectoRepository.remove(item);
   }
 }
-

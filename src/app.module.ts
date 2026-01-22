@@ -71,9 +71,9 @@ import { AuditoriaInventarioModule } from './modules/auditoria-inventario/audito
         const username = configService.get<string>('DB_USERNAME', 'root');
         const password = configService.get<string>('DB_PASSWORD', '') || '';
         const database = configService.get<string>('DB_NAME', 'jarlepsisdev');
-        
+
         // Database configuration
-        
+
         const config = {
           type: 'mysql' as const,
           host,
@@ -87,7 +87,7 @@ import { AuditoriaInventarioModule } from './modules/auditoria-inventario/audito
           retryAttempts: 1,
           retryDelay: 1000,
         };
-        
+
         return config;
       },
       inject: [ConfigService],

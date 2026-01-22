@@ -53,7 +53,12 @@ describe('UsersService - Roles y Permisos', () => {
         },
         {
           provide: GruposService,
-          useValue: { findOne: jest.fn(), obtenerGrupoPorEntidad: jest.fn(), crearMensajeSistema: jest.fn(), cerrarChat: jest.fn() },
+          useValue: {
+            findOne: jest.fn(),
+            obtenerGrupoPorEntidad: jest.fn(),
+            crearMensajeSistema: jest.fn(),
+            cerrarChat: jest.fn(),
+          },
         },
         {
           provide: UsuariosGruposService,
@@ -147,15 +152,10 @@ describe('UsersService - Roles y Permisos', () => {
           'admin', // requestingUserRole (not superadmin)
         ),
       ).rejects.toThrow(BadRequestException);
-      
-      await expect(
-        service.update(
-          2,
-          updateDto,
-          1,
-          'admin',
-        ),
-      ).rejects.toThrow('Solo puedes cambiar tu propia contraseña');
+
+      await expect(service.update(2, updateDto, 1, 'admin')).rejects.toThrow(
+        'Solo puedes cambiar tu propia contraseña',
+      );
     });
   });
 
@@ -206,22 +206,17 @@ describe('UsersService - Roles y Permisos', () => {
           'admin', // requestingUserRole (not superadmin)
         ),
       ).rejects.toThrow(BadRequestException);
-      
-      await expect(
-        service.update(
-          2,
-          updateDto,
-          1,
-          'admin',
-        ),
-      ).rejects.toThrow('Solo el superadmin puede cambiar roles de usuarios');
+
+      await expect(service.update(2, updateDto, 1, 'admin')).rejects.toThrow(
+        'Solo el superadmin puede cambiar roles de usuarios',
+      );
     });
   });
 
   describe('changeRole - Solo superadmin', () => {
     it('should allow superadmin to change role', async () => {
       const targetUser = { ...mockUser, usuarioId: 2, usuarioRolId: 1 };
-      
+
       mockRepository.findOne.mockResolvedValue(targetUser);
       mockRolesService.findOne.mockResolvedValue({
         rolId: 2,

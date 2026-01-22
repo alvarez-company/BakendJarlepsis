@@ -6,8 +6,6 @@ import { UsersService } from '../users/users.service';
 
 describe('AuthService', () => {
   let service: AuthService;
-  let usersService: UsersService;
-  let jwtService: JwtService;
 
   const mockUsersService = {
     findByEmail: jest.fn(),
@@ -35,8 +33,6 @@ describe('AuthService', () => {
     }).compile();
 
     service = module.get<AuthService>(AuthService);
-    usersService = module.get<UsersService>(UsersService);
-    jwtService = module.get<JwtService>(JwtService);
   });
 
   afterEach(() => {
@@ -47,9 +43,9 @@ describe('AuthService', () => {
     it('should throw UnauthorizedException when user does not exist', async () => {
       mockUsersService.findByEmail.mockResolvedValue(null);
 
-      await expect(
-        service.validateUser('test@example.com', 'password'),
-      ).rejects.toThrow(UnauthorizedException);
+      await expect(service.validateUser('test@example.com', 'password')).rejects.toThrow(
+        UnauthorizedException,
+      );
     });
 
     it('should throw UnauthorizedException when user is inactive', async () => {
@@ -61,9 +57,9 @@ describe('AuthService', () => {
       };
       mockUsersService.findByEmail.mockResolvedValue(mockUser);
 
-      await expect(
-        service.validateUser('test@example.com', 'password'),
-      ).rejects.toThrow(UnauthorizedException);
+      await expect(service.validateUser('test@example.com', 'password')).rejects.toThrow(
+        UnauthorizedException,
+      );
     });
 
     it('should throw UnauthorizedException when password is incorrect', async () => {
@@ -75,9 +71,9 @@ describe('AuthService', () => {
       };
       mockUsersService.findByEmail.mockResolvedValue(mockUser);
 
-      await expect(
-        service.validateUser('test@example.com', 'wrongPassword'),
-      ).rejects.toThrow(UnauthorizedException);
+      await expect(service.validateUser('test@example.com', 'wrongPassword')).rejects.toThrow(
+        UnauthorizedException,
+      );
     });
   });
 
@@ -115,4 +111,3 @@ describe('AuthService', () => {
     });
   });
 });
-

@@ -45,4 +45,3 @@ export class EstadoUsuario {
   @UpdateDateColumn()
   fechaActualizacion: Date;
 }
-

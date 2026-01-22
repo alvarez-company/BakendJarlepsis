@@ -7,4 +7,3 @@ import { winstonConfig } from './logger/winston.config';
   exports: [WinstonModule],
 })
 export class CommonModule {}
-

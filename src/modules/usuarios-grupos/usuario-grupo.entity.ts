@@ -35,4 +35,3 @@ export class UsuarioGrupo {
   @CreateDateColumn()
   fechaIngreso: Date;
 }
-

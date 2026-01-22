@@ -1,9 +1,4 @@
-import {
-  Entity,
-  Column,
-  PrimaryGeneratedColumn,
-  CreateDateColumn,
-} from 'typeorm';
+import { Entity, Column, PrimaryGeneratedColumn, CreateDateColumn } from 'typeorm';
 
 export enum TipoEntidad {
   MOVIMIENTO = 'movimiento',
@@ -41,4 +36,3 @@ export class AuditoriaEliminacion {
   @CreateDateColumn()
   fechaEliminacion: Date;
 }
-

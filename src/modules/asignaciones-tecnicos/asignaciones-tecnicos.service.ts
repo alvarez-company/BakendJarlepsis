@@ -1,4 +1,10 @@
-import { Injectable, NotFoundException, BadRequestException, Inject, forwardRef } from '@nestjs/common';
+import {
+  Injectable,
+  NotFoundException,
+  BadRequestException,
+  Inject,
+  forwardRef,
+} from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository, QueryFailedError } from 'typeorm';
 import { AsignacionTecnico } from './asignacion-tecnico.entity';
@@ -78,15 +84,17 @@ export class AsignacionesTecnicosService {
     if (user) {
       const rolTipo = user.usuarioRol?.rolTipo || user.role;
       if (rolTipo === 'bodega-internas' || rolTipo === 'bodega-redes') {
-        throw new BadRequestException('Los roles de Bodega Internas y Bodega Redes no pueden asignar material');
+        throw new BadRequestException(
+          'Los roles de Bodega Internas y Bodega Redes no pueden asignar material',
+        );
       }
     }
-    
+
     // Si no se proporciona código, generar uno automáticamente
     if (!createDto.asignacionCodigo) {
       createDto.asignacionCodigo = await this.generarCodigoAsignacion();
     }
-    
+
     try {
       const asignacion = this.asignacionesRepository.create(createDto);
       return await this.asignacionesRepository.save(asignacion);
@@ -101,7 +109,7 @@ export class AsignacionesTecnicosService {
             where: { asignacionCodigo: codigoDuplicado },
             relations: ['usuario', 'inventario', 'inventario.bodega', 'usuarioAsignador'],
           });
-          
+
           if (asignacionExistente) {
             // Si existe, retornarla (la asignación ya se creó correctamente)
             return asignacionExistente;
@@ -113,7 +121,9 @@ export class AsignacionesTecnicosService {
     }
   }
 
-  async findAll(paginationDto?: any): Promise<{ data: AsignacionTecnico[]; total: number; page: number; limit: number }> {
+  async findAll(
+    paginationDto?: any,
+  ): Promise<{ data: AsignacionTecnico[]; total: number; page: number; limit: number }> {
     const page = paginationDto?.page || 1;
     const limit = paginationDto?.limit || 10;
     const skip = (page - 1) * limit;
@@ -142,7 +152,13 @@ export class AsignacionesTecnicosService {
   async findOne(id: number): Promise<AsignacionTecnico> {
     const asignacion = await this.asignacionesRepository.findOne({
       where: { asignacionTecnicoId: id },
-      relations: ['usuario', 'inventario', 'inventario.bodega', 'inventario.bodega.sede', 'usuarioAsignador'],
+      relations: [
+        'usuario',
+        'inventario',
+        'inventario.bodega',
+        'inventario.bodega.sede',
+        'usuarioAsignador',
+      ],
     });
 
     if (!asignacion) {
@@ -155,7 +171,13 @@ export class AsignacionesTecnicosService {
   async findByUsuario(usuarioId: number): Promise<AsignacionTecnico[]> {
     return this.asignacionesRepository.find({
       where: { usuarioId },
-      relations: ['usuario', 'inventario', 'inventario.bodega', 'inventario.bodega.sede', 'usuarioAsignador'],
+      relations: [
+        'usuario',
+        'inventario',
+        'inventario.bodega',
+        'inventario.bodega.sede',
+        'usuarioAsignador',
+      ],
       order: { fechaCreacion: 'DESC' },
     });
   }
@@ -163,7 +185,13 @@ export class AsignacionesTecnicosService {
   async findByCodigo(codigo: string): Promise<AsignacionTecnico | null> {
     return this.asignacionesRepository.findOne({
       where: { asignacionCodigo: codigo },
-      relations: ['usuario', 'inventario', 'inventario.bodega', 'inventario.bodega.sede', 'usuarioAsignador'],
+      relations: [
+        'usuario',
+        'inventario',
+        'inventario.bodega',
+        'inventario.bodega.sede',
+        'usuarioAsignador',
+      ],
     });
   }
 
@@ -183,7 +211,7 @@ export class AsignacionesTecnicosService {
 
   async remove(id: number, usuarioId: number): Promise<void> {
     const asignacion = await this.findOne(id);
-    
+
     // Guardar datos completos para auditoría
     const datosEliminados = {
       asignacionTecnicoId: asignacion.asignacionTecnicoId,
@@ -207,15 +235,20 @@ export class AsignacionesTecnicosService {
         if (inventario) {
           // Buscar movimientos de salida relacionados con esta asignación
           // Los movimientos tienen observaciones como "Asignación de material a técnico {usuarioId}"
-          const resultadoMovimientos = await this.movimientosService.findAll({ page: 1, limit: 10000 });
-          const todosMovimientos = Array.isArray(resultadoMovimientos) ? resultadoMovimientos : resultadoMovimientos.data;
-          const movimientosAsociados = todosMovimientos.filter(m => {
+          const resultadoMovimientos = await this.movimientosService.findAll({
+            page: 1,
+            limit: 10000,
+          });
+          const todosMovimientos = Array.isArray(resultadoMovimientos)
+            ? resultadoMovimientos
+            : resultadoMovimientos.data;
+          const movimientosAsociados = todosMovimientos.filter((m) => {
             const esSalida = m.movimientoTipo === 'salida';
             const mismoInventario = m.inventarioId === asignacion.inventarioId;
-            const observacionIncluyeAsignacion = 
+            const observacionIncluyeAsignacion =
               m.movimientoObservaciones?.includes(`técnico ${asignacion.usuarioId}`) ||
               m.movimientoObservaciones?.includes('Asignación de material');
-            
+
             return esSalida && mismoInventario && observacionIncluyeAsignacion;
           });
 
@@ -225,15 +258,22 @@ export class AsignacionesTecnicosService {
               // Verificar que el movimiento está relacionado con esta asignación
               // comparando materiales y cantidades
               const materialAsignacion = asignacion.materiales.find(
-                (m: any) => m.materialId === movimiento.materialId
+                (m: any) => m.materialId === movimiento.materialId,
               );
-              
-              if (materialAsignacion && 
-                  Math.abs(Number(movimiento.movimientoCantidad) - Number(materialAsignacion.cantidad)) < 0.01) {
+
+              if (
+                materialAsignacion &&
+                Math.abs(
+                  Number(movimiento.movimientoCantidad) - Number(materialAsignacion.cantidad),
+                ) < 0.01
+              ) {
                 await this.movimientosService.remove(movimiento.movimientoId, usuarioId);
               }
             } catch (error) {
-              console.error(`Error al eliminar movimiento de salida ${movimiento.movimientoId}:`, error);
+              console.error(
+                `Error al eliminar movimiento de salida ${movimiento.movimientoId}:`,
+                error,
+              );
             }
           }
         }
@@ -251,12 +291,14 @@ export class AsignacionesTecnicosService {
               for (const numeroStr of material.numerosMedidor) {
                 try {
                   const numeroEntity = await this.numerosMedidorService.findByNumero(numeroStr);
-                  if (numeroEntity && 
-                      numeroEntity.usuarioId === asignacion.usuarioId &&
-                      numeroEntity.estado === 'asignado_tecnico') {
+                  if (
+                    numeroEntity &&
+                    numeroEntity.usuarioId === asignacion.usuarioId &&
+                    numeroEntity.estado === 'asignado_tecnico'
+                  ) {
                     numerosMedidorIds.push(numeroEntity.numeroMedidorId);
                   }
-                } catch (error) {
+                } catch (_error) {
                   console.warn(`No se encontró número de medidor: ${numeroStr}`);
                 }
               }
@@ -267,7 +309,10 @@ export class AsignacionesTecnicosService {
               }
             }
           } catch (error) {
-            console.error(`Error al liberar números de medidor para material ${material.materialId}:`, error);
+            console.error(
+              `Error al liberar números de medidor para material ${material.materialId}:`,
+              error,
+            );
           }
         }
       }
@@ -278,30 +323,40 @@ export class AsignacionesTecnicosService {
         for (const material of asignacion.materiales) {
           try {
             // Buscar inventario técnico para este usuario y material
-            const inventariosTecnico = await this.inventarioTecnicoService.findByUsuario(asignacion.usuarioId);
+            const inventariosTecnico = await this.inventarioTecnicoService.findByUsuario(
+              asignacion.usuarioId,
+            );
             const inventarioTecnicoItem = inventariosTecnico.find(
-              it => it.materialId === material.materialId
+              (it) => it.materialId === material.materialId,
             );
 
             if (inventarioTecnicoItem) {
               const cantidadActual = Number(inventarioTecnicoItem.cantidad || 0);
               const cantidadAsignada = Number(material.cantidad || 0);
-              
+
               // Si la cantidad actual es igual o mayor a la asignada, reducir o eliminar
               if (cantidadActual >= cantidadAsignada) {
                 if (cantidadActual === cantidadAsignada) {
                   // Si es igual, eliminar el registro completo
-                  await this.inventarioTecnicoService.remove(inventarioTecnicoItem.inventarioTecnicoId);
+                  await this.inventarioTecnicoService.remove(
+                    inventarioTecnicoItem.inventarioTecnicoId,
+                  );
                 } else {
                   // Si es mayor, reducir la cantidad
-                  await this.inventarioTecnicoService.update(inventarioTecnicoItem.inventarioTecnicoId, {
-                    cantidad: cantidadActual - cantidadAsignada,
-                  });
+                  await this.inventarioTecnicoService.update(
+                    inventarioTecnicoItem.inventarioTecnicoId,
+                    {
+                      cantidad: cantidadActual - cantidadAsignada,
+                    },
+                  );
                 }
               }
             }
           } catch (error) {
-            console.error(`Error al revertir inventario técnico para material ${material.materialId}:`, error);
+            console.error(
+              `Error al revertir inventario técnico para material ${material.materialId}:`,
+              error,
+            );
           }
         }
       } catch (error) {
@@ -322,10 +377,13 @@ export class AsignacionesTecnicosService {
                 await this.materialesService.ajustarStock(
                   material.materialId,
                   Number(material.cantidad || 0),
-                  bodegaId
+                  bodegaId,
                 );
               } catch (error) {
-                console.error(`Error al revertir stock para material ${material.materialId}:`, error);
+                console.error(
+                  `Error al revertir stock para material ${material.materialId}:`,
+                  error,
+                );
               }
             }
           }
@@ -333,7 +391,6 @@ export class AsignacionesTecnicosService {
       } catch (error) {
         console.error('Error al revertir stock en bodega de origen:', error);
       }
-
     } catch (error) {
       console.error('Error durante la reversión de la asignación:', error);
       // Continuar con la eliminación aunque haya errores en la reversión
@@ -347,7 +404,7 @@ export class AsignacionesTecnicosService {
         datosEliminados,
         usuarioId,
         'Eliminación de asignación',
-        `Asignación ${asignacion.asignacionCodigo} eliminada. Movimientos, números de medidor y stocks revertidos.`
+        `Asignación ${asignacion.asignacionCodigo} eliminada. Movimientos, números de medidor y stocks revertidos.`,
       );
     } catch (error) {
       console.error('Error al registrar en auditoría:', error);
@@ -358,4 +415,3 @@ export class AsignacionesTecnicosService {
     await this.asignacionesRepository.remove(asignacion);
   }
 }
-

@@ -21,4 +21,3 @@ export class CreateCategoriaDto {
   @IsOptional()
   categoriaEstado?: boolean;
 }
-

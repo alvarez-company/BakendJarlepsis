@@ -11,4 +11,3 @@ import { Clasificacion } from './clasificacion.entity';
   exports: [ClasificacionesService],
 })
 export class ClasificacionesModule {}
-

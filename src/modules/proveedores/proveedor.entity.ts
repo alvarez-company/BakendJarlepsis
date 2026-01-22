@@ -45,4 +45,3 @@ export class Proveedor {
   @UpdateDateColumn()
   fechaActualizacion: Date;
 }
-

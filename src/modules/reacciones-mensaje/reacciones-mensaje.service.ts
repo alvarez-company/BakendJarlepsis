@@ -10,10 +10,14 @@ export class ReaccionesMensajeService {
     private reaccionesRepository: Repository<ReaccionMensaje>,
   ) {}
 
-  async agregarReaccion(mensajeId: number, usuarioId: number, tipoReaccion: string): Promise<ReaccionMensaje> {
+  async agregarReaccion(
+    mensajeId: number,
+    usuarioId: number,
+    tipoReaccion: string,
+  ): Promise<ReaccionMensaje> {
     // Eliminar reacción anterior si existe
     await this.reaccionesRepository.delete({ mensajeId, usuarioId });
-    
+
     const reaccion = this.reaccionesRepository.create({
       mensajeId,
       usuarioId,
@@ -33,4 +37,3 @@ export class ReaccionesMensajeService {
     });
   }
 }
-

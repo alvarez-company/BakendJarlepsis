@@ -75,21 +75,21 @@ describe('UsersController - Roles y Permisos', () => {
     it('should allow superadmin to change user role', () => {
       const user = { usuarioRol: { rolTipo: 'superadmin' } };
       const context = createMockExecutionContext(user, ['superadmin']);
-      
+
       expect(rolesGuard.canActivate(context)).toBe(true);
     });
 
     it('should deny admin from changing user role', () => {
       const user = { usuarioRol: { rolTipo: 'admin' } };
       const context = createMockExecutionContext(user, ['superadmin']);
-      
+
       expect(rolesGuard.canActivate(context)).toBe(false);
     });
 
     it('should deny almacenista from changing user role', () => {
       const user = { usuarioRol: { rolTipo: 'almacenista' } };
       const context = createMockExecutionContext(user, ['superadmin']);
-      
+
       expect(rolesGuard.canActivate(context)).toBe(false);
     });
   });
@@ -97,29 +97,49 @@ describe('UsersController - Roles y Permisos', () => {
   describe('create - Permisos', () => {
     it('should allow superadmin to create users', () => {
       const user = { usuarioRol: { rolTipo: 'superadmin' } };
-      const context = createMockExecutionContext(user, ['superadmin', 'admin', 'bodega-internas', 'bodega-redes']);
-      
+      const context = createMockExecutionContext(user, [
+        'superadmin',
+        'admin',
+        'bodega-internas',
+        'bodega-redes',
+      ]);
+
       expect(rolesGuard.canActivate(context)).toBe(true);
     });
 
     it('should allow admin to create users', () => {
       const user = { usuarioRol: { rolTipo: 'admin' } };
-      const context = createMockExecutionContext(user, ['superadmin', 'admin', 'bodega-internas', 'bodega-redes']);
-      
+      const context = createMockExecutionContext(user, [
+        'superadmin',
+        'admin',
+        'bodega-internas',
+        'bodega-redes',
+      ]);
+
       expect(rolesGuard.canActivate(context)).toBe(true);
     });
 
     it('should allow bodega-internas to create users', () => {
       const user = { usuarioRol: { rolTipo: 'bodega-internas' } };
-      const context = createMockExecutionContext(user, ['superadmin', 'admin', 'bodega-internas', 'bodega-redes']);
-      
+      const context = createMockExecutionContext(user, [
+        'superadmin',
+        'admin',
+        'bodega-internas',
+        'bodega-redes',
+      ]);
+
       expect(rolesGuard.canActivate(context)).toBe(true);
     });
 
     it('should deny almacenista from creating users', () => {
       const user = { usuarioRol: { rolTipo: 'almacenista' } };
-      const context = createMockExecutionContext(user, ['superadmin', 'admin', 'bodega-internas', 'bodega-redes']);
-      
+      const context = createMockExecutionContext(user, [
+        'superadmin',
+        'admin',
+        'bodega-internas',
+        'bodega-redes',
+      ]);
+
       expect(rolesGuard.canActivate(context)).toBe(false);
     });
   });
@@ -128,14 +148,14 @@ describe('UsersController - Roles y Permisos', () => {
     it('should allow superadmin to delete users', () => {
       const user = { usuarioRol: { rolTipo: 'superadmin' } };
       const context = createMockExecutionContext(user, ['superadmin']);
-      
+
       expect(rolesGuard.canActivate(context)).toBe(true);
     });
 
     it('should deny admin from deleting users', () => {
       const user = { usuarioRol: { rolTipo: 'admin' } };
       const context = createMockExecutionContext(user, ['superadmin']);
-      
+
       expect(rolesGuard.canActivate(context)).toBe(false);
     });
   });

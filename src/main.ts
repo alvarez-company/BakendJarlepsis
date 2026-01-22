@@ -27,19 +27,19 @@ async function bootstrap() {
 
   // Security
   app.use(helmet());
-  
+
   // Configurar CORS para permitir múltiples orígenes (Frontend principal y MiniApp móvil)
   const frontendUrl = process.env.FRONTEND_URL || 'http://localhost:4173';
   const miniappUrl = process.env.MINIAPP_URL || 'http://localhost:4174';
   const allowedOrigins = [frontendUrl, miniappUrl];
-  
+
   app.enableCors({
     origin: (origin, callback) => {
       // Permitir requests sin origin (mobile apps, Postman, etc.)
       if (!origin) {
         return callback(null, true);
       }
-      
+
       // Verificar si el origin está en la lista permitida
       if (allowedOrigins.includes(origin)) {
         callback(null, true);
@@ -72,7 +72,7 @@ async function bootstrap() {
       },
     });
   });
-  
+
   httpAdapter.head('/', (req: any, res: any) => {
     res.status(200).end();
   });
@@ -113,4 +113,3 @@ async function bootstrap() {
 }
 
 bootstrap();
-

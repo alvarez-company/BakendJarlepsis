@@ -1,6 +1,5 @@
 import { Test, TestingModule } from '@nestjs/testing';
 import { getRepositoryToken } from '@nestjs/typeorm';
-import { Repository } from 'typeorm';
 import { BadRequestException } from '@nestjs/common';
 import { AsignacionesTecnicosService } from './asignaciones-tecnicos.service';
 import { AsignacionTecnico } from './asignacion-tecnico.entity';
@@ -117,13 +116,17 @@ describe('AsignacionesTecnicosService - Permisos', () => {
     it('should deny bodega-internas from creating assignment', async () => {
       const user = { usuarioRol: { rolTipo: 'bodega-internas' } };
       await expect(service.create(mockCreateDto as any, user)).rejects.toThrow(BadRequestException);
-      await expect(service.create(mockCreateDto as any, user)).rejects.toThrow('Los roles de Bodega Internas y Bodega Redes no pueden asignar material');
+      await expect(service.create(mockCreateDto as any, user)).rejects.toThrow(
+        'Los roles de Bodega Internas y Bodega Redes no pueden asignar material',
+      );
     });
 
     it('should deny bodega-redes from creating assignment', async () => {
       const user = { usuarioRol: { rolTipo: 'bodega-redes' } };
       await expect(service.create(mockCreateDto as any, user)).rejects.toThrow(BadRequestException);
-      await expect(service.create(mockCreateDto as any, user)).rejects.toThrow('Los roles de Bodega Internas y Bodega Redes no pueden asignar material');
+      await expect(service.create(mockCreateDto as any, user)).rejects.toThrow(
+        'Los roles de Bodega Internas y Bodega Redes no pueden asignar material',
+      );
     });
 
     it('should work with user.role fallback', async () => {
@@ -132,4 +135,3 @@ describe('AsignacionesTecnicosService - Permisos', () => {
     });
   });
 });
-

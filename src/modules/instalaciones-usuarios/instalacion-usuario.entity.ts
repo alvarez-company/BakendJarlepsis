@@ -38,4 +38,3 @@ export class InstalacionUsuario {
   @CreateDateColumn()
   fechaAsignacion: Date;
 }
-

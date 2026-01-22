@@ -21,4 +21,3 @@ import { MaterialesModule } from '../materiales/materiales.module';
   exports: [InstalacionesMaterialesService],
 })
 export class InstalacionesMaterialesModule {}
-

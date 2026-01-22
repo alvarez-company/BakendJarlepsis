@@ -28,4 +28,3 @@ import { SedesModule } from '../sedes/sedes.module';
   exports: [SearchService],
 })
 export class SearchModule {}
-

@@ -33,4 +33,3 @@ export class Clasificacion {
   @UpdateDateColumn()
   fechaActualizacion: Date;
 }
-

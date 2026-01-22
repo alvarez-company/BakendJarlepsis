@@ -8,4 +8,3 @@ export class ChangeRoleDto {
   @IsNumber()
   usuarioRolId: number;
 }
-

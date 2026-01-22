@@ -2,7 +2,11 @@ import { Injectable, NotFoundException, Inject, forwardRef } from '@nestjs/commo
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { InventarioTecnico } from './inventario-tecnico.entity';
-import { CreateInventarioTecnicoDto, UpdateInventarioTecnicoDto, AssignMaterialesToTecnicoDto } from './dto/create-inventario-tecnico.dto';
+import {
+  CreateInventarioTecnicoDto,
+  UpdateInventarioTecnicoDto,
+  AssignMaterialesToTecnicoDto,
+} from './dto/create-inventario-tecnico.dto';
 import { MovimientosService } from '../movimientos/movimientos.service';
 import { TipoMovimiento, EstadoMovimiento } from '../movimientos/movimiento-inventario.entity';
 import { InventariosService } from '../inventarios/inventarios.service';
@@ -52,37 +56,43 @@ export class InventarioTecnicoService {
     return this.inventarioTecnicoRepository.save(inventario);
   }
 
-  async asignarMateriales(usuarioId: number, dto: AssignMaterialesToTecnicoDto): Promise<InventarioTecnico[]> {
+  async asignarMateriales(
+    usuarioId: number,
+    dto: AssignMaterialesToTecnicoDto,
+  ): Promise<InventarioTecnico[]> {
     const resultados: InventarioTecnico[] = [];
 
     // Si hay inventarioId, crear movimientos de salida automáticamente
     // Usar usuarioAsignadorId si está disponible, sino usar el usuarioId del técnico
     const usuarioAsignador = dto.usuarioAsignadorId || usuarioId;
-    
+
     // El código se generará automáticamente en el servicio de asignaciones
-    let asignacionCodigo: string | undefined = undefined;
-    
+    const asignacionCodigo: string | undefined = undefined;
+
     if (dto.inventarioId) {
       try {
         const inventario = await this.inventariosService.findOne(dto.inventarioId);
         const bodegaId = inventario.bodegaId ?? inventario.bodega?.bodegaId;
-        
+
         if (bodegaId) {
           const salidaCodigo = `SALIDA-TECNICO-${usuarioId}-${Date.now()}`;
-          
+
           // Crear movimiento de salida para cada material
           for (const material of dto.materiales) {
             try {
               // Crear el movimiento de salida
               const movimientosCreados = await this.movimientosService.create({
                 movimientoTipo: TipoMovimiento.SALIDA,
-                materiales: [{
-                  materialId: material.materialId,
-                  movimientoCantidad: material.cantidad,
-                }],
+                materiales: [
+                  {
+                    materialId: material.materialId,
+                    movimientoCantidad: material.cantidad,
+                  },
+                ],
                 inventarioId: dto.inventarioId,
                 usuarioId: usuarioAsignador,
-                movimientoObservaciones: dto.observaciones || `Asignación de material a técnico ${usuarioId}`,
+                movimientoObservaciones:
+                  dto.observaciones || `Asignación de material a técnico ${usuarioId}`,
                 movimientoCodigo: salidaCodigo,
               });
 
@@ -90,7 +100,10 @@ export class InventarioTecnicoService {
               if (movimientosCreados && movimientosCreados.length > 0) {
                 for (const movimiento of movimientosCreados) {
                   if (movimiento.movimientoEstado !== EstadoMovimiento.COMPLETADA) {
-                    await this.movimientosService.actualizarEstado(movimiento.movimientoId, EstadoMovimiento.COMPLETADA);
+                    await this.movimientosService.actualizarEstado(
+                      movimiento.movimientoId,
+                      EstadoMovimiento.COMPLETADA,
+                    );
                   }
                 }
               }
@@ -115,16 +128,18 @@ export class InventarioTecnicoService {
       // Obtener información del asignador y bodega
       let asignadorNombre = 'Sistema';
       let bodegaNombre: string | undefined = undefined;
-      
+
       if (usuarioAsignador) {
         try {
           const asignador = await this.usersService.findOne(usuarioAsignador);
-          asignadorNombre = `${asignador.usuarioNombre || ''} ${asignador.usuarioApellido || ''}`.trim() || 'Usuario';
+          asignadorNombre =
+            `${asignador.usuarioNombre || ''} ${asignador.usuarioApellido || ''}`.trim() ||
+            'Usuario';
         } catch (error) {
           console.error('Error al obtener datos del asignador:', error);
         }
       }
-      
+
       if (dto.inventarioId) {
         try {
           const inventario = await this.inventariosService.findOne(dto.inventarioId);
@@ -133,7 +148,7 @@ export class InventarioTecnicoService {
           console.error('Error al obtener datos de la bodega:', error);
         }
       }
-      
+
       await this.notificacionesService.crearNotificacionMaterialesAsignados(
         usuarioId,
         asignacionCreada?.asignacionCodigo || `ASIG-${Date.now()}`,
@@ -150,12 +165,12 @@ export class InventarioTecnicoService {
     // Optimización: Guardar números de medidor asignados para incluirlos en la asignación
     const numerosAsignadosPorMaterial: Map<number, string[]> = new Map();
     const materialesIds = new Set<number>();
-    
+
     // Procesar todos los materiales en paralelo donde sea posible
     const procesosMateriales = dto.materiales.map(async (material) => {
       const cantidadAsignada = Number(material.cantidad || 0);
       materialesIds.add(material.materialId);
-      
+
       // Verificar si ya existe un registro para este técnico y material
       const existente = await this.inventarioTecnicoRepository.findOne({
         where: {
@@ -189,13 +204,14 @@ export class InventarioTecnicoService {
           if (material.numerosMedidor && material.numerosMedidor.length > 0) {
             // Guardar los números proporcionados
             numerosAsignadosPorMaterial.set(material.materialId, material.numerosMedidor);
-            
+
             // Procesar números en paralelo
             const procesosNumeros = material.numerosMedidor.map(async (numeroMedidor) => {
               try {
                 // Buscar si ya existe este número de medidor
-                let numeroMedidorEntity = await this.numerosMedidorService.findByNumero(numeroMedidor);
-                
+                let numeroMedidorEntity =
+                  await this.numerosMedidorService.findByNumero(numeroMedidor);
+
                 if (!numeroMedidorEntity) {
                   // Crear nuevo número de medidor
                   numeroMedidorEntity = await this.numerosMedidorService.create({
@@ -207,11 +223,14 @@ export class InventarioTecnicoService {
                   });
                 } else {
                   // Actualizar número de medidor existente
-                  numeroMedidorEntity = await this.numerosMedidorService.update(numeroMedidorEntity.numeroMedidorId, {
-                    estado: 'asignado_tecnico' as any,
-                    usuarioId: usuarioId,
-                    inventarioTecnicoId: inventarioTecnicoItem.inventarioTecnicoId,
-                  });
+                  numeroMedidorEntity = await this.numerosMedidorService.update(
+                    numeroMedidorEntity.numeroMedidorId,
+                    {
+                      estado: 'asignado_tecnico' as any,
+                      usuarioId: usuarioId,
+                      inventarioTecnicoId: inventarioTecnicoItem.inventarioTecnicoId,
+                    },
+                  );
                 }
                 return numeroMedidorEntity;
               } catch (error) {
@@ -219,48 +238,57 @@ export class InventarioTecnicoService {
                 return null;
               }
             });
-            
+
             await Promise.all(procesosNumeros);
           } else {
             // Si no se proporcionaron números, obtener números disponibles automáticamente
             try {
               const numerosDisponibles = await this.numerosMedidorService.obtenerDisponibles(
                 material.materialId,
-                cantidadAsignada
+                cantidadAsignada,
               );
-              
+
               if (numerosDisponibles.length > 0) {
                 await this.numerosMedidorService.asignarATecnico(
-                  numerosDisponibles.map(n => n.numeroMedidorId),
+                  numerosDisponibles.map((n) => n.numeroMedidorId),
                   usuarioId,
-                  inventarioTecnicoItem.inventarioTecnicoId
+                  inventarioTecnicoItem.inventarioTecnicoId,
                 );
-                
+
                 // Guardar los números asignados automáticamente
-                const numerosAsignados = numerosDisponibles.map(n => n.numeroMedidor);
+                const numerosAsignados = numerosDisponibles.map((n) => n.numeroMedidor);
                 numerosAsignadosPorMaterial.set(material.materialId, numerosAsignados);
               }
             } catch (error) {
-              console.warn(`No se pudieron asignar números de medidor automáticamente para material ${material.materialId}:`, error.message);
+              console.warn(
+                `No se pudieron asignar números de medidor automáticamente para material ${material.materialId}:`,
+                error.message,
+              );
               // No lanzar error, solo registrar advertencia
             }
           }
         }
       } catch (error) {
-        console.error(`Error al manejar números de medidor para material ${material.materialId}:`, error);
+        console.error(
+          `Error al manejar números de medidor para material ${material.materialId}:`,
+          error,
+        );
         // No lanzar error para no interrumpir el proceso de asignación
       }
     });
-    
+
     // Ejecutar todos los procesos de materiales en paralelo
     await Promise.all(procesosMateriales);
 
     // IMPORTANTE: Sincronizar el stock total de cada material después de asignar (en paralelo)
-    const sincronizacionesStock = Array.from(materialesIds).map(materialId => 
-      this.materialesService.sincronizarStock(materialId).catch(error => {
-        console.error(`Error al sincronizar stock del material ${materialId} después de asignar a técnico:`, error);
+    const sincronizacionesStock = Array.from(materialesIds).map((materialId) =>
+      this.materialesService.sincronizarStock(materialId).catch((error) => {
+        console.error(
+          `Error al sincronizar stock del material ${materialId} después de asignar a técnico:`,
+          error,
+        );
         // No lanzar error para no interrumpir el proceso
-      })
+      }),
     );
     await Promise.all(sincronizacionesStock);
 
@@ -274,7 +302,7 @@ export class InventarioTecnicoService {
             materialId: m.materialId,
             cantidad: Number(m.cantidad || 0),
           };
-          
+
           // Obtener los números asignados del Map (tanto explícitos como automáticos)
           const numerosAsignados = numerosAsignadosPorMaterial.get(m.materialId);
           if (numerosAsignados && numerosAsignados.length > 0) {
@@ -282,10 +310,10 @@ export class InventarioTecnicoService {
           } else {
             materialObj.numerosMedidor = [];
           }
-          
+
           return materialObj;
         });
-        
+
         asignacionCreada = await this.asignacionesTecnicosService.create({
           asignacionCodigo: asignacionCodigo, // undefined = se generará automáticamente
           usuarioId,
@@ -296,9 +324,14 @@ export class InventarioTecnicoService {
         });
       } catch (error: any) {
         // Si el error es por código duplicado, intentar obtener la asignación existente
-        if (error?.code === 'ER_DUP_ENTRY' || (error?.message && error.message.includes('Duplicate entry'))) {
-          console.warn('⚠️ Código de asignación duplicado detectado. Intentando obtener asignación existente...');
-          
+        if (
+          error?.code === 'ER_DUP_ENTRY' ||
+          (error?.message && error.message.includes('Duplicate entry'))
+        ) {
+          console.warn(
+            '⚠️ Código de asignación duplicado detectado. Intentando obtener asignación existente...',
+          );
+
           // Intentar obtener la asignación existente
           try {
             const codigoMatch = error?.message?.match(/Duplicate entry '([^']+)'/);
@@ -306,18 +339,29 @@ export class InventarioTecnicoService {
               const codigoDuplicado = codigoMatch[1];
               // Usar findByCodigo si existe, sino buscar manualmente
               if (this.asignacionesTecnicosService.findByCodigo) {
-                asignacionCreada = await this.asignacionesTecnicosService.findByCodigo(codigoDuplicado);
+                asignacionCreada =
+                  await this.asignacionesTecnicosService.findByCodigo(codigoDuplicado);
               } else {
                 // Fallback: buscar en todas las asignaciones
-                const resultadoAsignaciones = await this.asignacionesTecnicosService.findAll({ page: 1, limit: 10000 });
-                const todasAsignaciones = Array.isArray(resultadoAsignaciones) ? resultadoAsignaciones : resultadoAsignaciones.data;
-                asignacionCreada = todasAsignaciones.find((a: any) => a.asignacionCodigo === codigoDuplicado) || null;
+                const resultadoAsignaciones = await this.asignacionesTecnicosService.findAll({
+                  page: 1,
+                  limit: 10000,
+                });
+                const todasAsignaciones = Array.isArray(resultadoAsignaciones)
+                  ? resultadoAsignaciones
+                  : resultadoAsignaciones.data;
+                asignacionCreada =
+                  todasAsignaciones.find((a: any) => a.asignacionCodigo === codigoDuplicado) ||
+                  null;
               }
-              
+
               if (asignacionCreada) {
                 console.log('✅ Asignación existente encontrada con código:', codigoDuplicado);
               } else {
-                console.warn('⚠️ No se encontró la asignación con código duplicado:', codigoDuplicado);
+                console.warn(
+                  '⚠️ No se encontró la asignación con código duplicado:',
+                  codigoDuplicado,
+                );
               }
             }
           } catch (lookupError) {
@@ -344,14 +388,14 @@ export class InventarioTecnicoService {
       where: { usuarioId },
       relations: ['material', 'material.categoria', 'material.unidadMedida', 'usuario'],
     });
-    
+
     // Agrupar por materialId y sumar cantidades para evitar duplicados
     const materialesAgrupados = new Map<number, InventarioTecnico>();
-    
+
     inventarios.forEach((item) => {
       const materialId = item.materialId;
       const cantidad = Number(item.cantidad || 0);
-      
+
       if (materialesAgrupados.has(materialId)) {
         // Si ya existe, sumar la cantidad manteniendo todas las relaciones
         const existente = materialesAgrupados.get(materialId)!;
@@ -365,7 +409,7 @@ export class InventarioTecnicoService {
         });
       }
     });
-    
+
     // Convertir el Map a un array y devolverlo
     return Array.from(materialesAgrupados.values());
   }
@@ -395,15 +439,18 @@ export class InventarioTecnicoService {
     const materialId = inventario.materialId;
     Object.assign(inventario, updateDto);
     const resultado = await this.inventarioTecnicoRepository.save(inventario);
-    
+
     // IMPORTANTE: Sincronizar el stock total del material después de actualizar
     try {
       await this.materialesService.sincronizarStock(materialId);
     } catch (error) {
-      console.error(`Error al sincronizar stock del material ${materialId} después de actualizar inventario técnico:`, error);
+      console.error(
+        `Error al sincronizar stock del material ${materialId} después de actualizar inventario técnico:`,
+        error,
+      );
       // No lanzar error para no interrumpir el proceso
     }
-    
+
     return resultado;
   }
 
@@ -411,33 +458,37 @@ export class InventarioTecnicoService {
     const inventario = await this.findOne(id);
     const materialId = inventario.materialId;
     const usuarioId = inventario.usuarioId;
-    
+
     // Liberar números de medidor asignados antes de eliminar
     try {
       const numerosMedidor = await this.numerosMedidorService.findByUsuario(usuarioId);
       const numerosDelMaterial = numerosMedidor.filter(
-        n => n.materialId === materialId && 
-             n.usuarioId === usuarioId &&
-             (n.estado === 'asignado_tecnico' || n.estado === 'en_instalacion')
+        (n) =>
+          n.materialId === materialId &&
+          n.usuarioId === usuarioId &&
+          (n.estado === 'asignado_tecnico' || n.estado === 'en_instalacion'),
       );
-      
+
       if (numerosDelMaterial.length > 0) {
         await this.numerosMedidorService.liberarDeTecnico(
-          numerosDelMaterial.map(n => n.numeroMedidorId)
+          numerosDelMaterial.map((n) => n.numeroMedidorId),
         );
       }
     } catch (error) {
       console.error(`Error al liberar números de medidor al eliminar inventario técnico:`, error);
       // Continuar con la eliminación aunque falle la liberación
     }
-    
+
     await this.inventarioTecnicoRepository.remove(inventario);
-    
+
     // IMPORTANTE: Sincronizar el stock total del material después de eliminar
     try {
       await this.materialesService.sincronizarStock(materialId);
     } catch (error) {
-      console.error(`Error al sincronizar stock del material ${materialId} después de eliminar inventario técnico:`, error);
+      console.error(
+        `Error al sincronizar stock del material ${materialId} después de eliminar inventario técnico:`,
+        error,
+      );
       // No lanzar error para no interrumpir el proceso
     }
   }
@@ -451,18 +502,18 @@ export class InventarioTecnicoService {
       // Liberar números de medidor asignados antes de eliminar
       try {
         const numerosMedidor = await this.numerosMedidorService.findByUsuario(usuarioId);
-        const numerosDelMaterial = numerosMedidor.filter(n => n.materialId === materialId);
-        
+        const numerosDelMaterial = numerosMedidor.filter((n) => n.materialId === materialId);
+
         if (numerosDelMaterial.length > 0) {
           await this.numerosMedidorService.liberarDeTecnico(
-            numerosDelMaterial.map(n => n.numeroMedidorId)
+            numerosDelMaterial.map((n) => n.numeroMedidorId),
           );
         }
       } catch (error) {
         console.error(`Error al liberar números de medidor al eliminar inventario técnico:`, error);
         // Continuar con la eliminación aunque falle la liberación
       }
-      
+
       await this.inventarioTecnicoRepository.remove(inventario);
     }
   }
@@ -479,4 +530,3 @@ export class InventarioTecnicoService {
     return Boolean(material.materialEsMedidor);
   }
 }
-

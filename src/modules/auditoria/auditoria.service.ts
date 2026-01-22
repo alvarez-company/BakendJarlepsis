@@ -30,4 +30,3 @@ export class AuditoriaService {
     return await this.auditoriaRepository.save(auditoria);
   }
 }
-

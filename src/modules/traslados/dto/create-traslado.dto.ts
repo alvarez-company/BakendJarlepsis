@@ -12,7 +12,11 @@ export class MaterialTrasladoDto {
   @Min(0.01)
   trasladoCantidad: number;
 
-  @ApiProperty({ required: false, description: 'Números de medidor específicos para materiales de categoría medidor', type: [String] })
+  @ApiProperty({
+    required: false,
+    description: 'Números de medidor específicos para materiales de categoría medidor',
+    type: [String],
+  })
   @IsArray()
   @IsString({ each: true })
   @IsOptional()
@@ -48,4 +52,3 @@ export class CreateTrasladoDto {
   @IsOptional()
   trasladoCodigo?: string; // Código para agrupar múltiples traslados
 }
-

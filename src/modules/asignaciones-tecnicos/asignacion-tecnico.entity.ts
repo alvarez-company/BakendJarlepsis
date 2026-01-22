@@ -38,7 +38,7 @@ export class AsignacionTecnico {
   @Column({
     type: 'enum',
     enum: ['pendiente', 'aprobada', 'rechazada'],
-    default: 'pendiente'
+    default: 'pendiente',
   })
   asignacionEstado: 'pendiente' | 'aprobada' | 'rechazada';
 
@@ -60,4 +60,3 @@ export class AsignacionTecnico {
   @UpdateDateColumn()
   fechaActualizacion: Date;
 }
-

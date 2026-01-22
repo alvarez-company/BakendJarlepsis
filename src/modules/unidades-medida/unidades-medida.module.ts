@@ -11,4 +11,3 @@ import { UnidadMedida } from './unidad-medida.entity';
   exports: [UnidadesMedidaService],
 })
 export class UnidadesMedidaModule {}
-

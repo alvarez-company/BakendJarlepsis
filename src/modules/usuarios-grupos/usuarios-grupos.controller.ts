@@ -18,4 +18,3 @@ export class UsuariosGruposController {
     return this.service.agregarUsuariosGrupo(body.grupoId, body.usuariosId);
   }
 }
-

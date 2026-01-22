@@ -33,4 +33,3 @@ import { InventarioTecnico } from '../inventario-tecnico/inventario-tecnico.enti
   exports: [StatsService],
 })
 export class StatsModule {}
-

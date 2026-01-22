@@ -38,14 +38,32 @@ export class InventariosController {
   }
 
   @Get()
-  @Roles('superadmin', 'admin', 'administrador', 'almacenista', 'tecnico', 'soldador', 'bodega-internas', 'bodega-redes')
+  @Roles(
+    'superadmin',
+    'admin',
+    'administrador',
+    'almacenista',
+    'tecnico',
+    'soldador',
+    'bodega-internas',
+    'bodega-redes',
+  )
   @ApiOperation({ summary: 'Get all inventarios' })
   findAll() {
     return this.inventariosService.findAll();
   }
 
   @Get(':id')
-  @Roles('superadmin', 'admin', 'administrador', 'almacenista', 'tecnico', 'soldador', 'bodega-internas', 'bodega-redes')
+  @Roles(
+    'superadmin',
+    'admin',
+    'administrador',
+    'almacenista',
+    'tecnico',
+    'soldador',
+    'bodega-internas',
+    'bodega-redes',
+  )
   @ApiOperation({ summary: 'Get an inventario by ID' })
   findOne(@Param('id') id: string) {
     return this.inventariosService.findOne(+id);
@@ -72,19 +90,22 @@ export class InventariosController {
   async exportToExcel(@Res() res: Response, @Query('filters') filters?: string) {
     try {
       const inventarios = await this.inventariosService.findAll();
-      
+
       let filteredData = inventarios;
       if (filters) {
         try {
           const filterObj = JSON.parse(filters);
           if (filterObj.search) {
             const search = filterObj.search.toLowerCase();
-            filteredData = filteredData.filter((inv: any) =>
-              inv.inventarioNombre?.toLowerCase().includes(search) ||
-              inv.bodega?.bodegaNombre?.toLowerCase().includes(search)
+            filteredData = filteredData.filter(
+              (inv: any) =>
+                inv.inventarioNombre?.toLowerCase().includes(search) ||
+                inv.bodega?.bodegaNombre?.toLowerCase().includes(search),
             );
           }
-        } catch (e) {}
+        } catch (_e) {
+          // Ignorar errores de filtrado, continuar sin filtrar
+        }
       }
 
       const columns = [
@@ -107,7 +128,10 @@ export class InventariosController {
         filename: 'reporte-inventarios',
       });
 
-      res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+      res.setHeader(
+        'Content-Type',
+        'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+      );
       res.setHeader('Content-Disposition', 'attachment; filename="reporte-inventarios.xlsx"');
       res.send(buffer);
     } catch (error) {
@@ -122,19 +146,22 @@ export class InventariosController {
   async exportToPdf(@Res() res: Response, @Query('filters') filters?: string) {
     try {
       const inventarios = await this.inventariosService.findAll();
-      
+
       let filteredData = inventarios;
       if (filters) {
         try {
           const filterObj = JSON.parse(filters);
           if (filterObj.search) {
             const search = filterObj.search.toLowerCase();
-            filteredData = filteredData.filter((inv: any) =>
-              inv.inventarioNombre?.toLowerCase().includes(search) ||
-              inv.bodega?.bodegaNombre?.toLowerCase().includes(search)
+            filteredData = filteredData.filter(
+              (inv: any) =>
+                inv.inventarioNombre?.toLowerCase().includes(search) ||
+                inv.bodega?.bodegaNombre?.toLowerCase().includes(search),
             );
           }
-        } catch (e) {}
+        } catch (_e) {
+          // Ignorar errores de filtrado, continuar sin filtrar
+        }
       }
 
       const columns = [
@@ -165,4 +192,3 @@ export class InventariosController {
     }
   }
 }
-

@@ -1,4 +1,11 @@
-import { Injectable, NotFoundException, BadRequestException, ConflictException, Inject, forwardRef } from '@nestjs/common';
+import {
+  Injectable,
+  NotFoundException,
+  BadRequestException,
+  ConflictException,
+  Inject,
+  forwardRef,
+} from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository, DeepPartial } from 'typeorm';
 import * as bcrypt from 'bcrypt';
@@ -52,66 +59,87 @@ export class UsersService {
     }
 
     const hashedPassword = await bcrypt.hash(createUserDto.usuarioContrasena, 10);
-    
+
     // Convertir valores 0 a null para campos opcionales
     const userData: DeepPartial<User> = {
       ...createUserDto,
       usuarioContrasena: hashedPassword,
       usuarioCreador: creadorId,
     };
-    
+
     if (userData.usuarioSede === 0) {
       userData.usuarioSede = null;
     }
     if (userData.usuarioBodega === 0) {
       userData.usuarioBodega = null;
     }
-    
+
     const user = this.usersRepository.create(userData);
     const savedUser = await this.usersRepository.save(user);
-    
+
     // Asignar automáticamente al grupo general para que pueda comunicarse con todos
     try {
       const grupoGeneral = await this.gruposService.obtenerGrupoGeneral();
-      await this.usuariosGruposService.agregarUsuarioGrupo(grupoGeneral.grupoId, savedUser.usuarioId);
+      await this.usuariosGruposService.agregarUsuarioGrupo(
+        grupoGeneral.grupoId,
+        savedUser.usuarioId,
+      );
     } catch (error) {
-      console.error(`[UsersService] Error al asignar usuario ${savedUser.usuarioId} al grupo general:`, error);
+      console.error(
+        `[UsersService] Error al asignar usuario ${savedUser.usuarioId} al grupo general:`,
+        error,
+      );
     }
-    
+
     // Si el usuario tiene sede asignada, asignarlo al grupo de la sede
     if (savedUser.usuarioSede) {
       try {
         const grupoSede = await this.gruposService.obtenerGrupoPorEntidad(
           TipoGrupo.SEDE,
-          savedUser.usuarioSede
+          savedUser.usuarioSede,
         );
         if (grupoSede) {
-          await this.usuariosGruposService.agregarUsuarioGrupo(grupoSede.grupoId, savedUser.usuarioId);
+          await this.usuariosGruposService.agregarUsuarioGrupo(
+            grupoSede.grupoId,
+            savedUser.usuarioId,
+          );
         }
       } catch (error) {
-        console.error(`[UsersService] Error al asignar usuario ${savedUser.usuarioId} al grupo de sede:`, error);
+        console.error(
+          `[UsersService] Error al asignar usuario ${savedUser.usuarioId} al grupo de sede:`,
+          error,
+        );
       }
     }
-    
+
     // Si el usuario tiene bodega asignada, asignarlo al grupo de la bodega
     if (savedUser.usuarioBodega) {
       try {
         const grupoBodega = await this.gruposService.obtenerGrupoPorEntidad(
           TipoGrupo.BODEGA,
-          savedUser.usuarioBodega
+          savedUser.usuarioBodega,
         );
         if (grupoBodega) {
-          await this.usuariosGruposService.agregarUsuarioGrupo(grupoBodega.grupoId, savedUser.usuarioId);
+          await this.usuariosGruposService.agregarUsuarioGrupo(
+            grupoBodega.grupoId,
+            savedUser.usuarioId,
+          );
         }
       } catch (error) {
-        console.error(`[UsersService] Error al asignar usuario ${savedUser.usuarioId} al grupo de bodega:`, error);
+        console.error(
+          `[UsersService] Error al asignar usuario ${savedUser.usuarioId} al grupo de bodega:`,
+          error,
+        );
       }
     }
-    
+
     return savedUser;
   }
 
-  async findAll(paginationDto?: PaginationDto, search?: string): Promise<{ data: User[]; total: number; page: number; limit: number }> {
+  async findAll(
+    paginationDto?: PaginationDto,
+    search?: string,
+  ): Promise<{ data: User[]; total: number; page: number; limit: number }> {
     const page = paginationDto?.page || 1;
     const limit = paginationDto?.limit || 10;
     const skip = (page - 1) * limit;
@@ -125,14 +153,11 @@ export class UsersService {
     if (search) {
       queryBuilder.where(
         'user.usuarioNombre LIKE :search OR user.usuarioApellido LIKE :search OR user.usuarioCorreo LIKE :search OR user.usuarioDocumento LIKE :search',
-        { search: `%${search}%` }
+        { search: `%${search}%` },
       );
     }
 
-    queryBuilder
-      .orderBy('user.fechaCreacion', 'DESC')
-      .skip(skip)
-      .take(limit);
+    queryBuilder.orderBy('user.fechaCreacion', 'DESC').skip(skip).take(limit);
 
     const [data, total] = await queryBuilder.getManyAndCount();
 
@@ -169,25 +194,35 @@ export class UsersService {
     });
   }
 
-  async update(id: number, updateUserDto: UpdateUserDto, requestingUserId?: number, requestingUserRole?: string): Promise<User> {
+  async update(
+    id: number,
+    updateUserDto: UpdateUserDto,
+    requestingUserId?: number,
+    requestingUserRole?: string,
+  ): Promise<User> {
     const user = await this.findOne(id);
-    
+
     // Si se intenta cambiar la contraseña, solo superadmin puede cambiar contraseñas de otros usuarios
     if (updateUserDto.usuarioContrasena) {
       // Si el usuario que solicita no es superadmin y no está actualizando su propio perfil
       if (requestingUserId && requestingUserRole !== 'superadmin' && requestingUserId !== id) {
-        throw new BadRequestException('Solo puedes cambiar tu propia contraseña. Los cambios de contraseña de otros usuarios solo pueden ser realizados por el superadmin.');
+        throw new BadRequestException(
+          'Solo puedes cambiar tu propia contraseña. Los cambios de contraseña de otros usuarios solo pueden ser realizados por el superadmin.',
+        );
       }
       updateUserDto.usuarioContrasena = await bcrypt.hash(updateUserDto.usuarioContrasena, 10);
     }
-    
+
     // Si se intenta cambiar el rol, solo superadmin puede hacerlo
-    if (updateUserDto.usuarioRolId !== undefined && updateUserDto.usuarioRolId !== user.usuarioRolId) {
+    if (
+      updateUserDto.usuarioRolId !== undefined &&
+      updateUserDto.usuarioRolId !== user.usuarioRolId
+    ) {
       if (requestingUserRole !== 'superadmin') {
         throw new BadRequestException('Solo el superadmin puede cambiar roles de usuarios');
       }
     }
-    
+
     // Validar que el correo no esté en uso por otro usuario
     if (updateUserDto.usuarioCorreo && updateUserDto.usuarioCorreo !== user.usuarioCorreo) {
       const existingEmail = await this.findByEmail(updateUserDto.usuarioCorreo);
@@ -197,7 +232,10 @@ export class UsersService {
     }
 
     // Validar que el documento no esté en uso por otro usuario
-    if (updateUserDto.usuarioDocumento && updateUserDto.usuarioDocumento !== user.usuarioDocumento) {
+    if (
+      updateUserDto.usuarioDocumento &&
+      updateUserDto.usuarioDocumento !== user.usuarioDocumento
+    ) {
       const existingDocument = await this.findByDocument(updateUserDto.usuarioDocumento);
       if (existingDocument && existingDocument.usuarioId !== id) {
         throw new ConflictException('El documento ya está registrado');
@@ -213,20 +251,29 @@ export class UsersService {
     }
 
     // Actualizar explícitamente el rol si viene en el DTO
-    if (updateUserDto.usuarioRolId !== undefined && updateUserDto.usuarioRolId !== user.usuarioRolId) {
+    if (
+      updateUserDto.usuarioRolId !== undefined &&
+      updateUserDto.usuarioRolId !== user.usuarioRolId
+    ) {
       // Obtener el nuevo rol para validar qué campos requiere
       const newRole = await this.rolesService.findOne(updateUserDto.usuarioRolId);
       const rolTipo = newRole.rolTipo?.toLowerCase();
-      
+
       // Actualizar el rol
       user.usuarioRolId = updateUserDto.usuarioRolId;
-      
+
       // Limpiar campos según el nuevo rol
       // Roles que requieren centro operativo: admin, administrador, almacenista, tecnico, soldador
-      const rolesRequierenCentroOperativo = ['admin', 'administrador', 'almacenista', 'tecnico', 'soldador'];
+      const rolesRequierenCentroOperativo = [
+        'admin',
+        'administrador',
+        'almacenista',
+        'tecnico',
+        'soldador',
+      ];
       // Roles que requieren bodega: bodega-internas, bodega-redes
       const rolesRequierenBodega = ['bodega-internas', 'bodega-redes'];
-      
+
       if (rolTipo === 'superadmin') {
         // SuperAdmin no necesita centro operativo ni bodega
         user.usuarioSede = null;
@@ -246,7 +293,7 @@ export class UsersService {
 
     Object.assign(user, updateUserDto);
     const savedUser = await this.usersRepository.save(user);
-    
+
     // Recargar el usuario con sus relaciones para asegurar que el cambio se refleje
     return this.findOne(savedUser.usuarioId);
   }
@@ -254,34 +301,40 @@ export class UsersService {
   async changeRole(id: number, newRoleId: number): Promise<User> {
     // Validar que el usuario existe
     const user = await this.findOne(id);
-    
+
     // Validar que el nuevo rol existe
     if (!newRoleId || newRoleId <= 0) {
       throw new BadRequestException('El ID del rol es inválido');
     }
-    
+
     // Obtener el nuevo rol para validar qué campos requiere
     const newRole = await this.rolesService.findOne(newRoleId);
     if (!newRole || !newRole.rolEstado) {
       throw new BadRequestException('El rol seleccionado no existe o está inactivo');
     }
-    
+
     const rolTipo = newRole.rolTipo?.toLowerCase();
-    
+
     // Validar que no se esté cambiando al mismo rol
     if (user.usuarioRolId === newRoleId) {
       throw new BadRequestException('El usuario ya tiene este rol asignado');
     }
-    
+
     // Actualizar el rol
     user.usuarioRolId = newRoleId;
-    
+
     // Limpiar campos según el nuevo rol
     // Roles que requieren centro operativo: admin, administrador, almacenista, tecnico, soldador
-    const rolesRequierenCentroOperativo = ['admin', 'administrador', 'almacenista', 'tecnico', 'soldador'];
+    const rolesRequierenCentroOperativo = [
+      'admin',
+      'administrador',
+      'almacenista',
+      'tecnico',
+      'soldador',
+    ];
     // Roles que requieren bodega: bodega-internas, bodega-redes
     const rolesRequierenBodega = ['bodega-internas', 'bodega-redes'];
-    
+
     if (rolTipo === 'superadmin') {
       // SuperAdmin no necesita centro operativo ni bodega
       user.usuarioSede = null;
@@ -295,50 +348,50 @@ export class UsersService {
       user.usuarioBodega = null;
       // Mantener usuarioSede si ya está asignado, de lo contrario se debe asignar en el frontend
     }
-    
+
     const savedUser = await this.usersRepository.save(user);
-    
+
     // Recargar el usuario con sus relaciones para asegurar que el cambio se refleje
     return this.findOne(savedUser.usuarioId);
   }
 
   async changePassword(userId: number, changePasswordDto: ChangePasswordDto): Promise<User> {
     const user = await this.findOne(userId);
-    
+
     // Validar contraseña actual
     if (!user.usuarioContrasena) {
       throw new BadRequestException('Usuario sin contraseña configurada');
     }
-    
+
     const isCurrentPasswordValid = await bcrypt.compare(
       changePasswordDto.currentPassword,
-      user.usuarioContrasena
+      user.usuarioContrasena,
     );
-    
+
     if (!isCurrentPasswordValid) {
       throw new BadRequestException('La contraseña actual es incorrecta');
     }
-    
+
     // Validar que la nueva contraseña sea diferente
     const isSamePassword = await bcrypt.compare(
       changePasswordDto.newPassword,
-      user.usuarioContrasena
+      user.usuarioContrasena,
     );
-    
+
     if (isSamePassword) {
       throw new BadRequestException('La nueva contraseña debe ser diferente a la actual');
     }
-    
+
     // Hashear y actualizar la nueva contraseña
     const hashedNewPassword = await bcrypt.hash(changePasswordDto.newPassword, 10);
     user.usuarioContrasena = hashedNewPassword;
-    
+
     return this.usersRepository.save(user);
   }
 
   async updateMyProfile(userId: number, updateUserDto: UpdateUserDto): Promise<User> {
     const user = await this.findOne(userId);
-    
+
     // Validar que el correo no esté en uso por otro usuario
     if (updateUserDto.usuarioCorreo && updateUserDto.usuarioCorreo !== user.usuarioCorreo) {
       const existingEmail = await this.findByEmail(updateUserDto.usuarioCorreo);
@@ -348,7 +401,10 @@ export class UsersService {
     }
 
     // Validar que el documento no esté en uso por otro usuario
-    if (updateUserDto.usuarioDocumento && updateUserDto.usuarioDocumento !== user.usuarioDocumento) {
+    if (
+      updateUserDto.usuarioDocumento &&
+      updateUserDto.usuarioDocumento !== user.usuarioDocumento
+    ) {
       const existingDocument = await this.findByDocument(updateUserDto.usuarioDocumento);
       if (existingDocument && existingDocument.usuarioId !== userId) {
         throw new ConflictException('El documento ya está registrado');
@@ -385,10 +441,13 @@ export class UsersService {
     await this.usersRepository.remove(user);
   }
 
-  async cancelarContrato(usuarioId: number, usuarioEjecutorId: number): Promise<{ message: string; materialesTransferidos: number }> {
+  async cancelarContrato(
+    usuarioId: number,
+    usuarioEjecutorId: number,
+  ): Promise<{ message: string; materialesTransferidos: number }> {
     // Obtener el técnico
     const tecnico = await this.findOne(usuarioId);
-    
+
     // Verificar que sea un técnico
     if (tecnico.usuarioRol?.rolTipo !== 'tecnico') {
       throw new BadRequestException('El usuario no es un técnico');
@@ -401,19 +460,19 @@ export class UsersService {
 
     // Obtener el inventario del técnico
     const inventarioTecnico = await this.inventarioTecnicoService.findByUsuario(usuarioId);
-    
+
     if (inventarioTecnico.length === 0) {
       // Si no tiene materiales, solo desactivar el usuario
       await this.updateEstado(usuarioId, false);
       return {
         message: 'Contrato cancelado. El técnico no tenía materiales en inventario.',
-        materialesTransferidos: 0
+        materialesTransferidos: 0,
       };
     }
 
     // Obtener todas las bodegas de la sede
     const bodegas = await this.bodegasService.findAll();
-    const bodegasSede = bodegas.filter(b => b.sedeId === tecnico.usuarioSede);
+    const bodegasSede = bodegas.filter((b) => b.sedeId === tecnico.usuarioSede);
 
     if (bodegasSede.length === 0) {
       throw new BadRequestException('No se encontraron bodegas para la sede del técnico');
@@ -421,8 +480,8 @@ export class UsersService {
 
     // Obtener todos los inventarios de las bodegas de la sede
     const todosInventarios = await this.inventariosService.findAll();
-    const inventariosSede = todosInventarios.filter(inv => {
-      const bodega = bodegasSede.find(b => b.bodegaId === inv.bodegaId);
+    const inventariosSede = todosInventarios.filter((inv) => {
+      const bodega = bodegasSede.find((b) => b.bodegaId === inv.bodegaId);
       return bodega !== undefined;
     });
 
@@ -432,7 +491,7 @@ export class UsersService {
 
     // Agrupar materiales por materialId y sumar cantidades
     const materialesAgrupados = new Map<number, number>();
-    inventarioTecnico.forEach(item => {
+    inventarioTecnico.forEach((item) => {
       const cantidadActual = materialesAgrupados.get(item.materialId) || 0;
       materialesAgrupados.set(item.materialId, cantidadActual + Number(item.cantidad || 0));
     });
@@ -446,10 +505,12 @@ export class UsersService {
         // Crear movimiento de entrada SIN inventarioId para que vaya al stock de la sede
         await this.movimientosService.create({
           movimientoTipo: TipoMovimiento.ENTRADA,
-          materiales: [{
-            materialId: materialId,
-            movimientoCantidad: cantidadTotal,
-          }],
+          materiales: [
+            {
+              materialId: materialId,
+              movimientoCantidad: cantidadTotal,
+            },
+          ],
           inventarioId: null, // null para que vaya al stock de la sede
           usuarioId: usuarioEjecutorId,
           movimientoObservaciones: `Transferencia por cancelación de contrato del técnico ${tecnico.usuarioNombre} ${tecnico.usuarioApellido}`,
@@ -477,7 +538,7 @@ export class UsersService {
 
     return {
       message: `Contrato cancelado exitosamente. ${materialesTransferidos} material(es) transferido(s) al inventario de la sede.`,
-      materialesTransferidos
+      materialesTransferidos,
     };
   }
 }

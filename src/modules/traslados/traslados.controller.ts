@@ -40,7 +40,16 @@ export class TrasladosController {
   }
 
   @Get()
-  @Roles('superadmin', 'admin', 'administrador', 'almacenista', 'tecnico', 'soldador', 'bodega-internas', 'bodega-redes')
+  @Roles(
+    'superadmin',
+    'admin',
+    'administrador',
+    'almacenista',
+    'tecnico',
+    'soldador',
+    'bodega-internas',
+    'bodega-redes',
+  )
   @ApiOperation({ summary: 'Get all traslados' })
   findAll(@Query() paginationDto?: PaginationDto) {
     return this.trasladosService.findAll(paginationDto);
@@ -54,7 +63,16 @@ export class TrasladosController {
   }
 
   @Get(':id')
-  @Roles('superadmin', 'admin', 'administrador', 'almacenista', 'tecnico', 'soldador', 'bodega-internas', 'bodega-redes')
+  @Roles(
+    'superadmin',
+    'admin',
+    'administrador',
+    'almacenista',
+    'tecnico',
+    'soldador',
+    'bodega-internas',
+    'bodega-redes',
+  )
   @ApiOperation({ summary: 'Get a traslado by ID' })
   findOne(@Param('id') id: string) {
     return this.trasladosService.findOne(+id);
@@ -94,19 +112,24 @@ export class TrasladosController {
   @ApiQuery({ name: 'filters', required: false, type: String })
   @ApiQuery({ name: 'dateStart', required: false, type: String })
   @ApiQuery({ name: 'dateEnd', required: false, type: String })
-  async exportToExcel(@Res() res: Response, @Query('filters') filters?: string, @Query('dateStart') dateStart?: string, @Query('dateEnd') dateEnd?: string) {
+  async exportToExcel(
+    @Res() res: Response,
+    @Query('filters') filters?: string,
+    @Query('dateStart') dateStart?: string,
+    @Query('dateEnd') dateEnd?: string,
+  ) {
     try {
       const resultado = await this.trasladosService.findAll({ page: 1, limit: 10000 });
       const traslados = resultado.data;
-      
+
       let filteredData = traslados;
-      
+
       // Filtrar por fechas si se proporcionan
       if (dateStart || dateEnd) {
         const startDate = dateStart ? new Date(dateStart) : null;
         const endDate = dateEnd ? new Date(dateEnd) : null;
         if (endDate) endDate.setHours(23, 59, 59, 999);
-        
+
         filteredData = filteredData.filter((t: any) => {
           const fecha = new Date(t.fechaCreacion || t.trasladoFechaCreacion);
           if (startDate && fecha < startDate) return false;
@@ -114,19 +137,22 @@ export class TrasladosController {
           return true;
         });
       }
-      
+
       if (filters) {
         try {
           const filterObj = JSON.parse(filters);
           if (filterObj.search) {
             const search = filterObj.search.toLowerCase();
-            filteredData = filteredData.filter((t: any) =>
-              t.trasladoCodigo?.toLowerCase().includes(search) ||
-              t.material?.materialNombre?.toLowerCase().includes(search) ||
-              t.material?.materialCodigo?.toLowerCase().includes(search)
+            filteredData = filteredData.filter(
+              (t: any) =>
+                t.trasladoCodigo?.toLowerCase().includes(search) ||
+                t.material?.materialNombre?.toLowerCase().includes(search) ||
+                t.material?.materialCodigo?.toLowerCase().includes(search),
             );
           }
-        } catch (e) {}
+        } catch (_e) {
+          // Ignorar errores de filtrado, continuar sin filtrar
+        }
       }
 
       const columns = [
@@ -146,7 +172,9 @@ export class TrasladosController {
         bodegaOrigen: t.bodegaOrigen?.bodegaNombre || 'Sin bodega',
         bodegaDestino: t.bodegaDestino?.bodegaNombre || 'Sin bodega',
         trasladoEstado: t.trasladoEstado || '-',
-        fechaCreacion: t.fechaCreacion ? new Date(t.fechaCreacion).toLocaleDateString('es-CO') : '-',
+        fechaCreacion: t.fechaCreacion
+          ? new Date(t.fechaCreacion).toLocaleDateString('es-CO')
+          : '-',
       }));
 
       const buffer = await this.exportacionService.exportToExcel({
@@ -155,7 +183,10 @@ export class TrasladosController {
         filename: 'reporte-traslados',
       });
 
-      res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+      res.setHeader(
+        'Content-Type',
+        'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+      );
       res.setHeader('Content-Disposition', 'attachment; filename="reporte-traslados.xlsx"');
       res.send(buffer);
     } catch (error) {
@@ -169,19 +200,24 @@ export class TrasladosController {
   @ApiQuery({ name: 'filters', required: false, type: String })
   @ApiQuery({ name: 'dateStart', required: false, type: String })
   @ApiQuery({ name: 'dateEnd', required: false, type: String })
-  async exportToPdf(@Res() res: Response, @Query('filters') filters?: string, @Query('dateStart') dateStart?: string, @Query('dateEnd') dateEnd?: string) {
+  async exportToPdf(
+    @Res() res: Response,
+    @Query('filters') filters?: string,
+    @Query('dateStart') dateStart?: string,
+    @Query('dateEnd') dateEnd?: string,
+  ) {
     try {
       const resultado = await this.trasladosService.findAll({ page: 1, limit: 10000 });
       const traslados = resultado.data;
-      
+
       let filteredData = traslados;
-      
+
       // Filtrar por fechas si se proporcionan
       if (dateStart || dateEnd) {
         const startDate = dateStart ? new Date(dateStart) : null;
         const endDate = dateEnd ? new Date(dateEnd) : null;
         if (endDate) endDate.setHours(23, 59, 59, 999);
-        
+
         filteredData = filteredData.filter((t: any) => {
           const fecha = new Date(t.fechaCreacion || t.trasladoFechaCreacion);
           if (startDate && fecha < startDate) return false;
@@ -189,19 +225,22 @@ export class TrasladosController {
           return true;
         });
       }
-      
+
       if (filters) {
         try {
           const filterObj = JSON.parse(filters);
           if (filterObj.search) {
             const search = filterObj.search.toLowerCase();
-            filteredData = filteredData.filter((t: any) =>
-              t.trasladoCodigo?.toLowerCase().includes(search) ||
-              t.material?.materialNombre?.toLowerCase().includes(search) ||
-              t.material?.materialCodigo?.toLowerCase().includes(search)
+            filteredData = filteredData.filter(
+              (t: any) =>
+                t.trasladoCodigo?.toLowerCase().includes(search) ||
+                t.material?.materialNombre?.toLowerCase().includes(search) ||
+                t.material?.materialCodigo?.toLowerCase().includes(search),
             );
           }
-        } catch (e) {}
+        } catch (_e) {
+          // Ignorar errores de filtrado, continuar sin filtrar
+        }
       }
 
       const columns = [
@@ -221,7 +260,9 @@ export class TrasladosController {
         bodegaOrigen: t.bodegaOrigen?.bodegaNombre || 'Sin bodega',
         bodegaDestino: t.bodegaDestino?.bodegaNombre || 'Sin bodega',
         trasladoEstado: t.trasladoEstado || '-',
-        fechaCreacion: t.fechaCreacion ? new Date(t.fechaCreacion).toLocaleDateString('es-CO') : '-',
+        fechaCreacion: t.fechaCreacion
+          ? new Date(t.fechaCreacion).toLocaleDateString('es-CO')
+          : '-',
       }));
 
       const buffer = await this.exportacionService.exportToPdf({

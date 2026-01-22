@@ -20,7 +20,11 @@ export class CreateInstalacionMaterialDto {
   @IsOptional()
   observaciones?: string;
 
-  @ApiProperty({ required: false, description: 'Números de medidor específicos utilizados en la instalación (desde miniapp)', type: [String] })
+  @ApiProperty({
+    required: false,
+    description: 'Números de medidor específicos utilizados en la instalación (desde miniapp)',
+    type: [String],
+  })
   @IsArray()
   @IsString({ each: true })
   @IsOptional()
@@ -49,4 +53,3 @@ export class AssignMaterialesToInstalacionDto {
     numerosMedidor?: string[]; // Números de medidor específicos
   }>;
 }
-

@@ -41,13 +41,15 @@ export class ProveedoresService {
 
   async remove(id: number): Promise<void> {
     const proveedor = await this.findOne(id);
-    
+
     // Validar que no tenga materiales asociados
     if (proveedor.materiales && proveedor.materiales.length > 0) {
-      throw new HasMaterialsException(`proveedor "${proveedor.proveedorNombre}"`, proveedor.materiales.length);
+      throw new HasMaterialsException(
+        `proveedor "${proveedor.proveedorNombre}"`,
+        proveedor.materiales.length,
+      );
     }
-    
+
     await this.proveedoresRepository.remove(proveedor);
   }
 }
-

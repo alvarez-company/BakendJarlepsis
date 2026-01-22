@@ -84,4 +84,3 @@ export class Traslado {
   @UpdateDateColumn()
   fechaActualizacion: Date;
 }
-

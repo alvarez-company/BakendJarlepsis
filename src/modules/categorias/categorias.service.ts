@@ -4,9 +4,7 @@ import { Repository } from 'typeorm';
 import { Categoria } from './categoria.entity';
 import { CreateCategoriaDto } from './dto/create-categoria.dto';
 import { UpdateCategoriaDto } from './dto/update-categoria.dto';
-import { 
-  HasMaterialsException 
-} from '../../common/exceptions/business.exception';
+import { HasMaterialsException } from '../../common/exceptions/business.exception';
 
 @Injectable()
 export class CategoriasService {
@@ -46,13 +44,12 @@ export class CategoriasService {
 
   async remove(id: number): Promise<void> {
     const categoria = await this.findOne(id);
-    
+
     // Validar que no tenga materiales
     if (categoria.materiales && categoria.materiales.length > 0) {
       throw new HasMaterialsException(categoria.categoriaNombre, categoria.materiales.length);
     }
-    
+
     await this.categoriasRepository.remove(categoria);
   }
 }
-

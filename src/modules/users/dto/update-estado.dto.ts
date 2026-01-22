@@ -6,4 +6,3 @@ export class UpdateEstadoUsuarioDto {
   @IsBoolean()
   usuarioEstado: boolean;
 }
-

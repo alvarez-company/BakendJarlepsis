@@ -11,4 +11,3 @@ import { Departamento } from './departamento.entity';
   exports: [DepartamentosService],
 })
 export class DepartamentosModule {}
-

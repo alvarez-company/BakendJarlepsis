@@ -42,4 +42,3 @@ export class UnidadesMedidaService {
     await this.unidadesMedidaRepository.remove(unidad);
   }
 }
-

@@ -11,4 +11,3 @@ import { TipoInstalacion } from './tipo-instalacion.entity';
   exports: [TiposInstalacionService],
 })
 export class TiposInstalacionModule {}
-

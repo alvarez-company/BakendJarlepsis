@@ -10,20 +10,24 @@ export class EstadosUsuarioService {
     private estadosRepository: Repository<EstadoUsuario>,
   ) {}
 
-  async actualizarEstado(usuarioId: number, estado: EstadoEnum, mensajeEstado?: string): Promise<EstadoUsuario> {
+  async actualizarEstado(
+    usuarioId: number,
+    estado: EstadoEnum,
+    mensajeEstado?: string,
+  ): Promise<EstadoUsuario> {
     let estadoUsuario = await this.estadosRepository.findOne({ where: { usuarioId } });
-    
+
     if (!estadoUsuario) {
       estadoUsuario = this.estadosRepository.create({ usuarioId, estado });
     } else {
       estadoUsuario.estado = estado;
       estadoUsuario.ultimaConexion = new Date();
     }
-    
+
     if (mensajeEstado) {
       estadoUsuario.mensajeEstado = mensajeEstado;
     }
-    
+
     return this.estadosRepository.save(estadoUsuario);
   }
 
@@ -38,4 +42,3 @@ export class EstadosUsuarioService {
     });
   }
 }
-

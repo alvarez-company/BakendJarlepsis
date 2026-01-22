@@ -65,4 +65,3 @@ export class Bodega {
   @UpdateDateColumn()
   fechaActualizacion: Date;
 }
-

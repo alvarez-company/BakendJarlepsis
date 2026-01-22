@@ -51,4 +51,3 @@ export class Grupo {
   @UpdateDateColumn()
   fechaActualizacion: Date;
 }
-

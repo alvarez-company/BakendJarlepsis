@@ -27,4 +27,3 @@ import { NumerosMedidorModule } from '../numeros-medidor/numeros-medidor.module'
   exports: [InventarioTecnicoService],
 })
 export class InventarioTecnicoModule {}
-

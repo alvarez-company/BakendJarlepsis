@@ -16,4 +16,3 @@ export class CreateUnidadMedidaDto {
   @IsOptional()
   unidadMedidaEstado?: boolean;
 }
-

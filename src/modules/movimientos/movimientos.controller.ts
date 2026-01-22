@@ -39,9 +39,22 @@ export class MovimientosController {
   }
 
   @Get()
-  @Roles('superadmin', 'admin', 'administrador', 'almacenista', 'tecnico', 'soldador', 'bodega-internas', 'bodega-redes')
+  @Roles(
+    'superadmin',
+    'admin',
+    'administrador',
+    'almacenista',
+    'tecnico',
+    'soldador',
+    'bodega-internas',
+    'bodega-redes',
+  )
   @ApiOperation({ summary: 'Get all movimientos' })
-  findAll(@Query('instalacionId') instalacionId?: string, @Query() paginationDto?: PaginationDto, @Request() req?: any) {
+  findAll(
+    @Query('instalacionId') instalacionId?: string,
+    @Query() paginationDto?: PaginationDto,
+    @Request() req?: any,
+  ) {
     if (instalacionId) {
       return this.movimientosService.findByInstalacion(+instalacionId);
     }
@@ -56,7 +69,16 @@ export class MovimientosController {
   }
 
   @Get('material/:materialId')
-  @Roles('superadmin', 'admin', 'administrador', 'almacenista', 'tecnico', 'soldador', 'bodega-internas', 'bodega-redes')
+  @Roles(
+    'superadmin',
+    'admin',
+    'administrador',
+    'almacenista',
+    'tecnico',
+    'soldador',
+    'bodega-internas',
+    'bodega-redes',
+  )
   @ApiOperation({ summary: 'Get movimientos by material ID with stock history' })
   findByMaterial(@Param('materialId') materialId: string) {
     return this.movimientosService.findByMaterial(+materialId);
@@ -77,7 +99,16 @@ export class MovimientosController {
   }
 
   @Get('tecnico/:usuarioId/historial')
-  @Roles('superadmin', 'admin', 'administrador', 'almacenista', 'tecnico', 'soldador', 'bodega-internas', 'bodega-redes')
+  @Roles(
+    'superadmin',
+    'admin',
+    'administrador',
+    'almacenista',
+    'tecnico',
+    'soldador',
+    'bodega-internas',
+    'bodega-redes',
+  )
   @ApiOperation({ summary: 'Get stock history by tecnico (usuario) ID' })
   findByTecnico(@Param('usuarioId') usuarioId: string) {
     return this.movimientosService.findByTecnico(+usuarioId);
@@ -89,21 +120,27 @@ export class MovimientosController {
   @ApiQuery({ name: 'filters', required: false, type: String })
   @ApiQuery({ name: 'dateStart', required: false, type: String })
   @ApiQuery({ name: 'dateEnd', required: false, type: String })
-  async exportToExcel(@Res() res: Response, @Query('filters') filters?: string, @Query('instalacionId') instalacionId?: string, @Query('dateStart') dateStart?: string, @Query('dateEnd') dateEnd?: string) {
+  async exportToExcel(
+    @Res() res: Response,
+    @Query('filters') filters?: string,
+    @Query('instalacionId') instalacionId?: string,
+    @Query('dateStart') dateStart?: string,
+    @Query('dateEnd') dateEnd?: string,
+  ) {
     try {
-      const resultado = instalacionId 
+      const resultado = instalacionId
         ? await this.movimientosService.findByInstalacion(+instalacionId)
         : await this.movimientosService.findAll();
       const movimientos = Array.isArray(resultado) ? resultado : resultado.data;
-      
+
       let filteredData = movimientos;
-      
+
       // Filtrar por fechas si se proporcionan
       if (dateStart || dateEnd) {
         const startDate = dateStart ? new Date(dateStart) : null;
         const endDate = dateEnd ? new Date(dateEnd) : null;
         if (endDate) endDate.setHours(23, 59, 59, 999);
-        
+
         filteredData = filteredData.filter((m: any) => {
           const fecha = new Date(m.fechaCreacion || m.movimientoFechaCreacion);
           if (startDate && fecha < startDate) return false;
@@ -111,27 +148,32 @@ export class MovimientosController {
           return true;
         });
       }
-      
+
       if (filters) {
         try {
           const filterObj = JSON.parse(filters);
           if (filterObj.search) {
             const search = filterObj.search.toLowerCase();
-            filteredData = filteredData.filter((m: any) =>
-              m.movimientoCodigo?.toLowerCase().includes(search) ||
-              m.material?.materialNombre?.toLowerCase().includes(search) ||
-              m.material?.materialCodigo?.toLowerCase().includes(search)
+            filteredData = filteredData.filter(
+              (m: any) =>
+                m.movimientoCodigo?.toLowerCase().includes(search) ||
+                m.material?.materialNombre?.toLowerCase().includes(search) ||
+                m.material?.materialCodigo?.toLowerCase().includes(search),
             );
           }
           // Filtrar por tipo de movimiento si se proporciona
           if (filterObj.tipo) {
             const tipoFilter = filterObj.tipo.toLowerCase();
             filteredData = filteredData.filter((m: any) => {
-              const movimientoTipo = String(m.movimientoTipo || m.tipoMovimiento || '').toLowerCase();
+              const movimientoTipo = String(
+                m.movimientoTipo || m.tipoMovimiento || '',
+              ).toLowerCase();
               return movimientoTipo === tipoFilter;
             });
           }
-        } catch (e) {}
+        } catch (_e) {
+          // Ignorar errores de filtrado, continuar sin filtrar
+        }
       }
 
       const columns = [
@@ -151,7 +193,9 @@ export class MovimientosController {
         cantidad: m.movimientoCantidad || m.cantidad || 0,
         inventario: m.inventario?.inventarioNombre || 'Sin inventario',
         movimientoEstado: m.movimientoEstado || '-',
-        fechaCreacion: m.fechaCreacion ? new Date(m.fechaCreacion).toLocaleDateString('es-CO') : '-',
+        fechaCreacion: m.fechaCreacion
+          ? new Date(m.fechaCreacion).toLocaleDateString('es-CO')
+          : '-',
       }));
 
       const buffer = await this.exportacionService.exportToExcel({
@@ -160,7 +204,10 @@ export class MovimientosController {
         filename: 'reporte-movimientos',
       });
 
-      res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+      res.setHeader(
+        'Content-Type',
+        'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+      );
       res.setHeader('Content-Disposition', 'attachment; filename="reporte-movimientos.xlsx"');
       res.send(buffer);
     } catch (error) {
@@ -174,21 +221,27 @@ export class MovimientosController {
   @ApiQuery({ name: 'filters', required: false, type: String })
   @ApiQuery({ name: 'dateStart', required: false, type: String })
   @ApiQuery({ name: 'dateEnd', required: false, type: String })
-  async exportToPdf(@Res() res: Response, @Query('filters') filters?: string, @Query('instalacionId') instalacionId?: string, @Query('dateStart') dateStart?: string, @Query('dateEnd') dateEnd?: string) {
+  async exportToPdf(
+    @Res() res: Response,
+    @Query('filters') filters?: string,
+    @Query('instalacionId') instalacionId?: string,
+    @Query('dateStart') dateStart?: string,
+    @Query('dateEnd') dateEnd?: string,
+  ) {
     try {
-      const resultado = instalacionId 
+      const resultado = instalacionId
         ? await this.movimientosService.findByInstalacion(+instalacionId)
         : await this.movimientosService.findAll({ page: 1, limit: 10000 });
       const movimientos = Array.isArray(resultado) ? resultado : resultado.data;
-      
+
       let filteredData = movimientos;
-      
+
       // Filtrar por fechas si se proporcionan
       if (dateStart || dateEnd) {
         const startDate = dateStart ? new Date(dateStart) : null;
         const endDate = dateEnd ? new Date(dateEnd) : null;
         if (endDate) endDate.setHours(23, 59, 59, 999);
-        
+
         filteredData = filteredData.filter((m: any) => {
           const fecha = new Date(m.fechaCreacion || m.movimientoFechaCreacion);
           if (startDate && fecha < startDate) return false;
@@ -196,27 +249,32 @@ export class MovimientosController {
           return true;
         });
       }
-      
+
       if (filters) {
         try {
           const filterObj = JSON.parse(filters);
           if (filterObj.search) {
             const search = filterObj.search.toLowerCase();
-            filteredData = filteredData.filter((m: any) =>
-              m.movimientoCodigo?.toLowerCase().includes(search) ||
-              m.material?.materialNombre?.toLowerCase().includes(search) ||
-              m.material?.materialCodigo?.toLowerCase().includes(search)
+            filteredData = filteredData.filter(
+              (m: any) =>
+                m.movimientoCodigo?.toLowerCase().includes(search) ||
+                m.material?.materialNombre?.toLowerCase().includes(search) ||
+                m.material?.materialCodigo?.toLowerCase().includes(search),
             );
           }
           // Filtrar por tipo de movimiento si se proporciona
           if (filterObj.tipo) {
             const tipoFilter = filterObj.tipo.toLowerCase();
             filteredData = filteredData.filter((m: any) => {
-              const movimientoTipo = String(m.movimientoTipo || m.tipoMovimiento || '').toLowerCase();
+              const movimientoTipo = String(
+                m.movimientoTipo || m.tipoMovimiento || '',
+              ).toLowerCase();
               return movimientoTipo === tipoFilter;
             });
           }
-        } catch (e) {}
+        } catch (_e) {
+          // Ignorar errores de filtrado, continuar sin filtrar
+        }
       }
 
       const columns = [
@@ -236,7 +294,9 @@ export class MovimientosController {
         cantidad: m.movimientoCantidad || m.cantidad || 0,
         inventario: m.inventario?.inventarioNombre || 'Sin inventario',
         movimientoEstado: m.movimientoEstado || '-',
-        fechaCreacion: m.fechaCreacion ? new Date(m.fechaCreacion).toLocaleDateString('es-CO') : '-',
+        fechaCreacion: m.fechaCreacion
+          ? new Date(m.fechaCreacion).toLocaleDateString('es-CO')
+          : '-',
       }));
 
       const buffer = await this.exportacionService.exportToPdf({
@@ -271,12 +331,7 @@ export class MovimientosController {
   @Roles('superadmin')
   @ApiOperation({ summary: 'Delete a movimiento' })
   async remove(@Param('id') id: string, @Request() req) {
-    try {
-      await this.movimientosService.remove(+id, req.user.usuarioId);
-      return { message: 'Movimiento eliminado correctamente', success: true };
-    } catch (error) {
-      throw error;
-    }
+    await this.movimientosService.remove(+id, req.user.usuarioId);
+    return { message: 'Movimiento eliminado correctamente', success: true };
   }
 }
-

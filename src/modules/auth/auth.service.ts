@@ -1,4 +1,9 @@
-import { Injectable, UnauthorizedException, ConflictException, BadRequestException } from '@nestjs/common';
+import {
+  Injectable,
+  UnauthorizedException,
+  ConflictException,
+  BadRequestException,
+} from '@nestjs/common';
 import { JwtService } from '@nestjs/jwt';
 import { UsersService } from '../users/users.service';
 import { LoginDto } from './dto/login.dto';
@@ -36,26 +41,28 @@ export class AuthService {
     }
 
     // 4. Retornar usuario sin contraseña
-    const { usuarioContrasena, ...result } = user;
+    const { usuarioContrasena: _usuarioContrasena, ...result } = user;
     return result;
   }
 
   async login(loginDto: LoginDto) {
     try {
       const user = await this.validateUser(loginDto.email, loginDto.password);
-      
+
       // Verificar que usuarioRol esté cargado
       if (!user.usuarioRol) {
         throw new UnauthorizedException('Error al obtener información del usuario');
       }
 
       const rolTipo = user.usuarioRol?.rolTipo || 'empleado';
-      
+
       // Restringir login de técnico y soldador en el sistema principal (solo miniapp)
       if (rolTipo === 'tecnico' || rolTipo === 'soldador') {
-        throw new UnauthorizedException('Los técnicos y soldadores solo pueden iniciar sesión en la aplicación móvil');
+        throw new UnauthorizedException(
+          'Los técnicos y soldadores solo pueden iniciar sesión en la aplicación móvil',
+        );
       }
-      
+
       const payload = {
         email: user.usuarioCorreo,
         sub: user.usuarioId,
@@ -95,7 +102,9 @@ export class AuthService {
       }
 
       // Validar que el documento no exista
-      const existingUserByDocument = await this.usersService.findByDocument(registerDto.usuarioDocumento);
+      const existingUserByDocument = await this.usersService.findByDocument(
+        registerDto.usuarioDocumento,
+      );
       if (existingUserByDocument) {
         throw new ConflictException('El documento ya está registrado');
       }
@@ -113,7 +122,7 @@ export class AuthService {
 
       // Crear usuario
       const user = await this.usersService.create(registerDto);
-      const { usuarioContrasena, ...result } = user;
+      const { usuarioContrasena: _usuarioContrasena, ...result } = user;
       return result;
     } catch (error) {
       // Re-lanzar errores específicos

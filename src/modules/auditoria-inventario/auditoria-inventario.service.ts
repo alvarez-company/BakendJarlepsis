@@ -79,7 +79,8 @@ export class AuditoriaInventarioService {
     fechaDesde?: Date;
     fechaHasta?: Date;
   }): Promise<AuditoriaInventario[]> {
-    const query = this.auditoriaRepository.createQueryBuilder('auditoria')
+    const query = this.auditoriaRepository
+      .createQueryBuilder('auditoria')
       .leftJoinAndSelect('auditoria.material', 'material')
       .leftJoinAndSelect('auditoria.usuario', 'usuario')
       .leftJoinAndSelect('auditoria.bodega', 'bodega');
@@ -107,4 +108,3 @@ export class AuditoriaInventarioService {
     return query.orderBy('auditoria.fechaCreacion', 'DESC').getMany();
   }
 }
-

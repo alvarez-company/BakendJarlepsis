@@ -21,4 +21,3 @@ export class UpdateAsignacionTecnicoDto {
   @IsOptional()
   observaciones?: string;
 }
-

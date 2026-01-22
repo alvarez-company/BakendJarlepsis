@@ -16,4 +16,3 @@ export class CreateClasificacionDto {
   @IsOptional()
   clasificacionEstado?: boolean;
 }
-

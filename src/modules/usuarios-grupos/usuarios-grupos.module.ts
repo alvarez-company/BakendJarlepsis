@@ -11,4 +11,3 @@ import { UsuarioGrupo } from './usuario-grupo.entity';
   exports: [UsuariosGruposService],
 })
 export class UsuariosGruposModule {}
-

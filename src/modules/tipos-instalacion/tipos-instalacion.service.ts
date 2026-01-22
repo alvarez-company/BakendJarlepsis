@@ -17,33 +17,37 @@ export class TiposInstalacionService {
 
   async findAll(user?: any): Promise<TipoInstalacion[]> {
     const allTipos = await this.tiposInstalacionRepository.find();
-    
+
     // SuperAdmin y Admin ven todos los tipos
-    if (user?.usuarioRol?.rolTipo === 'superadmin' || user?.role === 'superadmin' ||
-        user?.usuarioRol?.rolTipo === 'admin' || user?.role === 'admin') {
+    if (
+      user?.usuarioRol?.rolTipo === 'superadmin' ||
+      user?.role === 'superadmin' ||
+      user?.usuarioRol?.rolTipo === 'admin' ||
+      user?.role === 'admin'
+    ) {
       return allTipos;
     }
-    
+
     // Bodega Internas solo ve tipos que contengan "internas"
     if (user?.usuarioRol?.rolTipo === 'bodega-internas' || user?.role === 'bodega-internas') {
-      return allTipos.filter(tipo => 
-        tipo.tipoInstalacionNombre?.toLowerCase().includes('internas')
+      return allTipos.filter((tipo) =>
+        tipo.tipoInstalacionNombre?.toLowerCase().includes('internas'),
       );
     }
-    
+
     // Bodega Redes solo ve tipos que contengan "redes"
     if (user?.usuarioRol?.rolTipo === 'bodega-redes' || user?.role === 'bodega-redes') {
-      return allTipos.filter(tipo => 
-        tipo.tipoInstalacionNombre?.toLowerCase().includes('redes')
-      );
+      return allTipos.filter((tipo) => tipo.tipoInstalacionNombre?.toLowerCase().includes('redes'));
     }
-    
+
     // Otros roles ven todos los tipos
     return allTipos;
   }
 
   async findOne(id: number): Promise<TipoInstalacion> {
-    const tipo = await this.tiposInstalacionRepository.findOne({ where: { tipoInstalacionId: id } });
+    const tipo = await this.tiposInstalacionRepository.findOne({
+      where: { tipoInstalacionId: id },
+    });
     if (!tipo) throw new NotFoundException(`Tipo de instalación con ID ${id} no encontrado`);
     return tipo;
   }
@@ -59,4 +63,3 @@ export class TiposInstalacionService {
     await this.tiposInstalacionRepository.remove(tipo);
   }
 }
-

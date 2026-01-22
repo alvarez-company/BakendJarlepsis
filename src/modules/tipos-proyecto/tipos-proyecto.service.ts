@@ -36,4 +36,3 @@ export class TiposProyectoService {
     await this.tiposProyectoRepository.remove(tipo);
   }
 }
-

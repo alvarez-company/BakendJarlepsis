@@ -11,4 +11,3 @@ import { ItemProyecto } from './item-proyecto.entity';
   exports: [ItemsProyectoService],
 })
 export class ItemsProyectoModule {}
-

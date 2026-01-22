@@ -10,4 +10,3 @@ export class AjustarStockDto {
   @IsNumber()
   bodegaId: number;
 }
-

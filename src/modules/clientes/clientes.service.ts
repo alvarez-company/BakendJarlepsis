@@ -78,17 +78,17 @@ export class ClientesService {
           'fechaActualizacion',
         ],
       });
-      
+
       // Recalcular cantidadInstalaciones para cada cliente (solo finalizadas)
       // y obtener información de instalación asignada
       for (const cliente of clientes) {
         try {
           const resultado = await this.clientesRepository.query(
             `SELECT COUNT(*) as cantidad FROM instalaciones WHERE clienteId = ? AND estado = 'finalizada'`,
-            [cliente.clienteId]
+            [cliente.clienteId],
           );
           const cantidadFinalizadas = resultado[0]?.cantidad || 0;
-          
+
           // Solo actualizar si el valor es diferente
           if (cliente.cantidadInstalaciones !== cantidadFinalizadas) {
             await this.clientesRepository
@@ -109,7 +109,7 @@ export class ClientesService {
              AND (iu.instalacionUsuarioId IS NOT NULL OR i.estado IN ('asignacion', 'pendiente', 'en_proceso'))
              ORDER BY i.fechaCreacion DESC
              LIMIT 1`,
-            [cliente.clienteId]
+            [cliente.clienteId],
           );
 
           if (instalacionAsignada && instalacionAsignada.length > 0) {
@@ -121,10 +121,13 @@ export class ClientesService {
             };
           }
         } catch (error) {
-          console.error(`Error al recalcular instalaciones para cliente ${cliente.clienteId}:`, error);
+          console.error(
+            `Error al recalcular instalaciones para cliente ${cliente.clienteId}:`,
+            error,
+          );
         }
       }
-      
+
       return clientes;
     } catch (error) {
       console.error('Error en findAll de clientes:', error);
@@ -167,7 +170,7 @@ export class ClientesService {
          AND (iu.instalacionUsuarioId IS NOT NULL OR i.estado IN ('asignacion', 'pendiente', 'en_proceso'))
          ORDER BY i.fechaCreacion DESC
          LIMIT 1`,
-        [id]
+        [id],
       );
 
       if (instalacionAsignada && instalacionAsignada.length > 0) {
@@ -185,9 +188,12 @@ export class ClientesService {
     return cliente;
   }
 
-  async update(id: number, updateClienteDto: UpdateClienteDto & { clienteEstado?: EstadoCliente }): Promise<Cliente> {
+  async update(
+    id: number,
+    updateClienteDto: UpdateClienteDto & { clienteEstado?: EstadoCliente },
+  ): Promise<Cliente> {
     const cliente = await this.findOne(id);
-    
+
     // Actualizar solo los campos permitidos usando QueryBuilder
     const updateValues: any = {};
     if (updateClienteDto.nombreUsuario !== undefined) {
@@ -231,4 +237,3 @@ export class ClientesService {
     await this.clientesRepository.remove(cliente);
   }
 }
-

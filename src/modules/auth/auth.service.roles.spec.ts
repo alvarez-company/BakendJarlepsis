@@ -7,8 +7,6 @@ import * as bcrypt from 'bcrypt';
 
 describe('AuthService - Roles y Restricciones', () => {
   let service: AuthService;
-  let usersService: UsersService;
-  let jwtService: JwtService;
 
   const mockUsersService = {
     findByEmail: jest.fn(),
@@ -34,8 +32,6 @@ describe('AuthService - Roles y Restricciones', () => {
     }).compile();
 
     service = module.get<AuthService>(AuthService);
-    usersService = module.get<UsersService>(UsersService);
-    jwtService = module.get<JwtService>(JwtService);
   });
 
   afterEach(() => {
@@ -72,7 +68,7 @@ describe('AuthService - Roles y Restricciones', () => {
 
       expect(result).toHaveProperty('access_token');
       expect(result.user.rolTipo).toBe('superadmin');
-      expect(jwtService.sign).toHaveBeenCalled();
+      expect(mockJwtService.sign).toHaveBeenCalled();
     });
 
     it('should allow login for admin', async () => {
@@ -156,13 +152,15 @@ describe('AuthService - Roles y Restricciones', () => {
           password: mockPassword,
         }),
       ).rejects.toThrow(UnauthorizedException);
-      
+
       await expect(
         service.login({
           email: 'tecnico@test.com',
           password: mockPassword,
         }),
-      ).rejects.toThrow('Los técnicos y soldadores solo pueden iniciar sesión en la aplicación móvil');
+      ).rejects.toThrow(
+        'Los técnicos y soldadores solo pueden iniciar sesión en la aplicación móvil',
+      );
     });
 
     it('should reject login for soldador in main system', async () => {
@@ -190,13 +188,15 @@ describe('AuthService - Roles y Restricciones', () => {
           password: mockPassword,
         }),
       ).rejects.toThrow(UnauthorizedException);
-      
+
       await expect(
         service.login({
           email: 'soldador@test.com',
           password: mockPassword,
         }),
-      ).rejects.toThrow('Los técnicos y soldadores solo pueden iniciar sesión en la aplicación móvil');
+      ).rejects.toThrow(
+        'Los técnicos y soldadores solo pueden iniciar sesión en la aplicación móvil',
+      );
     });
 
     it('should allow login for bodega-internas', async () => {

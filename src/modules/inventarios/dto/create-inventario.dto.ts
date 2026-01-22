@@ -20,4 +20,3 @@ export class CreateInventarioDto {
   @IsOptional()
   inventarioEstado?: boolean;
 }
-

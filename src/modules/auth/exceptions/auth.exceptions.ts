@@ -47,4 +47,3 @@ export class WeakPasswordException extends BadRequestException {
     super('La contraseña debe tener al menos 6 caracteres');
   }
 }
-

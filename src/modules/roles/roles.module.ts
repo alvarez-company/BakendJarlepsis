@@ -11,4 +11,3 @@ import { Role } from './role.entity';
   exports: [RolesService],
 })
 export class RolesModule {}
-

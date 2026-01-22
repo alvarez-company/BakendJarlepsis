@@ -1,13 +1,4 @@
-import {
-  Controller,
-  Get,
-  Post,
-  Body,
-  Patch,
-  Param,
-  Delete,
-  UseGuards,
-} from '@nestjs/common';
+import { Controller, Get, Post, Body, Patch, Param, Delete, UseGuards } from '@nestjs/common';
 import { ApiTags, ApiBearerAuth, ApiOperation } from '@nestjs/swagger';
 import { PaisesService } from './paises.service';
 import { CreatePaisDto } from './dto/create-pais.dto';
@@ -58,4 +49,3 @@ export class PaisesController {
     return this.paisesService.remove(+id);
   }
 }
-

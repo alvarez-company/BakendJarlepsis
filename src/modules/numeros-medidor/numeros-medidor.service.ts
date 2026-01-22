@@ -1,8 +1,18 @@
-import { Injectable, NotFoundException, BadRequestException, Inject, forwardRef } from '@nestjs/common';
+import {
+  Injectable,
+  NotFoundException,
+  BadRequestException,
+  Inject,
+  forwardRef,
+} from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository, In } from 'typeorm';
 import { NumeroMedidor, EstadoNumeroMedidor } from './numero-medidor.entity';
-import { CreateNumeroMedidorDto, UpdateNumeroMedidorDto, AsignarNumerosMedidorDto } from './dto/create-numero-medidor.dto';
+import {
+  CreateNumeroMedidorDto,
+  UpdateNumeroMedidorDto,
+  AsignarNumerosMedidorDto,
+} from './dto/create-numero-medidor.dto';
 import { MaterialesService } from '../materiales/materiales.service';
 
 @Injectable()
@@ -17,17 +27,17 @@ export class NumerosMedidorService {
   async create(createDto: CreateNumeroMedidorDto): Promise<NumeroMedidor> {
     // Normalizar el número de medidor (trim y lowercase) para comparación
     const numeroNormalizado = createDto.numeroMedidor.trim().toLowerCase();
-    
+
     // Verificar que el número de medidor sea único (comparación case-insensitive)
     // Los números de medidor NUNCA se repiten, incluso si ya salieron o fueron instalados
     const existentes = await this.numerosMedidorRepository.find();
     const existe = existentes.some(
-      n => n.numeroMedidor.trim().toLowerCase() === numeroNormalizado
+      (n) => n.numeroMedidor.trim().toLowerCase() === numeroNormalizado,
     );
 
     if (existe) {
       throw new BadRequestException(
-        `El número de medidor "${createDto.numeroMedidor}" ya existe en el sistema. Los números de medidor son únicos y nunca se repiten, incluso si ya salieron de inventario o fueron instalados.`
+        `El número de medidor "${createDto.numeroMedidor}" ya existe en el sistema. Los números de medidor son únicos y nunca se repiten, incluso si ya salieron de inventario o fueron instalados.`,
       );
     }
 
@@ -65,12 +75,12 @@ export class NumerosMedidorService {
       try {
         // Normalizar el número (trim y lowercase) para comparación
         const numeroNormalizado = numero.trim().toLowerCase();
-        
+
         // Verificar si ya existe (comparación case-insensitive)
         // Los números de medidor NUNCA se repiten, incluso si ya salieron o fueron instalados
         const todosExistentes = await this.numerosMedidorRepository.find();
         const existe = todosExistentes.some(
-          n => n.numeroMedidor.trim().toLowerCase() === numeroNormalizado
+          (n) => n.numeroMedidor.trim().toLowerCase() === numeroNormalizado,
         );
 
         if (existe) {
@@ -94,14 +104,16 @@ export class NumerosMedidorService {
     // Los números de medidor NUNCA se repiten, incluso si ya salieron o fueron instalados
     if (errores.length > 0) {
       throw new BadRequestException(
-        `Error al crear números de medidor: ${errores.join(', ')}. Los números de medidor son únicos y nunca se repiten, incluso si ya salieron de inventario o fueron instalados.`
+        `Error al crear números de medidor: ${errores.join(', ')}. Los números de medidor son únicos y nunca se repiten, incluso si ya salieron de inventario o fueron instalados.`,
       );
     }
 
     return resultados;
   }
 
-  async findAll(paginationDto?: any): Promise<{ data: NumeroMedidor[]; total: number; page: number; limit: number }> {
+  async findAll(
+    paginationDto?: any,
+  ): Promise<{ data: NumeroMedidor[]; total: number; page: number; limit: number }> {
     const page = paginationDto?.page || 1;
     const limit = paginationDto?.limit || 10;
     const skip = (page - 1) * limit;
@@ -129,12 +141,12 @@ export class NumerosMedidorService {
 
   async findByMaterial(materialId: number, estado?: EstadoNumeroMedidor): Promise<NumeroMedidor[]> {
     const where: any = { materialId };
-    
+
     // Si se especifica un estado, filtrar por él
     if (estado) {
       where.estado = estado;
     }
-    
+
     return this.numerosMedidorRepository.find({
       where,
       relations: ['material', 'usuario', 'inventarioTecnico', 'instalacionMaterial'],
@@ -147,7 +159,13 @@ export class NumerosMedidorService {
     // 2. O están en instalaciones donde el usuario está asignado
     const numerosAsignados = await this.numerosMedidorRepository.find({
       where: { usuarioId },
-      relations: ['material', 'material.categoria', 'inventarioTecnico', 'instalacionMaterial', 'instalacionMaterial.instalacion'],
+      relations: [
+        'material',
+        'material.categoria',
+        'inventarioTecnico',
+        'instalacionMaterial',
+        'instalacionMaterial.instalacion',
+      ],
     });
 
     // Buscar números de medidor en instalaciones del usuario
@@ -159,7 +177,11 @@ export class NumerosMedidorService {
       .leftJoinAndSelect('numero.inventarioTecnico', 'inventarioTecnico')
       .leftJoinAndSelect('numero.instalacionMaterial', 'instalacionMaterial')
       .leftJoinAndSelect('instalacionMaterial.instalacion', 'instalacion')
-      .leftJoin('instalaciones_usuarios', 'iu', 'iu.instalacionId = numero.instalacionId AND iu.activo = 1')
+      .leftJoin(
+        'instalaciones_usuarios',
+        'iu',
+        'iu.instalacionId = numero.instalacionId AND iu.activo = 1',
+      )
       .where('iu.usuarioId = :usuarioId', { usuarioId })
       .andWhere('numero.instalacionId IS NOT NULL')
       .getMany();
@@ -167,16 +189,16 @@ export class NumerosMedidorService {
     // Combinar y eliminar duplicados
     const todosNumeros = [...numerosAsignados, ...numerosEnInstalaciones];
     const numerosUnicos = Array.from(
-      new Map(todosNumeros.map(n => [n.numeroMedidorId, n])).values()
+      new Map(todosNumeros.map((n) => [n.numeroMedidorId, n])).values(),
     );
 
     // Asegurar que los números de medidor se devuelvan correctamente sin modificaciones
-    const resultado = numerosUnicos.map(n => {
+    const resultado = numerosUnicos.map((n) => {
       const numeroOriginal = n.numeroMedidor || '';
       const numeroLimpio = numeroOriginal.trim();
       return {
         ...n,
-        numeroMedidor: numeroLimpio
+        numeroMedidor: numeroLimpio,
       };
     });
 
@@ -193,14 +215,26 @@ export class NumerosMedidorService {
   async findByEstado(estado: EstadoNumeroMedidor): Promise<NumeroMedidor[]> {
     return this.numerosMedidorRepository.find({
       where: { estado },
-      relations: ['material', 'material.categoria', 'usuario', 'inventarioTecnico', 'instalacionMaterial'],
+      relations: [
+        'material',
+        'material.categoria',
+        'usuario',
+        'inventarioTecnico',
+        'instalacionMaterial',
+      ],
     });
   }
 
   async findOne(id: number): Promise<NumeroMedidor> {
     const numeroMedidor = await this.numerosMedidorRepository.findOne({
       where: { numeroMedidorId: id },
-      relations: ['material', 'material.categoria', 'usuario', 'inventarioTecnico', 'instalacionMaterial'],
+      relations: [
+        'material',
+        'material.categoria',
+        'usuario',
+        'inventarioTecnico',
+        'instalacionMaterial',
+      ],
     });
 
     if (!numeroMedidor) {
@@ -213,13 +247,19 @@ export class NumerosMedidorService {
   async findByNumero(numeroMedidor: string): Promise<NumeroMedidor | null> {
     // Normalizar el número para búsqueda case-insensitive
     const numeroNormalizado = numeroMedidor.trim().toLowerCase();
-    
+
     // Buscar todos y filtrar por normalización
     const todos = await this.numerosMedidorRepository.find({
-      relations: ['material', 'material.categoria', 'usuario', 'inventarioTecnico', 'instalacionMaterial'],
+      relations: [
+        'material',
+        'material.categoria',
+        'usuario',
+        'inventarioTecnico',
+        'instalacionMaterial',
+      ],
     });
-    
-    return todos.find(n => n.numeroMedidor.trim().toLowerCase() === numeroNormalizado) || null;
+
+    return todos.find((n) => n.numeroMedidor.trim().toLowerCase() === numeroNormalizado) || null;
   }
 
   async update(id: number, updateDto: UpdateNumeroMedidorDto): Promise<NumeroMedidor> {
@@ -243,7 +283,7 @@ export class NumerosMedidorService {
   async asignarATecnico(
     numerosMedidorIds: number[],
     usuarioId: number,
-    inventarioTecnicoId: number
+    inventarioTecnicoId: number,
   ): Promise<NumeroMedidor[]> {
     const numerosMedidor = await this.numerosMedidorRepository.find({
       where: { numeroMedidorId: In(numerosMedidorIds) },
@@ -267,7 +307,7 @@ export class NumerosMedidorService {
   async asignarAInstalacion(
     numerosMedidorIds: number[],
     instalacionId: number,
-    instalacionMaterialId: number
+    instalacionMaterialId: number,
   ): Promise<NumeroMedidor[]> {
     const numerosMedidor = await this.numerosMedidorRepository.find({
       where: { numeroMedidorId: In(numerosMedidorIds) },
@@ -311,7 +351,7 @@ export class NumerosMedidorService {
         numero.usuarioId = null;
         numero.inventarioTecnicoId = null;
       }
-      
+
       resultados.push(await this.numerosMedidorRepository.save(numero));
     }
 
@@ -339,11 +379,11 @@ export class NumerosMedidorService {
         numero.inventarioTecnicoId = null;
         numero.usuarioId = null;
       }
-      
+
       // Limpiar referencias de instalación
       numero.instalacionId = null;
       numero.instalacionMaterialId = null;
-      
+
       resultados.push(await this.numerosMedidorRepository.save(numero));
     }
 
@@ -406,7 +446,7 @@ export class NumerosMedidorService {
 
     if (disponibles.length < cantidad) {
       throw new BadRequestException(
-        `No hay suficientes números de medidor disponibles. Disponibles: ${disponibles.length}, Requeridos: ${cantidad}`
+        `No hay suficientes números de medidor disponibles. Disponibles: ${disponibles.length}, Requeridos: ${cantidad}`,
       );
     }
 

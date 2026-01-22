@@ -20,4 +20,3 @@ export class CreateTipoDocumentoIdentidadDto {
   @IsOptional()
   tipoDocumentoEstado?: boolean;
 }
-

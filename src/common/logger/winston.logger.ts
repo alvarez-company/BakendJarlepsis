@@ -41,4 +41,3 @@ export class WinstonLogger implements LoggerService {
     this.logger.verbose(message, { context });
   }
 }
-

@@ -40,4 +40,3 @@ export class InventarioTecnico {
   @UpdateDateColumn()
   fechaActualizacion: Date;
 }
-

@@ -43,4 +43,3 @@ export class MunicipiosService {
     await this.municipiosRepository.remove(municipio);
   }
 }
-

@@ -1,6 +1,6 @@
 import { Injectable } from '@nestjs/common';
 import * as ExcelJS from 'exceljs';
-import PDFDocument = require('pdfkit');
+import PDFDocument from 'pdfkit';
 import * as fs from 'fs';
 import * as path from 'path';
 
@@ -59,13 +59,13 @@ export class ExportacionService {
           filename: logoPath,
           extension: 'png',
         });
-        
+
         // Insertar logo en la primera fila
         worksheet.addImage(imageId, {
           tl: { col: 0, row: 0 },
-          ext: { width: 120, height: 60 }
+          ext: { width: 120, height: 60 },
         });
-        
+
         // Ajustar altura de la fila para el logo
         worksheet.getRow(1).height = 60;
         logoRowHeight = 60;
@@ -78,7 +78,7 @@ export class ExportacionService {
     // Header con información de la empresa - diseño mejorado
     const headerStartRow = currentRow;
     const infoStartCol = logoPath ? 2 : 1;
-    
+
     // Nombre de la empresa
     if (company.name) {
       const nameCell = worksheet.getCell(`${String.fromCharCode(64 + infoStartCol)}${currentRow}`);
@@ -89,14 +89,14 @@ export class ExportacionService {
       nameCell.fill = {
         type: 'pattern',
         pattern: 'solid',
-        fgColor: { argb: 'FFF0FDF4' }
+        fgColor: { argb: 'FFF0FDF4' },
       };
       currentRow++;
     }
-    
+
     // Información de contacto
     let infoRow = currentRow;
-    
+
     if (company.address) {
       const addressCell = worksheet.getCell(`${String.fromCharCode(64 + infoStartCol)}${infoRow}`);
       addressCell.value = `📍 ${company.address}`;
@@ -104,7 +104,7 @@ export class ExportacionService {
       addressCell.alignment = { vertical: 'middle', horizontal: 'left' };
       infoRow++;
     }
-    
+
     if (company.phone) {
       const phoneCell = worksheet.getCell(`${String.fromCharCode(64 + infoStartCol)}${infoRow}`);
       phoneCell.value = `📞 ${company.phone}`;
@@ -112,7 +112,7 @@ export class ExportacionService {
       phoneCell.alignment = { vertical: 'middle', horizontal: 'left' };
       infoRow++;
     }
-    
+
     if (company.email) {
       const emailCell = worksheet.getCell(`${String.fromCharCode(64 + infoStartCol)}${infoRow}`);
       emailCell.value = `✉️ ${company.email}`;
@@ -120,17 +120,17 @@ export class ExportacionService {
       emailCell.alignment = { vertical: 'middle', horizontal: 'left' };
       infoRow++;
     }
-    
+
     currentRow = infoRow + 1;
-    
+
     // Fecha de generación
     const dateCell = worksheet.getCell(`A${currentRow}`);
-    dateCell.value = `📅 Fecha de generación: ${new Date().toLocaleDateString('es-CO', { 
-      year: 'numeric', 
-      month: 'long', 
+    dateCell.value = `📅 Fecha de generación: ${new Date().toLocaleDateString('es-CO', {
+      year: 'numeric',
+      month: 'long',
       day: 'numeric',
       hour: '2-digit',
-      minute: '2-digit'
+      minute: '2-digit',
     })}`;
     dateCell.font = { size: 9, italic: true, color: { argb: 'FF6B7280' } };
     currentRow += 2; // Espacio antes de la tabla
@@ -142,7 +142,7 @@ export class ExportacionService {
       cell.fill = {
         type: 'pattern',
         pattern: 'solid',
-        fgColor: { argb: 'FF059669' }
+        fgColor: { argb: 'FF059669' },
       };
     });
     separatorRow.height = 3;
@@ -153,26 +153,26 @@ export class ExportacionService {
     columns.forEach((col, index) => {
       const cell = headerRow.getCell(index + 1);
       cell.value = col.label;
-      cell.font = { 
-        bold: true, 
+      cell.font = {
+        bold: true,
         size: 11,
-        color: { argb: 'FFFFFFFF' } 
+        color: { argb: 'FFFFFFFF' },
       };
       cell.fill = {
         type: 'pattern',
         pattern: 'solid',
-        fgColor: { argb: 'FF059669' } // Verde emerald
+        fgColor: { argb: 'FF059669' }, // Verde emerald
       };
-      cell.alignment = { 
-        vertical: 'middle', 
+      cell.alignment = {
+        vertical: 'middle',
         horizontal: 'center',
-        wrapText: true
+        wrapText: true,
       };
       cell.border = {
         top: { style: 'medium', color: { argb: 'FF047857' } },
         left: { style: 'thin', color: { argb: 'FF047857' } },
         bottom: { style: 'medium', color: { argb: 'FF047857' } },
-        right: { style: 'thin', color: { argb: 'FF047857' } }
+        right: { style: 'thin', color: { argb: 'FF047857' } },
       };
     });
     headerRow.height = 30;
@@ -184,7 +184,7 @@ export class ExportacionService {
       columns.forEach((col, colIndex) => {
         const cell = row.getCell(colIndex + 1);
         const value = item[col.key];
-        
+
         // Convertir objetos complejos a strings
         let cellValue: any = '';
         if (value && typeof value === 'object' && !Array.isArray(value)) {
@@ -198,38 +198,40 @@ export class ExportacionService {
             cellValue = JSON.stringify(value);
           }
         } else if (Array.isArray(value)) {
-          cellValue = value.map(v => 
-            typeof v === 'object' && v !== null && 'nombre' in v ? v.nombre : String(v)
-          ).join(', ');
+          cellValue = value
+            .map((v) =>
+              typeof v === 'object' && v !== null && 'nombre' in v ? v.nombre : String(v),
+            )
+            .join(', ');
         } else {
           cellValue = value ?? '';
         }
-        
+
         cell.value = cellValue;
-        cell.alignment = { 
-          vertical: 'middle', 
-          horizontal: 'left', 
-          wrapText: true 
+        cell.alignment = {
+          vertical: 'middle',
+          horizontal: 'left',
+          wrapText: true,
         };
         cell.border = {
           top: { style: 'thin', color: { argb: 'FFE5E7EB' } },
           left: { style: 'thin', color: { argb: 'FFE5E7EB' } },
           bottom: { style: 'thin', color: { argb: 'FFE5E7EB' } },
-          right: { style: 'thin', color: { argb: 'FFE5E7EB' } }
+          right: { style: 'thin', color: { argb: 'FFE5E7EB' } },
         };
-        
+
         // Alternar colores de fila
         if (rowIndex % 2 === 0) {
           cell.fill = {
             type: 'pattern',
             pattern: 'solid',
-            fgColor: { argb: 'FFF9FAFB' }
+            fgColor: { argb: 'FFF9FAFB' },
           };
         } else {
           cell.fill = {
             type: 'pattern',
             pattern: 'solid',
-            fgColor: { argb: 'FFFFFFFF' }
+            fgColor: { argb: 'FFFFFFFF' },
           };
         }
       });
@@ -253,16 +255,16 @@ export class ExportacionService {
       try {
         const { columns, data, filename = 'export', companyInfo } = config;
         const company = { ...this.defaultCompanyInfo, ...companyInfo };
-        
+
         // Crear documento PDF con PDFKit
-        const doc = new PDFDocument({ 
-          margin: 50, 
+        const doc = new PDFDocument({
+          margin: 50,
           size: 'A4',
           info: {
             Title: filename,
             Author: company.name,
-            Subject: 'Reporte generado automáticamente'
-          }
+            Subject: 'Reporte generado automáticamente',
+          },
         });
         const buffers: Buffer[] = [];
 
@@ -279,7 +281,8 @@ export class ExportacionService {
 
         // Header con fondo de color
         const headerHeight = 100;
-        doc.rect(margin, yPosition, pageWidth - (margin * 2), headerHeight)
+        doc
+          .rect(margin, yPosition, pageWidth - margin * 2, headerHeight)
           .fillColor('#F0FDF4')
           .fill()
           .strokeColor('#059669')
@@ -293,7 +296,7 @@ export class ExportacionService {
             doc.image(logoPath, margin + 10, yPosition + 10, {
               width: 100,
               height: 60,
-              fit: [100, 60]
+              fit: [100, 60],
             });
           } catch (error) {
             // Ignorar error al cargar logo en PDF
@@ -305,20 +308,19 @@ export class ExportacionService {
         let textY = yPosition + 15;
 
         // Nombre de la empresa
-        doc.fontSize(22)
+        doc
+          .fontSize(22)
           .font('Helvetica-Bold')
           .fillColor('#059669')
           .text(company.name || 'Jarlepsis', textStartX, textY, {
             width: pageWidth - textStartX - margin,
-            align: 'left'
+            align: 'left',
           });
         textY += 25;
 
         // Información de contacto
-        doc.fontSize(10)
-          .font('Helvetica')
-          .fillColor('#374151');
-        
+        doc.fontSize(10).font('Helvetica').fillColor('#374151');
+
         if (company.address) {
           doc.text(`📍 ${company.address}`, textStartX, textY);
           textY += 15;
@@ -335,24 +337,26 @@ export class ExportacionService {
         yPosition += headerHeight + 15;
 
         // Fecha de generación
-        doc.fontSize(9)
+        doc
+          .fontSize(9)
           .font('Helvetica-Oblique')
           .fillColor('#6B7280')
           .text(
-            `📅 Fecha de generación: ${new Date().toLocaleDateString('es-CO', { 
-              year: 'numeric', 
-              month: 'long', 
+            `📅 Fecha de generación: ${new Date().toLocaleDateString('es-CO', {
+              year: 'numeric',
+              month: 'long',
               day: 'numeric',
               hour: '2-digit',
-              minute: '2-digit'
+              minute: '2-digit',
             })}`,
             margin,
-            yPosition
+            yPosition,
           );
         yPosition += 20;
 
         // Línea separadora decorativa
-        doc.moveTo(margin, yPosition)
+        doc
+          .moveTo(margin, yPosition)
           .lineTo(pageWidth - margin, yPosition)
           .strokeColor('#059669')
           .lineWidth(3)
@@ -360,7 +364,7 @@ export class ExportacionService {
         yPosition += 20;
 
         // Calcular ancho de columnas
-        const availableWidth = pageWidth - (margin * 2);
+        const availableWidth = pageWidth - margin * 2;
         const columnWidth = availableWidth / columns.length;
         const startX = margin;
 
@@ -368,24 +372,24 @@ export class ExportacionService {
         doc.fontSize(10).font('Helvetica-Bold');
         let xPosition = startX;
         const headerY = yPosition;
-        
+
         columns.forEach((col, index) => {
           // Fondo del encabezado
-          doc.rect(xPosition, headerY, columnWidth, 30)
+          doc
+            .rect(xPosition, headerY, columnWidth, 30)
             .fillColor('#059669')
             .fill()
             .strokeColor('#047857')
             .lineWidth(1.5)
             .stroke();
-          
+
           // Texto del encabezado
-          doc.fillColor('#FFFFFF')
-            .text(col.label, xPosition + 8, headerY + 10, {
-              width: columnWidth - 16,
-              align: 'left',
-              ellipsis: true
-            });
-          
+          doc.fillColor('#FFFFFF').text(col.label, xPosition + 8, headerY + 10, {
+            width: columnWidth - 16,
+            align: 'left',
+            ellipsis: true,
+          });
+
           xPosition += columnWidth;
         });
         yPosition += 30;
@@ -401,11 +405,11 @@ export class ExportacionService {
 
           xPosition = startX;
           const rowY = yPosition;
-          
+
           columns.forEach((col, colIndex) => {
             const value = item[col.key];
             let cellValue = '';
-            
+
             if (value && typeof value === 'object' && !Array.isArray(value)) {
               if ('label' in value) {
                 cellValue = String(value.label);
@@ -415,35 +419,31 @@ export class ExportacionService {
                 cellValue = String(value);
               }
             } else if (Array.isArray(value)) {
-              cellValue = value.map(v => String(v)).join(', ');
+              cellValue = value.map((v) => String(v)).join(', ');
             } else {
               cellValue = String(value ?? '');
             }
 
             // Fondo alternado para filas
             if (rowIndex % 2 === 0) {
-              doc.rect(xPosition, rowY, columnWidth, 25)
-                .fillColor('#F9FAFB')
-                .fill();
+              doc.rect(xPosition, rowY, columnWidth, 25).fillColor('#F9FAFB').fill();
             } else {
-              doc.rect(xPosition, rowY, columnWidth, 25)
-                .fillColor('#FFFFFF')
-                .fill();
+              doc.rect(xPosition, rowY, columnWidth, 25).fillColor('#FFFFFF').fill();
             }
 
             // Borde de celda
-            doc.rect(xPosition, rowY, columnWidth, 25)
+            doc
+              .rect(xPosition, rowY, columnWidth, 25)
               .strokeColor('#E5E7EB')
               .lineWidth(0.5)
               .stroke();
 
             // Texto de celda
-            doc.fillColor('#111827')
-              .text(cellValue, xPosition + 6, rowY + 7, {
-                width: columnWidth - 12,
-                align: 'left',
-                ellipsis: true
-              });
+            doc.fillColor('#111827').text(cellValue, xPosition + 6, rowY + 7, {
+              width: columnWidth - 12,
+              align: 'left',
+              ellipsis: true,
+            });
 
             xPosition += columnWidth;
           });

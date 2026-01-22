@@ -1,4 +1,9 @@
-import { BadRequestException, UnauthorizedException, ConflictException, ForbiddenException } from '@nestjs/common';
+import {
+  BadRequestException,
+  UnauthorizedException,
+  ConflictException,
+  ForbiddenException,
+} from '@nestjs/common';
 
 // ==========================================
 // EXCEPCIONES DE ELIMINACIÓN
@@ -87,7 +92,7 @@ export class HasRelatedEntitiesException extends BadRequestException {
     const relationsList = Object.entries(relations)
       .map(([key, value]) => `${value} ${key}`)
       .join(', ');
-    
+
     super({
       statusCode: 400,
       message: `No se puede eliminar ${entityName} porque tiene: ${relationsList}`,
@@ -142,7 +147,7 @@ export class InvalidQuantityException extends BadRequestException {
     let message = `Cantidad inválida: ${quantity}`;
     if (minAllowed !== undefined) message += `. Mínimo permitido: ${minAllowed}`;
     if (maxAllowed !== undefined) message += `. Máximo permitido: ${maxAllowed}`;
-    
+
     super({
       statusCode: 400,
       message,

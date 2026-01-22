@@ -18,12 +18,12 @@ import { JwtService } from '@nestjs/jwt';
       const frontendUrl = process.env.FRONTEND_URL || 'http://localhost:4173';
       const miniappUrl = process.env.MINIAPP_URL || 'http://localhost:4174';
       const allowedOrigins = [frontendUrl, miniappUrl];
-      
+
       // Permitir requests sin origin (mobile apps, etc.)
       if (!origin) {
         return callback(null, true);
       }
-      
+
       // Verificar si el origin está en la lista permitida
       if (allowedOrigins.includes(origin)) {
         callback(null, true);
@@ -51,8 +51,9 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect {
 
   async handleConnection(client: Socket) {
     try {
-      const token = client.handshake.auth.token || client.handshake.headers.authorization?.split(' ')[1];
-      
+      const token =
+        client.handshake.auth.token || client.handshake.headers.authorization?.split(' ')[1];
+
       if (!token) {
         this.logger.warn('Conexión rechazada: sin token');
         client.disconnect();
@@ -84,7 +85,7 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect {
 
   handleDisconnect(client: Socket) {
     const userId = (client as any).userId;
-    
+
     if (userId) {
       this.users.delete(userId);
       this.server.emit('usuario_desconectado', { userId });
@@ -93,7 +94,10 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect {
   }
 
   @SubscribeMessage('unirse_grupo')
-  async handleUnirseGrupo(@ConnectedSocket() client: Socket, @MessageBody() data: { grupoId: number }) {
+  async handleUnirseGrupo(
+    @ConnectedSocket() client: Socket,
+    @MessageBody() data: { grupoId: number },
+  ) {
     const userId = (client as any).userId;
     const roomName = `grupo_${data.grupoId}`;
 
@@ -107,7 +111,10 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect {
   }
 
   @SubscribeMessage('salir_grupo')
-  async handleSalirGrupo(@ConnectedSocket() client: Socket, @MessageBody() data: { grupoId: number }) {
+  async handleSalirGrupo(
+    @ConnectedSocket() client: Socket,
+    @MessageBody() data: { grupoId: number },
+  ) {
     const userId = (client as any).userId;
     const roomName = `grupo_${data.grupoId}`;
 
@@ -136,7 +143,9 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect {
       this.server.to(socketId).emit('notificacion_nueva', notificacion);
       this.logger.log(`Notificación enviada al usuario ${usuarioId} (socket: ${socketId})`);
     } else {
-      this.logger.warn(`Usuario ${usuarioId} no está conectado, notificación guardada pero no emitida`);
+      this.logger.warn(
+        `Usuario ${usuarioId} no está conectado, notificación guardada pero no emitida`,
+      );
     }
   }
 
@@ -189,7 +198,9 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect {
         });
       }
     });
-    this.logger.log(`Chat ${grupoId} cerrado. Notificación enviada a ${usuariosIds.length} usuarios.`);
+    this.logger.log(
+      `Chat ${grupoId} cerrado. Notificación enviada a ${usuariosIds.length} usuarios.`,
+    );
   }
 
   emitirMensajeSistema(grupoId: number, mensaje: any) {
@@ -197,4 +208,3 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect {
     this.logger.log(`Mensaje del sistema emitido al grupo ${grupoId}`);
   }
 }
-

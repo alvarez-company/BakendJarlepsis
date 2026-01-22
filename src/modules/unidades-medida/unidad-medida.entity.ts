@@ -33,4 +33,3 @@ export class UnidadMedida {
   @UpdateDateColumn()
   fechaActualizacion: Date;
 }
-

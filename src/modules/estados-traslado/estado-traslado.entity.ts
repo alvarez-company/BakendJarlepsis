@@ -29,4 +29,3 @@ export class EstadoTrasladoEntity {
   @UpdateDateColumn()
   fechaActualizacion: Date;
 }
-

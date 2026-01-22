@@ -25,11 +25,18 @@ export class MensajesService {
     private gruposService: GruposService,
   ) {}
 
-  async enviarMensaje(grupoId: number, usuarioId: number, texto: string, mensajeRespuestaId?: number): Promise<Mensaje> {
+  async enviarMensaje(
+    grupoId: number,
+    usuarioId: number,
+    texto: string,
+    mensajeRespuestaId?: number,
+  ): Promise<Mensaje> {
     // Validar que el usuario esté activo
     const usuario = await this.usersService.findOne(usuarioId);
     if (!usuario || !usuario.usuarioEstado) {
-      throw new BadRequestException('No puedes enviar mensajes. Tu cuenta está bloqueada o inactiva.');
+      throw new BadRequestException(
+        'No puedes enviar mensajes. Tu cuenta está bloqueada o inactiva.',
+      );
     }
 
     // Validar que el grupo esté activo
@@ -43,9 +50,9 @@ export class MensajesService {
       mensajeTexto: texto,
       mensajeRespuestaId,
     });
-    
+
     const mensajeGuardado = await this.mensajesRepository.save(mensaje);
-    
+
     // Cargar relaciones para emitir
     const mensajeConRelaciones = await this.mensajesRepository.findOne({
       where: { mensajeId: mensajeGuardado.mensajeId },
@@ -57,7 +64,7 @@ export class MensajesService {
 
     // Obtener usuarios del grupo para enviar notificaciones
     const usuariosDelGrupo = await this.obtenerUsuariosDelGrupo(grupoId);
-    const usuariosParaNotificar = usuariosDelGrupo.filter(id => id !== usuarioId);
+    const usuariosParaNotificar = usuariosDelGrupo.filter((id) => id !== usuarioId);
 
     // Crear notificaciones
     if (usuariosParaNotificar.length > 0) {
@@ -76,12 +83,16 @@ export class MensajesService {
   private async obtenerUsuariosDelGrupo(grupoId: number): Promise<number[]> {
     const resultado = await this.mensajesRepository.query(
       'SELECT DISTINCT usuarioId FROM usuarios_grupos WHERE grupoId = ? AND activo = true',
-      [grupoId]
+      [grupoId],
     );
     return resultado.map((row: any) => row.usuarioId);
   }
 
-  async obtenerMensajesGrupo(grupoId: number, limit: number = 50, offset: number = 0): Promise<Mensaje[]> {
+  async obtenerMensajesGrupo(
+    grupoId: number,
+    limit: number = 50,
+    offset: number = 0,
+  ): Promise<Mensaje[]> {
     return this.mensajesRepository.find({
       where: { grupoId, mensajeActivo: true },
       relations: ['usuario', 'mensajeRespuesta', 'reacciones'],
@@ -94,7 +105,7 @@ export class MensajesService {
   async editarMensaje(mensajeId: number, nuevoTexto: string, usuarioId: number): Promise<Mensaje> {
     const mensaje = await this.mensajesRepository.findOne({ where: { mensajeId, usuarioId } });
     if (!mensaje) throw new Error('Mensaje no encontrado o sin permisos');
-    
+
     mensaje.mensajeTexto = nuevoTexto;
     mensaje.mensajeEditado = true;
     return this.mensajesRepository.save(mensaje);
@@ -103,7 +114,7 @@ export class MensajesService {
   async eliminarMensaje(mensajeId: number, usuarioId: number): Promise<void> {
     const mensaje = await this.mensajesRepository.findOne({ where: { mensajeId, usuarioId } });
     if (!mensaje) throw new Error('Mensaje no encontrado o sin permisos');
-    
+
     mensaje.mensajeActivo = false;
     await this.mensajesRepository.save(mensaje);
   }
@@ -117,6 +128,4 @@ export class MensajesService {
     });
     return mensajes.length > 0 ? mensajes[0] : null;
   }
-
 }
-

@@ -121,7 +121,11 @@ describe('MensajesService', () => {
         mensajeEditado: false,
       };
       mockRepository.findOne.mockResolvedValue(mockMensaje);
-      mockRepository.save.mockResolvedValue({ ...mockMensaje, mensajeTexto: 'New text', mensajeEditado: true });
+      mockRepository.save.mockResolvedValue({
+        ...mockMensaje,
+        mensajeTexto: 'New text',
+        mensajeEditado: true,
+      });
 
       const result = await service.editarMensaje(1, 'New text', 1);
 
@@ -130,4 +134,3 @@ describe('MensajesService', () => {
     });
   });
 });
-

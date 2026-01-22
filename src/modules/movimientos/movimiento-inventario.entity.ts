@@ -128,4 +128,3 @@ export class MovimientoInventario {
   @UpdateDateColumn()
   fechaActualizacion: Date;
 }
-

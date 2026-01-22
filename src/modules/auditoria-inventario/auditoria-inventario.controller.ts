@@ -10,9 +10,7 @@ import { Roles } from '../../common/decorators/roles.decorator';
 @Controller('auditoria-inventario')
 @UseGuards(JwtAuthGuard, RolesGuard)
 export class AuditoriaInventarioController {
-  constructor(
-    private readonly auditoriaService: AuditoriaInventarioService,
-  ) {}
+  constructor(private readonly auditoriaService: AuditoriaInventarioService) {}
 
   @Get('material/:materialId')
   @Roles('superadmin', 'admin', 'administrador', 'almacenista')
@@ -52,4 +50,3 @@ export class AuditoriaInventarioController {
     });
   }
 }
-

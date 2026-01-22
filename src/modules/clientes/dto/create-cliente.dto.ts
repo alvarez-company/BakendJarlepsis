@@ -3,7 +3,10 @@ import { IsString, IsNumber, IsEmail, IsOptional, IsEnum } from 'class-validator
 import { EstadoCliente } from '../cliente.entity';
 
 export class CreateClienteDto {
-  @ApiProperty({ example: 'Juan Pérez García', description: 'Nombre completo del usuario (persona a quien se le realiza la instalación)' })
+  @ApiProperty({
+    example: 'Juan Pérez García',
+    description: 'Nombre completo del usuario (persona a quien se le realiza la instalación)',
+  })
   @IsString()
   nombreUsuario: string;
 
@@ -36,4 +39,3 @@ export class CreateClienteDto {
   @IsOptional()
   cantidadInstalaciones?: number;
 }
-

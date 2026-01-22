@@ -58,4 +58,3 @@ export class CreateMaterialesBodegas1763053167123 implements MigrationInterface 
     await queryRunner.query('DROP TABLE IF EXISTS `materiales_bodegas`');
   }
 }
-

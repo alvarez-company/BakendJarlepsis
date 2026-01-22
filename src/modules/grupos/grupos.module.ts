@@ -23,4 +23,3 @@ import { ChatModule } from '../chat/chat.module';
   exports: [GruposService],
 })
 export class GruposModule {}
-

@@ -29,4 +29,3 @@ import { AuditoriaModule } from '../auditoria/auditoria.module';
   exports: [AsignacionesTecnicosService],
 })
 export class AsignacionesTecnicosModule {}
-

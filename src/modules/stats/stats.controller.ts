@@ -13,7 +13,16 @@ export class StatsController {
   constructor(private readonly statsService: StatsService) {}
 
   @Get('dashboard')
-  @Roles('superadmin', 'admin', 'administrador', 'almacenista', 'tecnico', 'soldador', 'bodega-internas', 'bodega-redes')
+  @Roles(
+    'superadmin',
+    'admin',
+    'administrador',
+    'almacenista',
+    'tecnico',
+    'soldador',
+    'bodega-internas',
+    'bodega-redes',
+  )
   @ApiOperation({ summary: 'Get dashboard statistics' })
   async getDashboardStats(@Request() req) {
     return {
@@ -21,4 +30,3 @@ export class StatsController {
     };
   }
 }
-

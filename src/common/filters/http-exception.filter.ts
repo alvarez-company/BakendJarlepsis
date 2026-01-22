@@ -18,14 +18,10 @@ export class AllExceptionsFilter implements ExceptionFilter {
     const request = ctx.getRequest<Request>();
 
     const status =
-      exception instanceof HttpException
-        ? exception.getStatus()
-        : HttpStatus.INTERNAL_SERVER_ERROR;
+      exception instanceof HttpException ? exception.getStatus() : HttpStatus.INTERNAL_SERVER_ERROR;
 
     const message =
-      exception instanceof HttpException
-        ? exception.getResponse()
-        : 'Internal server error';
+      exception instanceof HttpException ? exception.getResponse() : 'Internal server error';
 
     const errorResponse = {
       statusCode: status,
@@ -39,7 +35,7 @@ export class AllExceptionsFilter implements ExceptionFilter {
     console.error('='.repeat(80));
     console.error(`[${request.method}] ${request.url}`);
     console.error('Error Response:', JSON.stringify(errorResponse, null, 2));
-    
+
     if (exception instanceof Error) {
       console.error('Error Name:', exception.name);
       console.error('Error Message:', exception.message);
@@ -53,14 +49,14 @@ export class AllExceptionsFilter implements ExceptionFilter {
       console.error('Exception:', exception);
     }
     console.error('='.repeat(80));
-    
+
     // También usar el logger de NestJS
     this.logger.error(
       `${request.method} ${request.url}`,
       JSON.stringify(errorResponse, null, 2),
       'ExceptionFilter',
     );
-    
+
     if (exception instanceof Error) {
       this.logger.error(`Error: ${exception.message}`, exception.stack, 'ExceptionFilter');
     }
@@ -68,4 +64,3 @@ export class AllExceptionsFilter implements ExceptionFilter {
     response.status(status).json(errorResponse);
   }
 }
-

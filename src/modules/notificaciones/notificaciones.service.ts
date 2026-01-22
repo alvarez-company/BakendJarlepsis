@@ -34,17 +34,20 @@ export class NotificacionesService {
       });
 
       const saved = await this.notificacionesRepository.save(notificacion);
-      
+
       // Emitir notificación por WebSocket si está habilitado
       if (emitirSocket) {
         try {
           this.chatGateway.emitirNotificacion(usuarioId, saved);
         } catch (wsError) {
-          console.error(`[NotificacionesService] Error al emitir notificación por WebSocket:`, wsError);
+          console.error(
+            `[NotificacionesService] Error al emitir notificación por WebSocket:`,
+            wsError,
+          );
           // No lanzar error, la notificación ya se guardó en la BD
         }
       }
-      
+
       return saved;
     } catch (error) {
       console.error(`[NotificacionesService] ❌ Error al crear notificación:`, error);
@@ -157,10 +160,10 @@ export class NotificacionesService {
     clienteNombre: string,
     motivo?: string,
   ): Promise<Notificacion> {
-    const contenido = motivo 
+    const contenido = motivo
       ? `La instalación ${instalacionCodigo} para el cliente ${clienteNombre} tiene una novedad técnica: ${motivo}.`
       : `La instalación ${instalacionCodigo} para el cliente ${clienteNombre} tiene una novedad técnica.`;
-    
+
     return this.crearNotificacion(
       tecnicoId,
       TipoNotificacion.INSTALACION_NOVEDAD,
@@ -182,10 +185,10 @@ export class NotificacionesService {
     clienteNombre: string,
     motivo?: string,
   ): Promise<Notificacion> {
-    const contenido = motivo 
+    const contenido = motivo
       ? `La instalación ${instalacionCodigo} para el cliente ${clienteNombre} ha sido anulada. Motivo: ${motivo}.`
       : `La instalación ${instalacionCodigo} para el cliente ${clienteNombre} ha sido anulada.`;
-    
+
     return this.crearNotificacion(
       tecnicoId,
       TipoNotificacion.INSTALACION_ANULADA,
@@ -207,10 +210,11 @@ export class NotificacionesService {
     asignadorNombre: string,
     bodegaNombre?: string,
   ): Promise<Notificacion> {
-    const mensaje = cantidadMateriales === 1
-      ? `Se te ha asignado 1 material${bodegaNombre ? ` desde ${bodegaNombre}` : ''} por ${asignadorNombre}.`
-      : `Se te han asignado ${cantidadMateriales} materiales${bodegaNombre ? ` desde ${bodegaNombre}` : ''} por ${asignadorNombre}.`;
-    
+    const mensaje =
+      cantidadMateriales === 1
+        ? `Se te ha asignado 1 material${bodegaNombre ? ` desde ${bodegaNombre}` : ''} por ${asignadorNombre}.`
+        : `Se te han asignado ${cantidadMateriales} materiales${bodegaNombre ? ` desde ${bodegaNombre}` : ''} por ${asignadorNombre}.`;
+
     return this.crearNotificacion(
       tecnicoId,
       TipoNotificacion.MATERIALES_ASIGNADOS,
@@ -318,8 +322,8 @@ export class NotificacionesService {
   async contarMensajesNoLeidos(usuarioId: number): Promise<number> {
     try {
       const count = await this.notificacionesRepository.count({
-        where: { 
-          usuarioId, 
+        where: {
+          usuarioId,
           leida: false,
           tipoNotificacion: TipoNotificacion.MENSAJE_NUEVO,
         },
@@ -357,15 +361,15 @@ export class NotificacionesService {
   async marcarLeidasPorGrupo(grupoId: number, usuarioId: number): Promise<void> {
     const fechaLectura = new Date();
     await this.notificacionesRepository.update(
-      { 
-        grupoId, 
-        usuarioId, 
+      {
+        grupoId,
+        usuarioId,
         tipoNotificacion: TipoNotificacion.MENSAJE_NUEVO,
-        leida: false 
+        leida: false,
       },
-      { 
-        leida: true, 
-        fechaLectura 
+      {
+        leida: true,
+        fechaLectura,
       },
     );
 
@@ -373,4 +377,3 @@ export class NotificacionesService {
     this.chatGateway.emitirNotificacionesTodasLeidas(usuarioId);
   }
 }
-

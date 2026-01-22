@@ -38,4 +38,3 @@ export class Proyecto {
   @UpdateDateColumn()
   fechaActualizacion: Date;
 }
-

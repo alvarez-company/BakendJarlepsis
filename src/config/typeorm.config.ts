@@ -17,4 +17,3 @@ export default new DataSource({
   charset: 'utf8mb4',
   timezone: 'Z',
 });
-

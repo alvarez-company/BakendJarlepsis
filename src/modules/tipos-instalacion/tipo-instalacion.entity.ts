@@ -27,4 +27,3 @@ export class TipoInstalacion {
   @UpdateDateColumn()
   fechaActualizacion: Date;
 }
-

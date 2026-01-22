@@ -45,4 +45,3 @@ export class Departamento {
   @UpdateDateColumn()
   fechaActualizacion: Date;
 }
-

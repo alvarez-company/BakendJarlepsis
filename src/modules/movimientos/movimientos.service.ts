@@ -1,7 +1,17 @@
-import { Injectable, NotFoundException, BadRequestException, Inject, forwardRef } from '@nestjs/common';
+import {
+  Injectable,
+  NotFoundException,
+  BadRequestException,
+  Inject,
+  forwardRef,
+} from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
-import { MovimientoInventario, TipoMovimiento, EstadoMovimiento } from './movimiento-inventario.entity';
+import {
+  MovimientoInventario,
+  TipoMovimiento,
+  EstadoMovimiento,
+} from './movimiento-inventario.entity';
 import { CreateMovimientoDto } from './dto/create-movimiento.dto';
 import { MaterialesService } from '../materiales/materiales.service';
 import { InventariosService } from '../inventarios/inventarios.service';
@@ -86,7 +96,8 @@ export class MovimientosService {
 
   async create(createMovimientoDto: CreateMovimientoDto): Promise<MovimientoInventario[]> {
     // Generar código único para agrupar los movimientos
-    const movimientoCodigo = createMovimientoDto.movimientoCodigo ||
+    const movimientoCodigo =
+      createMovimientoDto.movimientoCodigo ||
       `${createMovimientoDto.movimientoTipo.toUpperCase()}-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
 
     // NO generar identificador único aquí - se generará por cada movimiento individual
@@ -95,9 +106,13 @@ export class MovimientosService {
     const movimientosCreados: MovimientoInventario[] = [];
     const inventarioCache = new Map<number, { inventarioId: number; bodegaId: number | null }>();
     const bodegaCache = new Map<number, { inventarioId: number | null; bodegaId: number | null }>();
-    let defaultInventarioContext: { inventarioId: number | null; bodegaId: number | null } | undefined;
+    let defaultInventarioContext:
+      | { inventarioId: number | null; bodegaId: number | null }
+      | undefined;
 
-    const cargarInventario = async (inventarioId?: number | null): Promise<{ inventarioId: number; bodegaId: number | null } | null> => {
+    const cargarInventario = async (
+      inventarioId?: number | null,
+    ): Promise<{ inventarioId: number; bodegaId: number | null } | null> => {
       if (!inventarioId) return null;
       if (inventarioCache.has(inventarioId)) {
         return inventarioCache.get(inventarioId)!;
@@ -118,7 +133,9 @@ export class MovimientosService {
       }
     };
 
-    const cargarPorBodega = async (bodegaId?: number | null): Promise<{ inventarioId: number | null; bodegaId: number | null } | null> => {
+    const cargarPorBodega = async (
+      bodegaId?: number | null,
+    ): Promise<{ inventarioId: number | null; bodegaId: number | null } | null> => {
       if (!bodegaId) return null;
       if (bodegaCache.has(bodegaId)) {
         return bodegaCache.get(bodegaId)!;
@@ -142,7 +159,9 @@ export class MovimientosService {
       return fallback;
     };
 
-    const obtenerContextoInventario = async (material: any): Promise<{ inventarioId: number | null; bodegaId: number | null }> => {
+    const obtenerContextoInventario = async (
+      material: any,
+    ): Promise<{ inventarioId: number | null; bodegaId: number | null }> => {
       // PRIORIDAD 1: Preferencia explícita del DTO (siempre usar este si está presente)
       // Si inventarioId es explícitamente null, retornar null (va a sede)
       if (createMovimientoDto.inventarioId === null) {
@@ -159,7 +178,9 @@ export class MovimientosService {
       }
 
       // Inventario directo del material
-      const materialInventario = await cargarInventario(material?.inventarioId || material?.inventario?.inventarioId);
+      const materialInventario = await cargarInventario(
+        material?.inventarioId || material?.inventario?.inventarioId,
+      );
       if (materialInventario) {
         return materialInventario;
       }
@@ -203,21 +224,24 @@ export class MovimientosService {
       // Verificar que el material existe
       let material = await this.materialesService.findOne(materialDto.materialId);
       let materialIdFinal = materialDto.materialId;
-      let precioUnitario = materialDto.movimientoPrecioUnitario;
-      
+      const precioUnitario = materialDto.movimientoPrecioUnitario;
+
       const inventarioContexto = await obtenerContextoInventario(material);
       // Permitir movimientos sin inventarioId (se asignará después desde la lista)
       const inventarioDestino = inventarioContexto?.inventarioId || null;
       const bodegaDestino = inventarioContexto?.bodegaId || null;
 
       // Si es una ENTRADA con proveedor diferente, crear o encontrar variante
-      if (createMovimientoDto.movimientoTipo === TipoMovimiento.ENTRADA && createMovimientoDto.proveedorId) {
+      if (
+        createMovimientoDto.movimientoTipo === TipoMovimiento.ENTRADA &&
+        createMovimientoDto.proveedorId
+      ) {
         // Verificar si el proveedor es diferente al del material original
         if (material.proveedorId !== createMovimientoDto.proveedorId) {
           // Buscar si ya existe una variante con este proveedor
           const varianteExistente = await this.materialesService.findByProveedorAndCodigo(
             createMovimientoDto.proveedorId,
-            material.materialCodigo
+            material.materialCodigo,
           );
 
           if (varianteExistente) {
@@ -230,7 +254,7 @@ export class MovimientosService {
               material,
               createMovimientoDto.proveedorId,
               inventarioDestino,
-              precioUnitario
+              precioUnitario,
             );
             material = nuevaVariante;
             materialIdFinal = nuevaVariante.materialId;
@@ -251,7 +275,7 @@ export class MovimientosService {
       if (createMovimientoDto.movimientoTipo === TipoMovimiento.SALIDA) {
         const materialFIFO = await this.materialesService.findMaterialFIFO(
           material.materialCodigo,
-          materialDto.movimientoCantidad
+          materialDto.movimientoCantidad,
         );
         if (materialFIFO) {
           materialIdFinal = materialFIFO.materialId;
@@ -260,7 +284,9 @@ export class MovimientosService {
 
       // Generar identificador único para este movimiento individual
       // Cada movimiento debe tener su propio identificador único, incluso si comparten el mismo código
-      const identificadorUnicoMovimiento = await this.generarIdentificadorUnico(createMovimientoDto.movimientoTipo);
+      const identificadorUnicoMovimiento = await this.generarIdentificadorUnico(
+        createMovimientoDto.movimientoTipo,
+      );
 
       // Crear el movimiento con el materialId correcto
       // Nota: bodegaId no se guarda porque la columna no existe en la BD
@@ -275,11 +301,12 @@ export class MovimientosService {
         proveedorId: createMovimientoDto.proveedorId || null,
         movimientoCodigo: movimientoCodigo,
         identificadorUnico: identificadorUnicoMovimiento, // Identificador único autogenerado por movimiento
-        numerosMedidor: materialDto.numerosMedidor && materialDto.numerosMedidor.length > 0 
-          ? materialDto.numerosMedidor 
-          : null, // Guardar números de medidor en el movimiento
+        numerosMedidor:
+          materialDto.numerosMedidor && materialDto.numerosMedidor.length > 0
+            ? materialDto.numerosMedidor
+            : null, // Guardar números de medidor en el movimiento
       };
-      
+
       // Agregar información del origen (bodega o técnico) para salidas y devoluciones
       // IMPORTANTE: Si el origen es técnico, NO establecer inventarioId
       if (createMovimientoDto.origenTipo) {
@@ -303,15 +330,10 @@ export class MovimientosService {
           movimientoData.inventarioId = inventarioDestino;
         }
       }
-      
-      let movimientoGuardado: any;
-      try {
-        const movimiento = this.movimientosRepository.create(movimientoData);
-        movimientoGuardado = await this.movimientosRepository.save(movimiento);
-      } catch (saveError: any) {
-        throw saveError;
-      }
-      
+
+      const movimiento = this.movimientosRepository.create(movimientoData);
+      const movimientoGuardado = (await this.movimientosRepository.save(movimiento)) as unknown as MovimientoInventario;
+
       // Obtener el movimiento guardado para agregarlo a la lista
       // Usar solo los datos necesarios para evitar problemas de serialización
       if (movimientoGuardado) {
@@ -331,7 +353,9 @@ export class MovimientosService {
           let bodegaId: number | undefined = undefined;
           if (movimientoGuardado.inventarioId) {
             try {
-              const inventario = await this.inventariosService.findOne(movimientoGuardado.inventarioId);
+              const inventario = await this.inventariosService.findOne(
+                movimientoGuardado.inventarioId,
+              );
               bodegaId = inventario.bodegaId || inventario.bodega?.bodegaId;
             } catch (error) {
               // Error silencioso
@@ -344,12 +368,15 @@ export class MovimientosService {
             usuarioId: createMovimientoDto.usuarioId,
             descripcion: `${getTipoLabel(tipoMovimiento)}: ${materialDto.movimientoCantidad} unidades`,
             cantidadNueva: materialDto.movimientoCantidad,
-            diferencia: tipoMovimiento === TipoMovimiento.ENTRADA 
-              ? materialDto.movimientoCantidad 
-              : -materialDto.movimientoCantidad,
+            diferencia:
+              tipoMovimiento === TipoMovimiento.ENTRADA
+                ? materialDto.movimientoCantidad
+                : -materialDto.movimientoCantidad,
             bodegaId,
             movimientoId: movimientoGuardado.movimientoId,
-            observaciones: movimientoGuardado.movimientoObservaciones || createMovimientoDto.movimientoObservaciones,
+            observaciones:
+              movimientoGuardado.movimientoObservaciones ||
+              createMovimientoDto.movimientoObservaciones,
           });
         } catch (error) {
           console.error('Error al registrar movimiento en auditoría:', error);
@@ -381,18 +408,19 @@ export class MovimientosService {
       // Manejar números de medidor si se proporcionan
       try {
         const material = await this.materialesService.findOne(materialIdFinal);
-        
+
         // Si se proporcionan números de medidor, procesarlos (el servicio marcará automáticamente el material como medidor)
         if (materialDto.numerosMedidor && materialDto.numerosMedidor.length > 0) {
           const tipoMovimiento = createMovimientoDto.movimientoTipo;
           const esEntrada = tipoMovimiento === TipoMovimiento.ENTRADA;
           const esSalida = tipoMovimiento === TipoMovimiento.SALIDA;
           const esDevolucion = tipoMovimiento === TipoMovimiento.DEVOLUCION;
-          
+
           for (const numeroMedidor of materialDto.numerosMedidor) {
             // Buscar si ya existe este número de medidor
-            let numeroMedidorEntity = await this.numerosMedidorService.findByNumero(numeroMedidor);
-            
+            const numeroMedidorEntity =
+              await this.numerosMedidorService.findByNumero(numeroMedidor);
+
             if (esEntrada) {
               // ENTRADA: Solo crear números nuevos. Los números de medidor NUNCA se repiten, incluso si ya salieron o fueron instalados
               if (!numeroMedidorEntity) {
@@ -405,17 +433,18 @@ export class MovimientosService {
               } else {
                 // Si el número ya existe, lanzar error - los números de medidor nunca se repiten
                 throw new BadRequestException(
-                  `El número de medidor "${numeroMedidor}" ya existe en el sistema. Los números de medidor son únicos y nunca se repiten, incluso si ya salieron de inventario o fueron instalados.`
+                  `El número de medidor "${numeroMedidor}" ya existe en el sistema. Los números de medidor son únicos y nunca se repiten, incluso si ya salieron de inventario o fueron instalados.`,
                 );
               }
             } else if (esSalida || esDevolucion) {
               // SALIDA/DEVOLUCIÓN: Cambiar estado según el destino
               if (!numeroMedidorEntity) {
                 // Si no existe, crear con estado según el destino
-                const estadoInicial = createMovimientoDto.origenTipo === 'tecnico' 
-                  ? EstadoNumeroMedidor.ASIGNADO_TECNICO 
-                  : EstadoNumeroMedidor.DISPONIBLE;
-                
+                const estadoInicial =
+                  createMovimientoDto.origenTipo === 'tecnico'
+                    ? EstadoNumeroMedidor.ASIGNADO_TECNICO
+                    : EstadoNumeroMedidor.DISPONIBLE;
+
                 await this.numerosMedidorService.create({
                   materialId: materialIdFinal,
                   numeroMedidor: numeroMedidor,
@@ -424,13 +453,20 @@ export class MovimientosService {
                 });
               } else {
                 // Actualizar estado según el destino
-                if (createMovimientoDto.origenTipo === 'tecnico' && createMovimientoDto.tecnicoOrigenId) {
+                if (
+                  createMovimientoDto.origenTipo === 'tecnico' &&
+                  createMovimientoDto.tecnicoOrigenId
+                ) {
                   // Si va a técnico, obtener inventario técnico
-                  const inventarioTecnico = await this.inventarioTecnicoService.findByUsuario(createMovimientoDto.tecnicoOrigenId);
-                  const inventarioItem = inventarioTecnico.find(
-                    (inv) => inv.materialId === materialIdFinal && inv.usuarioId === createMovimientoDto.tecnicoOrigenId
+                  const inventarioTecnico = await this.inventarioTecnicoService.findByUsuario(
+                    createMovimientoDto.tecnicoOrigenId,
                   );
-                  
+                  const inventarioItem = inventarioTecnico.find(
+                    (inv) =>
+                      inv.materialId === materialIdFinal &&
+                      inv.usuarioId === createMovimientoDto.tecnicoOrigenId,
+                  );
+
                   await this.numerosMedidorService.update(numeroMedidorEntity.numeroMedidorId, {
                     estado: EstadoNumeroMedidor.ASIGNADO_TECNICO,
                     usuarioId: createMovimientoDto.tecnicoOrigenId,
@@ -459,15 +495,17 @@ export class MovimientosService {
 
       // Ajustar stock según el tipo de movimiento (solo si el movimiento está completado)
       // No ajustar stock para movimientos pendientes (como las salidas automáticas)
-      const movimientoCompletado = movimientoGuardado.movimientoEstado === EstadoMovimiento.COMPLETADA;
-      
+      const movimientoCompletado =
+        movimientoGuardado.movimientoEstado === EstadoMovimiento.COMPLETADA;
+
       if (movimientoCompletado) {
         const tipoMovimiento = createMovimientoDto.movimientoTipo;
         const tipoStr = String(tipoMovimiento).toLowerCase();
         const esEntrada = tipoStr === 'entrada' || tipoMovimiento === TipoMovimiento.ENTRADA;
         const esSalida = tipoStr === 'salida' || tipoMovimiento === TipoMovimiento.SALIDA;
-        const esDevolucion = tipoStr === 'devolucion' || tipoMovimiento === TipoMovimiento.DEVOLUCION;
-        
+        const esDevolucion =
+          tipoStr === 'devolucion' || tipoMovimiento === TipoMovimiento.DEVOLUCION;
+
         // Si el origen es técnico, ajustar inventario técnico (para salidas, devoluciones y entradas desde técnico)
         if (createMovimientoDto.origenTipo === 'tecnico' && createMovimientoDto.tecnicoOrigenId) {
           if (esEntrada) {
@@ -479,7 +517,10 @@ export class MovimientosService {
               createMovimientoDto.tecnicoOrigenId,
             );
             // Ajustar stock en sede/bodega destino
-            if (createMovimientoDto.inventarioId === null || (!bodegaDestino && !createMovimientoDto.inventarioId)) {
+            if (
+              createMovimientoDto.inventarioId === null ||
+              (!bodegaDestino && !createMovimientoDto.inventarioId)
+            ) {
               await this.ajustarStockSedeMovimiento(
                 materialIdFinal,
                 materialDto.movimientoCantidad,
@@ -500,13 +541,14 @@ export class MovimientosService {
               createMovimientoDto.tecnicoOrigenId,
             );
           }
-        } 
+        }
         // Si es una ENTRADA sin bodega seleccionada y sin origen técnico, ajustar stock directamente en la sede
-        else if (esEntrada && (createMovimientoDto.inventarioId === null || (!bodegaDestino && !createMovimientoDto.inventarioId))) {
-          await this.ajustarStockSedeMovimiento(
-            materialIdFinal,
-            materialDto.movimientoCantidad,
-          );
+        else if (
+          esEntrada &&
+          (createMovimientoDto.inventarioId === null ||
+            (!bodegaDestino && !createMovimientoDto.inventarioId))
+        ) {
+          await this.ajustarStockSedeMovimiento(materialIdFinal, materialDto.movimientoCantidad);
         }
         // Si el origen es bodega, ajustar stock de bodega
         else if (bodegaDestino) {
@@ -531,20 +573,27 @@ export class MovimientosService {
     }
 
     // Si es una ENTRADA y hay asignaciones a técnicos, procesarlas
-    if (createMovimientoDto.movimientoTipo === TipoMovimiento.ENTRADA && 
-        createMovimientoDto.asignacionesTecnicos && 
-        createMovimientoDto.asignacionesTecnicos.length > 0) {
-      
+    if (
+      createMovimientoDto.movimientoTipo === TipoMovimiento.ENTRADA &&
+      createMovimientoDto.asignacionesTecnicos &&
+      createMovimientoDto.asignacionesTecnicos.length > 0
+    ) {
       // Obtener el inventario de la sede para crear salidas
       // Usar el inventarioId proporcionado o el primero de los movimientos creados
       let inventarioSede: { inventarioId: number | null; bodegaId: number | null } | null = null;
       if (createMovimientoDto.inventarioId) {
         try {
-          const inventario = await this.inventariosService.findOne(createMovimientoDto.inventarioId);
+          const inventario = await this.inventariosService.findOne(
+            createMovimientoDto.inventarioId,
+          );
           if (inventario && inventario.bodega) {
             inventarioSede = {
               inventarioId: inventario.inventarioId,
-              bodegaId: inventario.bodegaId || (typeof inventario.bodega === 'object' && 'bodegaId' in inventario.bodega ? inventario.bodega.bodegaId : null),
+              bodegaId:
+                inventario.bodegaId ||
+                (typeof inventario.bodega === 'object' && 'bodegaId' in inventario.bodega
+                  ? inventario.bodega.bodegaId
+                  : null),
             };
           }
         } catch (error) {
@@ -552,11 +601,17 @@ export class MovimientosService {
         }
       } else if (movimientosCreados.length > 0 && movimientosCreados[0].inventarioId) {
         try {
-          const inventario = await this.inventariosService.findOne(movimientosCreados[0].inventarioId);
+          const inventario = await this.inventariosService.findOne(
+            movimientosCreados[0].inventarioId,
+          );
           if (inventario && inventario.bodega) {
             inventarioSede = {
               inventarioId: inventario.inventarioId,
-              bodegaId: inventario.bodegaId || (typeof inventario.bodega === 'object' && 'bodegaId' in inventario.bodega ? inventario.bodega.bodegaId : null),
+              bodegaId:
+                inventario.bodegaId ||
+                (typeof inventario.bodega === 'object' && 'bodegaId' in inventario.bodega
+                  ? inventario.bodega.bodegaId
+                  : null),
             };
           }
         } catch (error) {
@@ -569,19 +624,19 @@ export class MovimientosService {
         try {
           // Asignar materiales al técnico
           await this.inventarioTecnicoService.asignarMateriales(asignacion.usuarioId, {
-            materiales: asignacion.materiales
+            materiales: asignacion.materiales,
           });
 
           // Si hay inventario de sede, crear movimientos de salida automáticos
           if (inventarioSede && inventarioSede.inventarioId && inventarioSede.bodegaId) {
             const salidaCodigo = `SALIDA-TECNICO-${asignacion.usuarioId}-${Date.now()}`;
-            
+
             // Crear salidas para cada material asignado
             for (const materialAsignado of asignacion.materiales) {
               try {
                 // Verificar que el material existe
                 const material = await this.materialesService.findOne(materialAsignado.materialId);
-                
+
                 // Crear movimiento de salida desde la sede/bodega
                 const salidaData: any = {
                   movimientoTipo: TipoMovimiento.SALIDA,
@@ -594,21 +649,26 @@ export class MovimientosService {
                   movimientoEstado: EstadoMovimiento.COMPLETADA, // Completar automáticamente
                 };
 
-                const identificadorUnicoSalida = await this.generarIdentificadorUnico(TipoMovimiento.SALIDA);
+                const identificadorUnicoSalida = await this.generarIdentificadorUnico(
+                  TipoMovimiento.SALIDA,
+                );
                 salidaData.identificadorUnico = identificadorUnicoSalida;
 
                 const salida = this.movimientosRepository.create(salidaData);
-                const salidaGuardada = await this.movimientosRepository.save(salida);
+                const salidaGuardada = (await this.movimientosRepository.save(salida)) as unknown as MovimientoInventario;
 
                 // Ajustar stock (reducir de bodega/sede)
                 await this.ajustarStockMovimiento(
                   materialAsignado.materialId,
                   TipoMovimiento.SALIDA,
                   materialAsignado.cantidad,
-                  inventarioSede.bodegaId
+                  inventarioSede.bodegaId,
                 );
               } catch (error) {
-                console.error(`Error al crear salida para material ${materialAsignado.materialId}:`, error);
+                console.error(
+                  `Error al crear salida para material ${materialAsignado.materialId}:`,
+                  error,
+                );
                 // Continuar con los demás materiales aunque falle uno
               }
             }
@@ -632,7 +692,7 @@ export class MovimientosService {
   ): Promise<void> {
     // Convertir cantidad a número para asegurar que sea un número válido
     const cantidadNumerica = Number(cantidad) || 0;
-    
+
     // Normalizar el tipo de movimiento (puede venir como string o enum)
     const tipoStr = String(tipo).toLowerCase();
     const esDevolucion = tipoStr === 'devolucion' || tipo === TipoMovimiento.DEVOLUCION;
@@ -674,10 +734,7 @@ export class MovimientosService {
    * Ajusta el stock general del material (en sede) sin asignarlo a una bodega específica.
    * Se usa para entradas sin bodega seleccionada.
    */
-  private async ajustarStockSedeMovimiento(
-    materialId: number,
-    cantidad: number,
-  ): Promise<void> {
+  private async ajustarStockSedeMovimiento(materialId: number, cantidad: number): Promise<void> {
     const cantidadNumerica = Number(cantidad) || 0;
     await this.materialesService.ajustarStockSede(materialId, cantidadNumerica);
   }
@@ -690,7 +747,7 @@ export class MovimientosService {
   ): Promise<void> {
     // Convertir cantidad a número para asegurar que sea un número válido
     const cantidadNumerica = Number(cantidad) || 0;
-    
+
     // Normalizar el tipo de movimiento (puede venir como string o enum)
     const tipoStr = String(tipo).toLowerCase();
     const esDevolucion = tipoStr === 'devolucion' || tipo === TipoMovimiento.DEVOLUCION;
@@ -705,29 +762,35 @@ export class MovimientosService {
       // Buscar el inventario técnico existente
       const inventarioTecnico = await this.inventarioTecnicoService.findByUsuario(tecnicoId);
       const inventarioItem = inventarioTecnico.find(
-        (inv) => inv.materialId === materialId && inv.usuarioId === tecnicoId
+        (inv) => inv.materialId === materialId && inv.usuarioId === tecnicoId,
       );
 
       if (inventarioItem) {
         // Calcular nueva cantidad (restar para salidas y devoluciones)
         const cantidadActual = Number(inventarioItem.cantidad || 0);
         const nuevaCantidad = Math.max(0, cantidadActual - cantidadNumerica);
-        
+
         // Actualizar el inventario técnico
         await this.inventarioTecnicoService.update(inventarioItem.inventarioTecnicoId, {
           cantidad: nuevaCantidad,
         });
-        
+
         // IMPORTANTE: Sincronizar el stock total del material después de actualizar inventario técnico
         await this.materialesService.sincronizarStock(materialId);
       }
     } catch (error) {
-      console.error(`Error al ajustar inventario técnico para técnico ${tecnicoId} y material ${materialId}:`, error);
+      console.error(
+        `Error al ajustar inventario técnico para técnico ${tecnicoId} y material ${materialId}:`,
+        error,
+      );
       throw error;
     }
   }
 
-  async findAll(paginationDto?: PaginationDto, user?: any): Promise<{ data: any[]; total: number; page: number; limit: number }> {
+  async findAll(
+    paginationDto?: PaginationDto,
+    user?: any,
+  ): Promise<{ data: any[]; total: number; page: number; limit: number }> {
     try {
       const page = paginationDto?.page || 1;
       // Si no se especifica límite o es muy grande, usar un valor razonable o sin límite
@@ -740,7 +803,7 @@ export class MovimientosService {
 
       if (user) {
         const rolTipo = user.usuarioRol?.rolTipo || user.role;
-        
+
         // SuperAdmin ve todo - no agregar condiciones
         if (rolTipo !== 'superadmin') {
           // Admin ve movimientos de su sede
@@ -842,18 +905,23 @@ export class MovimientosService {
         ORDER BY fechaCreacion DESC
         LIMIT ? OFFSET ?
       `;
-      const rawMovimientos = await this.movimientosRepository.query(
-        selectQuery,
-        [...queryParams, limit, skip]
-      );
+      const rawMovimientos = await this.movimientosRepository.query(selectQuery, [
+        ...queryParams,
+        limit,
+        skip,
+      ]);
 
       // Si hay movimientos, cargar relaciones manualmente
       if (rawMovimientos.length > 0) {
-        const inventarioIds = Array.from(new Set(rawMovimientos
-          .map((movimiento: any) => movimiento.inventarioId)
-          .filter((id: any) => id !== null && id !== undefined)
-          .map((id: any) => Number(id))
-          .filter((id: number) => !isNaN(id))));
+        const inventarioIds = Array.from(
+          new Set(
+            rawMovimientos
+              .map((movimiento: any) => movimiento.inventarioId)
+              .filter((id: any) => id !== null && id !== undefined)
+              .map((id: any) => Number(id))
+              .filter((id: number) => !isNaN(id)),
+          ),
+        );
 
         const inventarioMap = new Map<number, any>();
         await Promise.all(
@@ -864,7 +932,7 @@ export class MovimientosService {
             } catch (error) {
               // Error silencioso al cargar inventario
             }
-          })
+          }),
         );
 
         const bodegaMap = new Map<number, any>();
@@ -887,9 +955,9 @@ export class MovimientosService {
                   materialEstado: material.materialEstado,
                   materialEsMedidor: material.materialEsMedidor || false,
                 };
-            } catch (err) {
-              // Error silencioso al cargar material
-            }
+              } catch (err) {
+                // Error silencioso al cargar material
+              }
             }
 
             if (movimiento.inventarioId) {
@@ -897,7 +965,8 @@ export class MovimientosService {
               if (inventario) {
                 movimientoConRelaciones.inventario = inventario;
                 movimientoConRelaciones.bodega = inventario.bodega ?? null;
-                movimientoConRelaciones.bodegaId = inventario.bodegaId ?? inventario.bodega?.bodegaId ?? null;
+                movimientoConRelaciones.bodegaId =
+                  inventario.bodegaId ?? inventario.bodega?.bodegaId ?? null;
               }
             }
 
@@ -915,9 +984,9 @@ export class MovimientosService {
                   proveedorContacto: proveedor.proveedorContacto,
                   proveedorEstado: proveedor.proveedorEstado,
                 };
-            } catch (err) {
-              // Error silencioso al cargar proveedor
-            }
+              } catch (err) {
+                // Error silencioso al cargar proveedor
+              }
             }
 
             // Cargar usuario si existe
@@ -934,9 +1003,9 @@ export class MovimientosService {
                   usuarioEstado: usuario.usuarioEstado,
                   // usuarioOficina eliminado - las bodegas ahora pertenecen directamente a sedes
                 };
-            } catch (err) {
-              // Error silencioso al cargar usuario
-            }
+              } catch (err) {
+                // Error silencioso al cargar usuario
+              }
             }
 
             // Cargar técnico origen si el movimiento viene de un técnico
@@ -962,7 +1031,7 @@ export class MovimientosService {
                 // Usar query directa para obtener la instalación con su código
                 const instalacionRaw = await this.movimientosRepository.query(
                   'SELECT instalacionId, instalacionCodigo FROM instalaciones WHERE instalacionId = ?',
-                  [movimiento.instalacionId]
+                  [movimiento.instalacionId],
                 );
                 if (instalacionRaw && instalacionRaw.length > 0) {
                   movimientoConRelaciones.instalacion = {
@@ -976,7 +1045,7 @@ export class MovimientosService {
             }
 
             return movimientoConRelaciones;
-          })
+          }),
         );
 
         return {
@@ -1006,347 +1075,361 @@ export class MovimientosService {
   }
 
   async findOne(id: number): Promise<any> {
-    try {
-      // Obtener el movimiento sin relaciones problemáticas (bodega se obtiene a través de inventario)
-      // No cargar la relación instalacion para evitar que TypeORM intente cargar cliente automáticamente
-      // La instalacion se carga manualmente cuando es necesario
-      const movimiento = await this.movimientosRepository.findOne({
-        where: { movimientoId: id },
-        relations: ['usuario', 'proveedor', 'inventario', 'inventario.bodega'],
-      });
-      
-      if (!movimiento) {
-        throw new NotFoundException(`Movimiento con ID ${id} no encontrado`);
-      }
+    // Obtener el movimiento sin relaciones problemáticas (bodega se obtiene a través de inventario)
+    // No cargar la relación instalacion para evitar que TypeORM intente cargar cliente automáticamente
+    // La instalacion se carga manualmente cuando es necesario
+    const movimiento = await this.movimientosRepository.findOne({
+      where: { movimientoId: id },
+      relations: ['usuario', 'proveedor', 'inventario', 'inventario.bodega'],
+    });
 
-      // Cargar material manualmente
-      const movimientoConRelaciones: any = { ...movimiento };
-      
-      // Parsear numerosMedidor si existe (MySQL devuelve JSON como string)
-      if (movimiento.numerosMedidor) {
-        try {
-          movimientoConRelaciones.numerosMedidor = typeof movimiento.numerosMedidor === 'string'
+    if (!movimiento) {
+      throw new NotFoundException(`Movimiento con ID ${id} no encontrado`);
+    }
+
+    // Cargar material manualmente
+    const movimientoConRelaciones: any = { ...movimiento };
+
+    // Parsear numerosMedidor si existe (MySQL devuelve JSON como string)
+    if (movimiento.numerosMedidor) {
+      try {
+        movimientoConRelaciones.numerosMedidor =
+          typeof movimiento.numerosMedidor === 'string'
             ? JSON.parse(movimiento.numerosMedidor)
             : movimiento.numerosMedidor;
-        } catch (err) {
-          // Si falla el parse, dejar como está
-          movimientoConRelaciones.numerosMedidor = movimiento.numerosMedidor;
-        }
+      } catch (err) {
+        // Si falla el parse, dejar como está
+        movimientoConRelaciones.numerosMedidor = movimiento.numerosMedidor;
       }
-      if (movimiento.materialId) {
-        try {
-          const material = await this.materialesService.findOne(movimiento.materialId);
-          movimientoConRelaciones.material = {
-            materialId: material.materialId,
-            materialCodigo: material.materialCodigo,
-            materialNombre: material.materialNombre,
-            materialStock: material.materialStock,
-            materialPrecio: material.materialPrecio,
-            materialFoto: material.materialFoto,
-            materialEstado: material.materialEstado,
-            materialEsMedidor: material.materialEsMedidor || false,
-          };
-            } catch (err) {
-              // Error silencioso al cargar material
-            }
-      }
-
-      // Asegurar que inventario tenga bodega cargada
-      if (movimiento.inventario && !movimiento.inventario.bodega && movimiento.inventario.bodegaId) {
-        try {
-          const inventarioCompleto = await this.inventariosService.findOne(movimiento.inventario.inventarioId);
-          movimientoConRelaciones.inventario = inventarioCompleto;
-          } catch (err) {
-            // Error silencioso al cargar inventario
-          }
-      }
-
-      // Asignar bodega desde inventario
-      if (movimientoConRelaciones.inventario) {
-        movimientoConRelaciones.bodega = movimientoConRelaciones.inventario.bodega ?? null;
-        movimientoConRelaciones.bodegaId = movimientoConRelaciones.inventario.bodegaId ?? movimientoConRelaciones.inventario.bodega?.bodegaId ?? null;
-      }
-
-      // Cargar proveedor si existe y no está cargado
-      if (movimiento.proveedorId && !movimientoConRelaciones.proveedor) {
-        try {
-          const proveedor = await this.proveedoresService.findOne(movimiento.proveedorId);
-          movimientoConRelaciones.proveedor = {
-            proveedorId: proveedor.proveedorId,
-            proveedorNombre: proveedor.proveedorNombre,
-            proveedorNit: proveedor.proveedorNit,
-            proveedorTelefono: proveedor.proveedorTelefono,
-            proveedorEmail: proveedor.proveedorEmail,
-            proveedorDireccion: proveedor.proveedorDireccion,
-            proveedorContacto: proveedor.proveedorContacto,
-            proveedorEstado: proveedor.proveedorEstado,
-          };
-            } catch (err) {
-              // Error silencioso al cargar proveedor
-            }
-      }
-
-      // oficinaId eliminado - las bodegas ahora pertenecen directamente a sedes
-
-      // Cargar usuario si existe y no está cargado
-      if (movimiento.usuarioId && !movimientoConRelaciones.usuario) {
-        try {
-          const usuario = await this.usersService.findOne(movimiento.usuarioId);
-          movimientoConRelaciones.usuario = {
-            usuarioId: usuario.usuarioId,
-            usuarioNombre: usuario.usuarioNombre,
-            usuarioApellido: usuario.usuarioApellido,
-            usuarioCorreo: usuario.usuarioCorreo,
-            usuarioTelefono: usuario.usuarioTelefono,
-            usuarioDocumento: usuario.usuarioDocumento,
-            usuarioEstado: usuario.usuarioEstado,
-            // usuarioOficina eliminado - las bodegas ahora pertenecen directamente a sedes
-          };
-            } catch (err) {
-              // Error silencioso al cargar usuario
-            }
-      }
-
-      return movimientoConRelaciones;
-    } catch (error) {
-      throw error;
     }
+    if (movimiento.materialId) {
+      try {
+        const material = await this.materialesService.findOne(movimiento.materialId);
+        movimientoConRelaciones.material = {
+          materialId: material.materialId,
+          materialCodigo: material.materialCodigo,
+          materialNombre: material.materialNombre,
+          materialStock: material.materialStock,
+          materialPrecio: material.materialPrecio,
+          materialFoto: material.materialFoto,
+          materialEstado: material.materialEstado,
+          materialEsMedidor: material.materialEsMedidor || false,
+        };
+      } catch (err) {
+        // Error silencioso al cargar material
+      }
+    }
+
+    // Asegurar que inventario tenga bodega cargada
+    if (movimiento.inventario && !movimiento.inventario.bodega && movimiento.inventario.bodegaId) {
+      try {
+        const inventarioCompleto = await this.inventariosService.findOne(
+          movimiento.inventario.inventarioId,
+        );
+        movimientoConRelaciones.inventario = inventarioCompleto;
+      } catch (err) {
+        // Error silencioso al cargar inventario
+      }
+    }
+
+    // Asignar bodega desde inventario
+    if (movimientoConRelaciones.inventario) {
+      movimientoConRelaciones.bodega = movimientoConRelaciones.inventario.bodega ?? null;
+      movimientoConRelaciones.bodegaId =
+        movimientoConRelaciones.inventario.bodegaId ??
+        movimientoConRelaciones.inventario.bodega?.bodegaId ??
+        null;
+    }
+
+    // Cargar proveedor si existe y no está cargado
+    if (movimiento.proveedorId && !movimientoConRelaciones.proveedor) {
+      try {
+        const proveedor = await this.proveedoresService.findOne(movimiento.proveedorId);
+        movimientoConRelaciones.proveedor = {
+          proveedorId: proveedor.proveedorId,
+          proveedorNombre: proveedor.proveedorNombre,
+          proveedorNit: proveedor.proveedorNit,
+          proveedorTelefono: proveedor.proveedorTelefono,
+          proveedorEmail: proveedor.proveedorEmail,
+          proveedorDireccion: proveedor.proveedorDireccion,
+          proveedorContacto: proveedor.proveedorContacto,
+          proveedorEstado: proveedor.proveedorEstado,
+        };
+      } catch (err) {
+        // Error silencioso al cargar proveedor
+      }
+    }
+
+    // oficinaId eliminado - las bodegas ahora pertenecen directamente a sedes
+
+    // Cargar usuario si existe y no está cargado
+    if (movimiento.usuarioId && !movimientoConRelaciones.usuario) {
+      try {
+        const usuario = await this.usersService.findOne(movimiento.usuarioId);
+        movimientoConRelaciones.usuario = {
+          usuarioId: usuario.usuarioId,
+          usuarioNombre: usuario.usuarioNombre,
+          usuarioApellido: usuario.usuarioApellido,
+          usuarioCorreo: usuario.usuarioCorreo,
+          usuarioTelefono: usuario.usuarioTelefono,
+          usuarioDocumento: usuario.usuarioDocumento,
+          usuarioEstado: usuario.usuarioEstado,
+          // usuarioOficina eliminado - las bodegas ahora pertenecen directamente a sedes
+        };
+      } catch (err) {
+        // Error silencioso al cargar usuario
+      }
+    }
+
+    return movimientoConRelaciones;
   }
 
   async findByCodigo(codigo: string): Promise<any[]> {
-    try {
-      // No cargar la relación instalacion para evitar que TypeORM intente cargar cliente automáticamente
-      // La instalacion se carga manualmente cuando es necesario
-      const movimientos = await this.movimientosRepository.find({
-        where: { movimientoCodigo: codigo },
-        relations: ['usuario', 'proveedor', 'inventario', 'inventario.bodega', 'inventario.bodega.sede'],
-      });
+    // No cargar la relación instalacion para evitar que TypeORM intente cargar cliente automáticamente
+    // La instalacion se carga manualmente cuando es necesario
+    const movimientos = await this.movimientosRepository.find({
+      where: { movimientoCodigo: codigo },
+      relations: [
+        'usuario',
+        'proveedor',
+        'inventario',
+        'inventario.bodega',
+        'inventario.bodega.sede',
+      ],
+    });
 
-      // Cargar materiales manualmente para cada movimiento
-      const movimientosConRelaciones = await Promise.all(
-        movimientos.map(async (movimiento) => {
-          const movimientoConRelaciones: any = { ...movimiento };
-          
-          // Parsear numerosMedidor si existe (MySQL devuelve JSON como string)
-          if (movimiento.numerosMedidor) {
-            try {
-              movimientoConRelaciones.numerosMedidor = typeof movimiento.numerosMedidor === 'string'
+    // Cargar materiales manualmente para cada movimiento
+    const movimientosConRelaciones = await Promise.all(
+      movimientos.map(async (movimiento) => {
+        const movimientoConRelaciones: any = { ...movimiento };
+
+        // Parsear numerosMedidor si existe (MySQL devuelve JSON como string)
+        if (movimiento.numerosMedidor) {
+          try {
+            movimientoConRelaciones.numerosMedidor =
+              typeof movimiento.numerosMedidor === 'string'
                 ? JSON.parse(movimiento.numerosMedidor)
                 : movimiento.numerosMedidor;
-            } catch (err) {
-              // Si falla el parse, dejar como está
-              movimientoConRelaciones.numerosMedidor = movimiento.numerosMedidor;
-            }
+          } catch (err) {
+            // Si falla el parse, dejar como está
+            movimientoConRelaciones.numerosMedidor = movimiento.numerosMedidor;
           }
-          
-          if (movimiento.materialId) {
-            try {
-              const material = await this.materialesService.findOne(movimiento.materialId);
-              movimientoConRelaciones.material = {
-                materialId: material.materialId,
-                materialCodigo: material.materialCodigo,
-                materialNombre: material.materialNombre,
-                materialStock: material.materialStock,
-                materialPrecio: material.materialPrecio,
-                materialFoto: material.materialFoto,
-                materialEstado: material.materialEstado,
-                materialEsMedidor: material.materialEsMedidor || false,
-              };
-            } catch (err) {
-              // Error silencioso al cargar material
-            }
+        }
+
+        if (movimiento.materialId) {
+          try {
+            const material = await this.materialesService.findOne(movimiento.materialId);
+            movimientoConRelaciones.material = {
+              materialId: material.materialId,
+              materialCodigo: material.materialCodigo,
+              materialNombre: material.materialNombre,
+              materialStock: material.materialStock,
+              materialPrecio: material.materialPrecio,
+              materialFoto: material.materialFoto,
+              materialEstado: material.materialEstado,
+              materialEsMedidor: material.materialEsMedidor || false,
+            };
+          } catch (err) {
+            // Error silencioso al cargar material
           }
+        }
 
-          // Cargar inventario si existe
-          if (movimiento.inventarioId) {
-            try {
-              const inventarioCompleto = await this.inventariosService.findOne(movimiento.inventarioId);
-              movimientoConRelaciones.inventario = inventarioCompleto;
-              
-              // Asignar bodega desde inventario
-              if (inventarioCompleto) {
-                movimientoConRelaciones.bodega = inventarioCompleto.bodega ?? null;
-                movimientoConRelaciones.bodegaId = inventarioCompleto.bodegaId ?? inventarioCompleto.bodega?.bodegaId ?? null;
-              }
-            } catch (err) {
-              // Error silencioso al cargar inventario
+        // Cargar inventario si existe
+        if (movimiento.inventarioId) {
+          try {
+            const inventarioCompleto = await this.inventariosService.findOne(
+              movimiento.inventarioId,
+            );
+            movimientoConRelaciones.inventario = inventarioCompleto;
+
+            // Asignar bodega desde inventario
+            if (inventarioCompleto) {
+              movimientoConRelaciones.bodega = inventarioCompleto.bodega ?? null;
+              movimientoConRelaciones.bodegaId =
+                inventarioCompleto.bodegaId ?? inventarioCompleto.bodega?.bodegaId ?? null;
             }
+          } catch (err) {
+            // Error silencioso al cargar inventario
           }
+        }
 
-          // Cargar proveedor si existe y no está cargado
-          if (movimiento.proveedorId && !movimientoConRelaciones.proveedor) {
-            try {
-              const proveedor = await this.proveedoresService.findOne(movimiento.proveedorId);
-              movimientoConRelaciones.proveedor = {
-                proveedorId: proveedor.proveedorId,
-                proveedorNombre: proveedor.proveedorNombre,
-                proveedorNit: proveedor.proveedorNit,
-                proveedorTelefono: proveedor.proveedorTelefono,
-                proveedorEmail: proveedor.proveedorEmail,
-                proveedorDireccion: proveedor.proveedorDireccion,
-                proveedorContacto: proveedor.proveedorContacto,
-                proveedorEstado: proveedor.proveedorEstado,
-              };
-            } catch (err) {
-              // Error silencioso al cargar proveedor
-            }
+        // Cargar proveedor si existe y no está cargado
+        if (movimiento.proveedorId && !movimientoConRelaciones.proveedor) {
+          try {
+            const proveedor = await this.proveedoresService.findOne(movimiento.proveedorId);
+            movimientoConRelaciones.proveedor = {
+              proveedorId: proveedor.proveedorId,
+              proveedorNombre: proveedor.proveedorNombre,
+              proveedorNit: proveedor.proveedorNit,
+              proveedorTelefono: proveedor.proveedorTelefono,
+              proveedorEmail: proveedor.proveedorEmail,
+              proveedorDireccion: proveedor.proveedorDireccion,
+              proveedorContacto: proveedor.proveedorContacto,
+              proveedorEstado: proveedor.proveedorEstado,
+            };
+          } catch (err) {
+            // Error silencioso al cargar proveedor
           }
+        }
 
-          // Cargar usuario si existe y no está cargado
-          if (movimiento.usuarioId && !movimientoConRelaciones.usuario) {
-            try {
-              const usuario = await this.usersService.findOne(movimiento.usuarioId);
-              movimientoConRelaciones.usuario = {
-                usuarioId: usuario.usuarioId,
-                usuarioNombre: usuario.usuarioNombre,
-                usuarioApellido: usuario.usuarioApellido,
-                usuarioCorreo: usuario.usuarioCorreo,
-                usuarioTelefono: usuario.usuarioTelefono,
-                usuarioDocumento: usuario.usuarioDocumento,
-                usuarioEstado: usuario.usuarioEstado,
-                // usuarioOficina eliminado - las bodegas ahora pertenecen directamente a sedes
-              };
-            } catch (err) {
-              // Error silencioso al cargar usuario
-            }
+        // Cargar usuario si existe y no está cargado
+        if (movimiento.usuarioId && !movimientoConRelaciones.usuario) {
+          try {
+            const usuario = await this.usersService.findOne(movimiento.usuarioId);
+            movimientoConRelaciones.usuario = {
+              usuarioId: usuario.usuarioId,
+              usuarioNombre: usuario.usuarioNombre,
+              usuarioApellido: usuario.usuarioApellido,
+              usuarioCorreo: usuario.usuarioCorreo,
+              usuarioTelefono: usuario.usuarioTelefono,
+              usuarioDocumento: usuario.usuarioDocumento,
+              usuarioEstado: usuario.usuarioEstado,
+              // usuarioOficina eliminado - las bodegas ahora pertenecen directamente a sedes
+            };
+          } catch (err) {
+            // Error silencioso al cargar usuario
           }
+        }
 
-          // oficinaId eliminado - las bodegas ahora pertenecen directamente a sedes
+        // oficinaId eliminado - las bodegas ahora pertenecen directamente a sedes
 
-          return movimientoConRelaciones;
-        })
-      );
+        return movimientoConRelaciones;
+      }),
+    );
 
-      return movimientosConRelaciones;
-    } catch (error) {
-      throw error;
-    }
+    return movimientosConRelaciones;
   }
 
   async findByInstalacion(instalacionId: number): Promise<any[]> {
-    try {
-      // Usar query builder con select explícito para evitar que TypeORM intente seleccionar inventarioId
-      // que puede no existir en la base de datos
-      // Seleccionar solo las columnas que existen en la BD
-      const movimientos = await this.movimientosRepository
-        .createQueryBuilder('movimiento')
-        .select([
-          'movimiento.movimientoId',
-          'movimiento.materialId',
-          'movimiento.movimientoTipo',
-          'movimiento.movimientoCantidad',
-          'movimiento.movimientoPrecioUnitario',
-          'movimiento.movimientoObservaciones',
-          'movimiento.instalacionId',
-          'movimiento.usuarioId',
-          'movimiento.proveedorId',
-          // movimientoCodigo no se selecciona porque puede no existir en la BD
-          // oficinaId eliminado - las bodegas ahora pertenecen directamente a sedes
-          'movimiento.movimientoEstado',
-          'movimiento.fechaCreacion',
-          'movimiento.fechaActualizacion'
-        ])
-        .leftJoinAndSelect('movimiento.usuario', 'usuario')
-        .leftJoinAndSelect('movimiento.instalacion', 'instalacion', 'instalacion.instalacionId = movimiento.instalacionId')
-        .addSelect(['instalacion.instalacionId', 'instalacion.instalacionCodigo'])
-        .leftJoinAndSelect('movimiento.proveedor', 'proveedor')
-        .where('movimiento.instalacionId = :instalacionId', { instalacionId })
-        .getMany();
-      
-      // Nota: inventarioId no se selecciona porque puede no existir en la BD
-      // Se cargará manualmente más adelante si es necesario usando movimiento.inventarioId
-      // que se obtiene de la consulta raw cuando se necesita
+    // Usar query builder con select explícito para evitar que TypeORM intente seleccionar inventarioId
+    // que puede no existir en la base de datos
+    // Seleccionar solo las columnas que existen en la BD
+    const movimientos = await this.movimientosRepository
+      .createQueryBuilder('movimiento')
+      .select([
+        'movimiento.movimientoId',
+        'movimiento.materialId',
+        'movimiento.movimientoTipo',
+        'movimiento.movimientoCantidad',
+        'movimiento.movimientoPrecioUnitario',
+        'movimiento.movimientoObservaciones',
+        'movimiento.instalacionId',
+        'movimiento.usuarioId',
+        'movimiento.proveedorId',
+        // movimientoCodigo no se selecciona porque puede no existir en la BD
+        // oficinaId eliminado - las bodegas ahora pertenecen directamente a sedes
+        'movimiento.movimientoEstado',
+        'movimiento.fechaCreacion',
+        'movimiento.fechaActualizacion',
+      ])
+      .leftJoinAndSelect('movimiento.usuario', 'usuario')
+      .leftJoinAndSelect(
+        'movimiento.instalacion',
+        'instalacion',
+        'instalacion.instalacionId = movimiento.instalacionId',
+      )
+      .addSelect(['instalacion.instalacionId', 'instalacion.instalacionCodigo'])
+      .leftJoinAndSelect('movimiento.proveedor', 'proveedor')
+      .where('movimiento.instalacionId = :instalacionId', { instalacionId })
+      .getMany();
 
-      // Cargar materiales manualmente
-      const movimientosConRelaciones = await Promise.all(
-        movimientos.map(async (movimiento) => {
-          const movimientoConRelaciones: any = { ...movimiento };
-          
-          if (movimiento.materialId) {
-            try {
-              const material = await this.materialesService.findOne(movimiento.materialId);
-              movimientoConRelaciones.material = {
-                materialId: material.materialId,
-                materialCodigo: material.materialCodigo,
-                materialNombre: material.materialNombre,
-                materialStock: material.materialStock,
-                materialPrecio: material.materialPrecio,
-                materialFoto: material.materialFoto,
-                materialEstado: material.materialEstado,
-                materialEsMedidor: material.materialEsMedidor || false,
-              };
-            } catch (err) {
-              // Error silencioso al cargar material
-            }
+    // Nota: inventarioId no se selecciona porque puede no existir en la BD
+    // Se cargará manualmente más adelante si es necesario usando movimiento.inventarioId
+    // que se obtiene de la consulta raw cuando se necesita
+
+    // Cargar materiales manualmente
+    const movimientosConRelaciones = await Promise.all(
+      movimientos.map(async (movimiento) => {
+        const movimientoConRelaciones: any = { ...movimiento };
+
+        if (movimiento.materialId) {
+          try {
+            const material = await this.materialesService.findOne(movimiento.materialId);
+            movimientoConRelaciones.material = {
+              materialId: material.materialId,
+              materialCodigo: material.materialCodigo,
+              materialNombre: material.materialNombre,
+              materialStock: material.materialStock,
+              materialPrecio: material.materialPrecio,
+              materialFoto: material.materialFoto,
+              materialEstado: material.materialEstado,
+              materialEsMedidor: material.materialEsMedidor || false,
+            };
+          } catch (err) {
+            // Error silencioso al cargar material
           }
+        }
 
-          // Cargar inventario si existe
-          if (movimiento.inventarioId) {
-            try {
-              const inventarioCompleto = await this.inventariosService.findOne(movimiento.inventarioId);
-              movimientoConRelaciones.inventario = inventarioCompleto;
-              
-              // Asignar bodega desde inventario
-              if (inventarioCompleto) {
-                movimientoConRelaciones.bodega = inventarioCompleto.bodega ?? null;
-                movimientoConRelaciones.bodegaId = inventarioCompleto.bodegaId ?? inventarioCompleto.bodega?.bodegaId ?? null;
-              }
-            } catch (err) {
-              // Error silencioso al cargar inventario
+        // Cargar inventario si existe
+        if (movimiento.inventarioId) {
+          try {
+            const inventarioCompleto = await this.inventariosService.findOne(
+              movimiento.inventarioId,
+            );
+            movimientoConRelaciones.inventario = inventarioCompleto;
+
+            // Asignar bodega desde inventario
+            if (inventarioCompleto) {
+              movimientoConRelaciones.bodega = inventarioCompleto.bodega ?? null;
+              movimientoConRelaciones.bodegaId =
+                inventarioCompleto.bodegaId ?? inventarioCompleto.bodega?.bodegaId ?? null;
             }
+          } catch (err) {
+            // Error silencioso al cargar inventario
           }
+        }
 
-          // Cargar proveedor si existe y no está cargado
-          if (movimiento.proveedorId && !movimientoConRelaciones.proveedor) {
-            try {
-              const proveedor = await this.proveedoresService.findOne(movimiento.proveedorId);
-              movimientoConRelaciones.proveedor = {
-                proveedorId: proveedor.proveedorId,
-                proveedorNombre: proveedor.proveedorNombre,
-                proveedorNit: proveedor.proveedorNit,
-                proveedorTelefono: proveedor.proveedorTelefono,
-                proveedorEmail: proveedor.proveedorEmail,
-                proveedorDireccion: proveedor.proveedorDireccion,
-                proveedorContacto: proveedor.proveedorContacto,
-                proveedorEstado: proveedor.proveedorEstado,
-              };
-            } catch (err) {
-              // Error silencioso al cargar proveedor
-            }
+        // Cargar proveedor si existe y no está cargado
+        if (movimiento.proveedorId && !movimientoConRelaciones.proveedor) {
+          try {
+            const proveedor = await this.proveedoresService.findOne(movimiento.proveedorId);
+            movimientoConRelaciones.proveedor = {
+              proveedorId: proveedor.proveedorId,
+              proveedorNombre: proveedor.proveedorNombre,
+              proveedorNit: proveedor.proveedorNit,
+              proveedorTelefono: proveedor.proveedorTelefono,
+              proveedorEmail: proveedor.proveedorEmail,
+              proveedorDireccion: proveedor.proveedorDireccion,
+              proveedorContacto: proveedor.proveedorContacto,
+              proveedorEstado: proveedor.proveedorEstado,
+            };
+          } catch (err) {
+            // Error silencioso al cargar proveedor
           }
+        }
 
-          // Cargar usuario si existe y no está cargado
-          if (movimiento.usuarioId && !movimientoConRelaciones.usuario) {
-            try {
-              const usuario = await this.usersService.findOne(movimiento.usuarioId);
-              movimientoConRelaciones.usuario = {
-                usuarioId: usuario.usuarioId,
-                usuarioNombre: usuario.usuarioNombre,
-                usuarioApellido: usuario.usuarioApellido,
-                usuarioCorreo: usuario.usuarioCorreo,
-                usuarioTelefono: usuario.usuarioTelefono,
-                usuarioDocumento: usuario.usuarioDocumento,
-                usuarioEstado: usuario.usuarioEstado,
-                // usuarioOficina eliminado - las bodegas ahora pertenecen directamente a sedes
-              };
-            } catch (err) {
-              // Error silencioso al cargar usuario
-            }
+        // Cargar usuario si existe y no está cargado
+        if (movimiento.usuarioId && !movimientoConRelaciones.usuario) {
+          try {
+            const usuario = await this.usersService.findOne(movimiento.usuarioId);
+            movimientoConRelaciones.usuario = {
+              usuarioId: usuario.usuarioId,
+              usuarioNombre: usuario.usuarioNombre,
+              usuarioApellido: usuario.usuarioApellido,
+              usuarioCorreo: usuario.usuarioCorreo,
+              usuarioTelefono: usuario.usuarioTelefono,
+              usuarioDocumento: usuario.usuarioDocumento,
+              usuarioEstado: usuario.usuarioEstado,
+              // usuarioOficina eliminado - las bodegas ahora pertenecen directamente a sedes
+            };
+          } catch (err) {
+            // Error silencioso al cargar usuario
           }
+        }
 
-          // oficinaId eliminado - las bodegas ahora pertenecen directamente a sedes
+        // oficinaId eliminado - las bodegas ahora pertenecen directamente a sedes
 
-          return movimientoConRelaciones;
-        })
-      );
+        return movimientoConRelaciones;
+      }),
+    );
 
-      return movimientosConRelaciones;
-    } catch (error) {
-      throw error;
-    }
+    return movimientosConRelaciones;
   }
 
-  async update(id: number, updateMovimientoDto: Partial<CreateMovimientoDto>): Promise<MovimientoInventario> {
+  async update(
+    id: number,
+    updateMovimientoDto: Partial<CreateMovimientoDto>,
+  ): Promise<MovimientoInventario> {
     const movimiento = await this.movimientosRepository.findOne({
       where: { movimientoId: id },
     });
@@ -1367,7 +1450,7 @@ export class MovimientosService {
       try {
         const inventarioOriginal = await this.inventariosService.findOne(inventarioIdOriginal);
         const bodegaIdOriginal = inventarioOriginal.bodegaId || inventarioOriginal.bodega?.bodegaId;
-        
+
         if (bodegaIdOriginal) {
           // Revertir el stock (invertir la operación original)
           let cantidadRevertir = 0;
@@ -1382,8 +1465,12 @@ export class MovimientosService {
               cantidadRevertir = cantidadOriginal; // Revertir devolución = sumar (porque devolución resta stock)
               break;
           }
-          
-          await this.materialesService.ajustarStock(materialIdOriginal, cantidadRevertir, bodegaIdOriginal);
+
+          await this.materialesService.ajustarStock(
+            materialIdOriginal,
+            cantidadRevertir,
+            bodegaIdOriginal,
+          );
         }
       } catch (error) {
         // Continuar con la actualización aunque falle la reversión de stock
@@ -1409,7 +1496,7 @@ export class MovimientosService {
     let nuevaCantidad = cantidadOriginal;
     let nuevoMaterialId = materialIdOriginal;
     let nuevoInventarioId = inventarioIdOriginal;
-    
+
     if (updateMovimientoDto.materiales && updateMovimientoDto.materiales.length > 0) {
       const primerMaterial = updateMovimientoDto.materiales[0];
       nuevoMaterialId = primerMaterial.materialId;
@@ -1423,21 +1510,21 @@ export class MovimientosService {
     nuevoInventarioId = movimiento.inventarioId || inventarioIdOriginal;
 
     // Guardar el movimiento actualizado
-    const movimientoActualizado = await this.movimientosRepository.save(movimiento);
+    const movimientoActualizado = (await this.movimientosRepository.save(movimiento)) as unknown as MovimientoInventario;
 
     // Aplicar el nuevo ajuste de stock si el movimiento está completado
     if (movimientoCompletado && nuevoInventarioId) {
       try {
         const inventarioNuevo = await this.inventariosService.findOne(nuevoInventarioId);
         const bodegaIdNuevo = inventarioNuevo.bodegaId || inventarioNuevo.bodega?.bodegaId;
-        
+
         if (bodegaIdNuevo) {
           // Aplicar el nuevo ajuste de stock usando el método privado
           await this.ajustarStockMovimiento(
             nuevoMaterialId,
             movimientoTipoOriginal,
             nuevaCantidad,
-            bodegaIdNuevo
+            bodegaIdNuevo,
           );
         }
       } catch (error) {
@@ -1466,7 +1553,7 @@ export class MovimientosService {
     if (!movimiento) {
       throw new NotFoundException(`Movimiento con ID ${id} no encontrado`);
     }
-    
+
     // Guardar datos completos para auditoría
     const datosEliminados = {
       movimientoId: movimiento.movimientoId,
@@ -1489,35 +1576,40 @@ export class MovimientosService {
 
     // Revertir stock si el movimiento estaba completado y tiene inventario/bodega
     const movimientoCompletado = movimiento.movimientoEstado === EstadoMovimiento.COMPLETADA;
-    
+
     if (movimientoCompletado && movimiento.inventarioId) {
       try {
         // Validar que el inventario existe
         const inventario = await this.inventariosService.findOne(movimiento.inventarioId);
-        
+
         if (!inventario) {
-          throw new BadRequestException(`Inventario con ID ${movimiento.inventarioId} no encontrado`);
+          throw new BadRequestException(
+            `Inventario con ID ${movimiento.inventarioId} no encontrado`,
+          );
         }
 
         const bodegaId = inventario.bodegaId || inventario.bodega?.bodegaId;
-        
+
         if (bodegaId) {
           // Validar que el material existe
           const material = await this.materialesService.findOne(movimiento.materialId);
-          
+
           if (!material) {
             throw new BadRequestException(`Material con ID ${movimiento.materialId} no encontrado`);
           }
 
           // Revertir el stock (invertir la operación original)
           const tipoStr = String(movimiento.movimientoTipo).toLowerCase();
-          const esDevolucion = tipoStr === 'devolucion' || movimiento.movimientoTipo === TipoMovimiento.DEVOLUCION;
-          const esEntrada = tipoStr === 'entrada' || movimiento.movimientoTipo === TipoMovimiento.ENTRADA;
-          const esSalida = tipoStr === 'salida' || movimiento.movimientoTipo === TipoMovimiento.SALIDA;
-          
+          const esDevolucion =
+            tipoStr === 'devolucion' || movimiento.movimientoTipo === TipoMovimiento.DEVOLUCION;
+          const esEntrada =
+            tipoStr === 'entrada' || movimiento.movimientoTipo === TipoMovimiento.ENTRADA;
+          const esSalida =
+            tipoStr === 'salida' || movimiento.movimientoTipo === TipoMovimiento.SALIDA;
+
           let cantidadRevertir = 0;
           const cantidadNumerica = Number(movimiento.movimientoCantidad) || 0;
-          
+
           if (cantidadNumerica <= 0) {
             throw new BadRequestException('La cantidad del movimiento debe ser mayor a cero');
           }
@@ -1532,9 +1624,13 @@ export class MovimientosService {
             // Revertir devolución = sumar (porque devolución RESTA stock, entonces revertir es SUMAR)
             cantidadRevertir = cantidadNumerica;
           }
-          
-          await this.materialesService.ajustarStock(movimiento.materialId, cantidadRevertir, bodegaId);
-          
+
+          await this.materialesService.ajustarStock(
+            movimiento.materialId,
+            cantidadRevertir,
+            bodegaId,
+          );
+
           // Manejar números de medidor si el material es medidor
           try {
             if (material.materialEsMedidor && movimiento.numerosMedidor) {
@@ -1549,7 +1645,7 @@ export class MovimientosService {
               } else if (Array.isArray(movimiento.numerosMedidor)) {
                 numerosMedidorArray = movimiento.numerosMedidor;
               }
-              
+
               if (numerosMedidorArray && numerosMedidorArray.length > 0) {
                 // Buscar los IDs de los números de medidor
                 const numerosMedidorIds: number[] = [];
@@ -1563,7 +1659,7 @@ export class MovimientosService {
                     console.warn(`No se encontró número de medidor: ${numeroStr}`);
                   }
                 }
-                
+
                 if (numerosMedidorIds.length > 0) {
                   if (esEntrada) {
                     // Si se elimina una ENTRADA: verificar si los números fueron creados en esta entrada
@@ -1576,8 +1672,11 @@ export class MovimientosService {
                           // Verificar si el número fue creado en esta entrada (misma fecha aproximadamente)
                           const fechaMovimiento = new Date(movimiento.fechaCreacion);
                           const fechaNumero = new Date(numero.fechaCreacion);
-                          const diferenciaDias = Math.abs((fechaMovimiento.getTime() - fechaNumero.getTime()) / (1000 * 60 * 60 * 24));
-                          
+                          const diferenciaDias = Math.abs(
+                            (fechaMovimiento.getTime() - fechaNumero.getTime()) /
+                              (1000 * 60 * 60 * 24),
+                          );
+
                           // Si fue creado en los últimos 2 días, probablemente fue creado en esta entrada
                           if (diferenciaDias <= 2 && numero.estado === 'disponible') {
                             // Eliminar solo si fue creado recientemente y está disponible
@@ -1625,7 +1724,7 @@ export class MovimientosService {
         datosEliminados,
         usuarioId,
         'Eliminación de movimiento',
-        `Movimiento ${movimiento.movimientoTipo} eliminado. Stock revertido.`
+        `Movimiento ${movimiento.movimientoTipo} eliminado. Stock revertido.`,
       );
     } catch (error) {
       // Loguear error pero continuar con la eliminación
@@ -1653,7 +1752,10 @@ export class MovimientosService {
     }
   }
 
-  async actualizarEstado(movimientoId: number, nuevoEstado: EstadoMovimiento): Promise<MovimientoInventario> {
+  async actualizarEstado(
+    movimientoId: number,
+    nuevoEstado: EstadoMovimiento,
+  ): Promise<MovimientoInventario> {
     const movimiento = await this.movimientosRepository.findOne({
       where: { movimientoId },
     });
@@ -1688,7 +1790,11 @@ export class MovimientosService {
                 cantidadRevertir = Number(movimiento.movimientoCantidad); // Revertir devolución = sumar (porque devolución resta stock)
                 break;
             }
-            await this.materialesService.ajustarStock(movimiento.materialId, cantidadRevertir, bodegaId);
+            await this.materialesService.ajustarStock(
+              movimiento.materialId,
+              cantidadRevertir,
+              bodegaId,
+            );
           }
           // Si no estaba completado y ahora sí lo está, aplicar el ajuste de stock
           else if (!estabaCompletado && seraCompletado) {
@@ -1700,14 +1806,14 @@ export class MovimientosService {
                 movimiento.materialId,
                 TipoMovimiento.DEVOLUCION, // Forzar el enum correcto
                 Number(movimiento.movimientoCantidad),
-                bodegaId
+                bodegaId,
               );
             } else {
               await this.ajustarStockMovimiento(
                 movimiento.materialId,
                 movimiento.movimientoTipo,
                 Number(movimiento.movimientoCantidad),
-                bodegaId
+                bodegaId,
               );
             }
           }
@@ -1718,14 +1824,13 @@ export class MovimientosService {
     }
 
     movimiento.movimientoEstado = nuevoEstado;
-    return await this.movimientosRepository.save(movimiento);
+    return (await this.movimientosRepository.save(movimiento)) as unknown as MovimientoInventario;
   }
 
   async findByMaterial(materialId: number): Promise<any[]> {
-    try {
-      // Obtener todos los movimientos del material ordenados por fecha
-      const rawMovimientos = await this.movimientosRepository.query(
-        `SELECT 
+    // Obtener todos los movimientos del material ordenados por fecha
+    const rawMovimientos = await this.movimientosRepository.query(
+      `SELECT 
           m.movimientoId,
           m.materialId,
           m.movimientoTipo,
@@ -1743,166 +1848,171 @@ export class MovimientosService {
         FROM movimientos_inventario m
         WHERE m.materialId = ?
         ORDER BY m.fechaCreacion DESC`,
-        [materialId]
-      );
+      [materialId],
+    );
 
-      // Obtener material actual para cálculo de stock
-      const material = await this.materialesService.findOne(materialId);
-      
-      // Cargar inventarios y bodegas
-      const inventariosIds = [...new Set(rawMovimientos.map((m: any) => m.inventarioId).filter((id: any) => id && typeof id === 'number'))] as number[];
-      const inventarioMap = new Map<number, any>();
-      
-      for (const inventarioId of inventariosIds) {
-        try {
-          const inventario = await this.inventariosService.findOne(inventarioId);
-          inventarioMap.set(inventarioId, inventario);
-        } catch (err) {
-          // Error silencioso
-        }
+    // Obtener material actual para cálculo de stock
+    const material = await this.materialesService.findOne(materialId);
+
+    // Cargar inventarios y bodegas
+    const inventariosIds = [
+      ...new Set(
+        rawMovimientos
+          .map((m: any) => m.inventarioId)
+          .filter((id: any) => id && typeof id === 'number'),
+      ),
+    ] as number[];
+    const inventarioMap = new Map<number, any>();
+
+    for (const inventarioId of inventariosIds) {
+      try {
+        const inventario = await this.inventariosService.findOne(inventarioId);
+        inventarioMap.set(inventarioId, inventario);
+      } catch (err) {
+        // Error silencioso
       }
-
-      // Calcular stock antes y después para cada movimiento
-      // Ordenar movimientos de más antiguo a más reciente
-      const movimientosOrdenados = [...rawMovimientos].sort((a, b) => {
-        const fechaA = new Date(a.fechaCreacion).getTime();
-        const fechaB = new Date(b.fechaCreacion).getTime();
-        return fechaA - fechaB;
-      });
-
-      // Calcular stock antes y después recorriendo desde el principio
-      // Empezar desde 0 y calcular stock acumulativo
-      const stockPorMovimiento = new Map<number, { antes: number; despues: number }>();
-      let stockAcumulado = 0; // Empezar desde 0 (stock inicial)
-      
-      for (const movimiento of movimientosOrdenados) {
-        const cantidad = Number(movimiento.movimientoCantidad || 0);
-        const tipo = movimiento.movimientoTipo;
-        
-        // Stock antes del movimiento (estado actual antes de aplicar este movimiento)
-        const stockAntes = stockAcumulado;
-        
-        // Calcular stock después según el tipo de movimiento
-        let stockDespues = stockAcumulado;
-        if (tipo === 'entrada') {
-          stockDespues = stockAcumulado + cantidad; // Entrada aumenta stock
-        } else if (tipo === 'salida') {
-          stockDespues = stockAcumulado - cantidad; // Salida disminuye stock
-        } else if (tipo === 'devolucion') {
-          stockDespues = stockAcumulado - cantidad; // Devolución disminuye stock
-        }
-        
-        stockPorMovimiento.set(movimiento.movimientoId, {
-          antes: stockAntes,
-          despues: stockDespues
-        });
-        
-        // Actualizar stock acumulado para el siguiente movimiento
-        stockAcumulado = stockDespues;
-      }
-
-      // Ahora procesar movimientos en orden descendente (más reciente primero) con la información de stock
-      const movimientosDesc = [...rawMovimientos].sort((a, b) => {
-        const fechaA = new Date(a.fechaCreacion).getTime();
-        const fechaB = new Date(b.fechaCreacion).getTime();
-        return fechaB - fechaA;
-      });
-
-      const movimientosConRelaciones = await Promise.all(
-        movimientosDesc.map(async (movimiento: any) => {
-          const movimientoConRelaciones: any = { ...movimiento };
-          
-          // Agregar información de stock
-          const stockInfo = stockPorMovimiento.get(movimiento.movimientoId);
-          movimientoConRelaciones.stockAntes = stockInfo?.antes ?? 0;
-          movimientoConRelaciones.stockDespues = stockInfo?.despues ?? 0;
-
-          // Cargar material
-          movimientoConRelaciones.material = {
-            materialId: material.materialId,
-            materialCodigo: material.materialCodigo,
-            materialNombre: material.materialNombre,
-            materialStock: material.materialStock,
-            materialEsMedidor: material.materialEsMedidor || false,
-          };
-
-          // Cargar inventario
-          if (movimiento.inventarioId) {
-            const inventario = inventarioMap.get(Number(movimiento.inventarioId));
-            if (inventario) {
-              movimientoConRelaciones.inventario = inventario;
-              movimientoConRelaciones.bodega = inventario.bodega ?? null;
-              movimientoConRelaciones.bodegaId = inventario.bodegaId ?? inventario.bodega?.bodegaId ?? null;
-            }
-          }
-
-          // Cargar usuario
-          if (movimiento.usuarioId) {
-            try {
-              const usuario = await this.usersService.findOne(movimiento.usuarioId);
-              movimientoConRelaciones.usuario = {
-                usuarioId: usuario.usuarioId,
-                usuarioNombre: usuario.usuarioNombre,
-                usuarioApellido: usuario.usuarioApellido,
-                usuarioCorreo: usuario.usuarioCorreo,
-              };
-            } catch (err) {
-              // Error silencioso
-            }
-          }
-
-          // Cargar proveedor
-          if (movimiento.proveedorId) {
-            try {
-              const proveedor = await this.proveedoresService.findOne(movimiento.proveedorId);
-              movimientoConRelaciones.proveedor = {
-                proveedorId: proveedor.proveedorId,
-                proveedorNombre: proveedor.proveedorNombre,
-              };
-            } catch (err) {
-              // Error silencioso
-            }
-          }
-
-          // Cargar técnico origen si el movimiento viene de un técnico
-          if (movimiento.origenTipo === 'tecnico' && movimiento.tecnicoOrigenId) {
-            try {
-              const tecnicoOrigen = await this.usersService.findOne(movimiento.tecnicoOrigenId);
-              movimientoConRelaciones.tecnicoOrigen = {
-                usuarioId: tecnicoOrigen.usuarioId,
-                usuarioNombre: tecnicoOrigen.usuarioNombre,
-                usuarioApellido: tecnicoOrigen.usuarioApellido,
-              };
-            } catch (err) {
-              // Error silencioso
-            }
-          }
-
-          return movimientoConRelaciones;
-        })
-      );
-
-      return movimientosConRelaciones;
-    } catch (error) {
-      throw error;
     }
+
+    // Calcular stock antes y después para cada movimiento
+    // Ordenar movimientos de más antiguo a más reciente
+    const movimientosOrdenados = [...rawMovimientos].sort((a, b) => {
+      const fechaA = new Date(a.fechaCreacion).getTime();
+      const fechaB = new Date(b.fechaCreacion).getTime();
+      return fechaA - fechaB;
+    });
+
+    // Calcular stock antes y después recorriendo desde el principio
+    // Empezar desde 0 y calcular stock acumulativo
+    const stockPorMovimiento = new Map<number, { antes: number; despues: number }>();
+    let stockAcumulado = 0; // Empezar desde 0 (stock inicial)
+
+    for (const movimiento of movimientosOrdenados) {
+      const cantidad = Number(movimiento.movimientoCantidad || 0);
+      const tipo = movimiento.movimientoTipo;
+
+      // Stock antes del movimiento (estado actual antes de aplicar este movimiento)
+      const stockAntes = stockAcumulado;
+
+      // Calcular stock después según el tipo de movimiento
+      let stockDespues = stockAcumulado;
+      if (tipo === 'entrada') {
+        stockDespues = stockAcumulado + cantidad; // Entrada aumenta stock
+      } else if (tipo === 'salida') {
+        stockDespues = stockAcumulado - cantidad; // Salida disminuye stock
+      } else if (tipo === 'devolucion') {
+        stockDespues = stockAcumulado - cantidad; // Devolución disminuye stock
+      }
+
+      stockPorMovimiento.set(movimiento.movimientoId, {
+        antes: stockAntes,
+        despues: stockDespues,
+      });
+
+      // Actualizar stock acumulado para el siguiente movimiento
+      stockAcumulado = stockDespues;
+    }
+
+    // Ahora procesar movimientos en orden descendente (más reciente primero) con la información de stock
+    const movimientosDesc = [...rawMovimientos].sort((a, b) => {
+      const fechaA = new Date(a.fechaCreacion).getTime();
+      const fechaB = new Date(b.fechaCreacion).getTime();
+      return fechaB - fechaA;
+    });
+
+    const movimientosConRelaciones = await Promise.all(
+      movimientosDesc.map(async (movimiento: any) => {
+        const movimientoConRelaciones: any = { ...movimiento };
+
+        // Agregar información de stock
+        const stockInfo = stockPorMovimiento.get(movimiento.movimientoId);
+        movimientoConRelaciones.stockAntes = stockInfo?.antes ?? 0;
+        movimientoConRelaciones.stockDespues = stockInfo?.despues ?? 0;
+
+        // Cargar material
+        movimientoConRelaciones.material = {
+          materialId: material.materialId,
+          materialCodigo: material.materialCodigo,
+          materialNombre: material.materialNombre,
+          materialStock: material.materialStock,
+          materialEsMedidor: material.materialEsMedidor || false,
+        };
+
+        // Cargar inventario
+        if (movimiento.inventarioId) {
+          const inventario = inventarioMap.get(Number(movimiento.inventarioId));
+          if (inventario) {
+            movimientoConRelaciones.inventario = inventario;
+            movimientoConRelaciones.bodega = inventario.bodega ?? null;
+            movimientoConRelaciones.bodegaId =
+              inventario.bodegaId ?? inventario.bodega?.bodegaId ?? null;
+          }
+        }
+
+        // Cargar usuario
+        if (movimiento.usuarioId) {
+          try {
+            const usuario = await this.usersService.findOne(movimiento.usuarioId);
+            movimientoConRelaciones.usuario = {
+              usuarioId: usuario.usuarioId,
+              usuarioNombre: usuario.usuarioNombre,
+              usuarioApellido: usuario.usuarioApellido,
+              usuarioCorreo: usuario.usuarioCorreo,
+            };
+          } catch (err) {
+            // Error silencioso
+          }
+        }
+
+        // Cargar proveedor
+        if (movimiento.proveedorId) {
+          try {
+            const proveedor = await this.proveedoresService.findOne(movimiento.proveedorId);
+            movimientoConRelaciones.proveedor = {
+              proveedorId: proveedor.proveedorId,
+              proveedorNombre: proveedor.proveedorNombre,
+            };
+          } catch (err) {
+            // Error silencioso
+          }
+        }
+
+        // Cargar técnico origen si el movimiento viene de un técnico
+        if (movimiento.origenTipo === 'tecnico' && movimiento.tecnicoOrigenId) {
+          try {
+            const tecnicoOrigen = await this.usersService.findOne(movimiento.tecnicoOrigenId);
+            movimientoConRelaciones.tecnicoOrigen = {
+              usuarioId: tecnicoOrigen.usuarioId,
+              usuarioNombre: tecnicoOrigen.usuarioNombre,
+              usuarioApellido: tecnicoOrigen.usuarioApellido,
+            };
+          } catch (err) {
+            // Error silencioso
+          }
+        }
+
+        return movimientoConRelaciones;
+      }),
+    );
+
+    return movimientosConRelaciones;
   }
 
   async findByBodega(bodegaId: number): Promise<any[]> {
-    try {
-      // Obtener todos los inventarios de la bodega
-      const allInventarios = await this.inventariosService.findAll();
-      const inventarios = allInventarios.filter(inv => inv.bodegaId === bodegaId && inv.inventarioEstado);
+    // Obtener todos los inventarios de la bodega
+    const allInventarios = await this.inventariosService.findAll();
+    const inventarios = allInventarios.filter(
+      (inv) => inv.bodegaId === bodegaId && inv.inventarioEstado,
+    );
 
-      if (inventarios.length === 0) {
-        return [];
-      }
+    if (inventarios.length === 0) {
+      return [];
+    }
 
-      const inventariosIds = inventarios.map(inv => inv.inventarioId);
+    const inventariosIds = inventarios.map((inv) => inv.inventarioId);
 
-      // Obtener todos los movimientos de esos inventarios
-      const rawMovimientos = await this.movimientosRepository.query(
-        `SELECT 
+    // Obtener todos los movimientos de esos inventarios
+    const rawMovimientos = await this.movimientosRepository.query(
+      `SELECT 
           m.movimientoId,
           m.materialId,
           m.movimientoTipo,
@@ -1922,56 +2032,52 @@ export class MovimientosService {
         FROM movimientos_inventario m
         WHERE m.inventarioId IN (${inventariosIds.map(() => '?').join(',')})
         ORDER BY m.fechaCreacion ASC`,
-        inventariosIds
-      );
+      inventariosIds,
+    );
 
-      // Calcular stock antes y después para cada movimiento por material
-      const movimientosConStock = await this.calcularStockMovimientos(rawMovimientos);
-      
-      // Ordenar por fecha descendente (más reciente primero)
-      const movimientosOrdenados = movimientosConStock.sort((a, b) => {
-        const fechaA = new Date(a.fechaCreacion).getTime();
-        const fechaB = new Date(b.fechaCreacion).getTime();
-        return fechaB - fechaA;
-      });
+    // Calcular stock antes y después para cada movimiento por material
+    const movimientosConStock = await this.calcularStockMovimientos(rawMovimientos);
 
-      return await this.enrichMovimientos(movimientosOrdenados);
-    } catch (error) {
-      throw error;
-    }
+    // Ordenar por fecha descendente (más reciente primero)
+    const movimientosOrdenados = movimientosConStock.sort((a, b) => {
+      const fechaA = new Date(a.fechaCreacion).getTime();
+      const fechaB = new Date(b.fechaCreacion).getTime();
+      return fechaB - fechaA;
+    });
+
+    return await this.enrichMovimientos(movimientosOrdenados);
   }
 
   async findBySede(sedeId: number): Promise<any[]> {
-    try {
-      // Obtener todas las bodegas de la sede
-      const bodegas = await this.movimientosRepository.query(
-        `SELECT b.bodegaId 
+    // Obtener todas las bodegas de la sede
+    const bodegas = await this.movimientosRepository.query(
+      `SELECT b.bodegaId 
          FROM bodegas b
          WHERE b.sedeId = ?`,
-        [sedeId]
-      );
+      [sedeId],
+    );
 
-      if (bodegas.length === 0) {
-        return [];
-      }
+    if (bodegas.length === 0) {
+      return [];
+    }
 
-      const bodegasIds = bodegas.map((b: any) => b.bodegaId);
+    const bodegasIds = bodegas.map((b: any) => b.bodegaId);
 
-      // Obtener todos los inventarios de esas bodegas
-      const allInventarios = await this.inventariosService.findAll();
-      const inventarios = allInventarios.filter(inv => 
-        bodegasIds.includes(inv.bodegaId) && inv.inventarioEstado
-      );
+    // Obtener todos los inventarios de esas bodegas
+    const allInventarios = await this.inventariosService.findAll();
+    const inventarios = allInventarios.filter(
+      (inv) => bodegasIds.includes(inv.bodegaId) && inv.inventarioEstado,
+    );
 
-      if (inventarios.length === 0) {
-        return [];
-      }
+    if (inventarios.length === 0) {
+      return [];
+    }
 
-      const inventariosIds = inventarios.map(inv => inv.inventarioId);
+    const inventariosIds = inventarios.map((inv) => inv.inventarioId);
 
-      // Obtener todos los movimientos de esos inventarios
-      const rawMovimientos = await this.movimientosRepository.query(
-        `SELECT 
+    // Obtener todos los movimientos de esos inventarios
+    const rawMovimientos = await this.movimientosRepository.query(
+      `SELECT 
           m.movimientoId,
           m.materialId,
           m.movimientoTipo,
@@ -1991,30 +2097,26 @@ export class MovimientosService {
         FROM movimientos_inventario m
         WHERE m.inventarioId IN (${inventariosIds.map(() => '?').join(',')})
         ORDER BY m.fechaCreacion ASC`,
-        inventariosIds
-      );
+      inventariosIds,
+    );
 
-      // Calcular stock antes y después para cada movimiento por material
-      const movimientosConStock = await this.calcularStockMovimientos(rawMovimientos);
-      
-      // Ordenar por fecha descendente (más reciente primero)
-      const movimientosOrdenados = movimientosConStock.sort((a, b) => {
-        const fechaA = new Date(a.fechaCreacion).getTime();
-        const fechaB = new Date(b.fechaCreacion).getTime();
-        return fechaB - fechaA;
-      });
+    // Calcular stock antes y después para cada movimiento por material
+    const movimientosConStock = await this.calcularStockMovimientos(rawMovimientos);
 
-      return await this.enrichMovimientos(movimientosOrdenados);
-    } catch (error) {
-      throw error;
-    }
+    // Ordenar por fecha descendente (más reciente primero)
+    const movimientosOrdenados = movimientosConStock.sort((a, b) => {
+      const fechaA = new Date(a.fechaCreacion).getTime();
+      const fechaB = new Date(b.fechaCreacion).getTime();
+      return fechaB - fechaA;
+    });
+
+    return await this.enrichMovimientos(movimientosOrdenados);
   }
 
   async findByTecnico(usuarioId: number): Promise<any[]> {
-    try {
-      // Obtener todas las asignaciones del técnico desde inventario-tecnico
-      const asignaciones = await this.movimientosRepository.query(
-        `SELECT 
+    // Obtener todas las asignaciones del técnico desde inventario-tecnico
+    const asignaciones = await this.movimientosRepository.query(
+      `SELECT 
           it.inventarioTecnicoId,
           it.materialId,
           it.cantidad,
@@ -2023,62 +2125,59 @@ export class MovimientosService {
         FROM inventario_tecnicos it
         WHERE it.usuarioId = ?
         ORDER BY it.fechaCreacion ASC`,
-        [usuarioId]
-      );
+      [usuarioId],
+    );
 
-      // Calcular stock acumulado para cada asignación
-      const historialItems: any[] = [];
-      const stockPorMaterial = new Map<number, number>();
+    // Calcular stock acumulado para cada asignación
+    const historialItems: any[] = [];
+    const stockPorMaterial = new Map<number, number>();
 
-      for (const asignacion of asignaciones) {
-        const materialId = asignacion.materialId;
-        const cantidad = Number(asignacion.cantidad || 0);
-        
-        // Stock antes es el acumulado actual del material
-        const stockAntes = stockPorMaterial.get(materialId) || 0;
-        const stockDespues = stockAntes + cantidad;
-        
-        // Actualizar stock acumulado
-        stockPorMaterial.set(materialId, stockDespues);
+    for (const asignacion of asignaciones) {
+      const materialId = asignacion.materialId;
+      const cantidad = Number(asignacion.cantidad || 0);
 
-        // Cargar información del material
-        let material: any = null;
-        try {
-          const materialData = await this.materialesService.findOne(materialId);
-          material = {
-            materialId: materialData.materialId,
-            materialCodigo: materialData.materialCodigo,
-            materialNombre: materialData.materialNombre,
-          };
-        } catch (err) {
-          // Error silencioso
-        }
+      // Stock antes es el acumulado actual del material
+      const stockAntes = stockPorMaterial.get(materialId) || 0;
+      const stockDespues = stockAntes + cantidad;
 
-        historialItems.push({
-          id: `asignacion-${asignacion.inventarioTecnicoId}`,
-          tipo: 'asignacion',
-          fecha: new Date(asignacion.fechaCreacion),
-          cantidad,
-          stockAntes,
-          stockDespues,
-          material,
-          usuario: {
-            usuarioId,
-          },
-        });
+      // Actualizar stock acumulado
+      stockPorMaterial.set(materialId, stockDespues);
+
+      // Cargar información del material
+      let material: any = null;
+      try {
+        const materialData = await this.materialesService.findOne(materialId);
+        material = {
+          materialId: materialData.materialId,
+          materialCodigo: materialData.materialCodigo,
+          materialNombre: materialData.materialNombre,
+        };
+      } catch (err) {
+        // Error silencioso
       }
 
-      // Ordenar por fecha descendente (más reciente primero)
-      return historialItems.sort((a, b) => b.fecha.getTime() - a.fecha.getTime());
-    } catch (error) {
-      throw error;
+      historialItems.push({
+        id: `asignacion-${asignacion.inventarioTecnicoId}`,
+        tipo: 'asignacion',
+        fecha: new Date(asignacion.fechaCreacion),
+        cantidad,
+        stockAntes,
+        stockDespues,
+        material,
+        usuario: {
+          usuarioId,
+        },
+      });
     }
+
+    // Ordenar por fecha descendente (más reciente primero)
+    return historialItems.sort((a, b) => b.fecha.getTime() - a.fecha.getTime());
   }
 
   private async calcularStockMovimientos(rawMovimientos: any[]): Promise<any[]> {
     // Agrupar movimientos por material
     const movimientosPorMaterial = new Map<number, any[]>();
-    
+
     rawMovimientos.forEach((mov: any) => {
       const materialId = mov.materialId;
       if (!movimientosPorMaterial.has(materialId)) {
@@ -2089,7 +2188,7 @@ export class MovimientosService {
 
     // Calcular stock para cada material
     const movimientosConStock: any[] = [];
-    
+
     for (const [materialId, movimientos] of movimientosPorMaterial.entries()) {
       // Ordenar movimientos por fecha (más antiguo primero)
       const movimientosOrdenados = movimientos.sort((a, b) => {
@@ -2099,14 +2198,14 @@ export class MovimientosService {
       });
 
       let stockAcumulado = 0;
-      
+
       for (const movimiento of movimientosOrdenados) {
         const cantidad = Number(movimiento.movimientoCantidad || 0);
         const tipo = movimiento.movimientoTipo;
-        
+
         const stockAntes = stockAcumulado;
         let stockDespues = stockAcumulado;
-        
+
         if (tipo === 'entrada') {
           stockDespues = stockAcumulado + cantidad;
         } else if (tipo === 'salida') {
@@ -2114,13 +2213,13 @@ export class MovimientosService {
         } else if (tipo === 'devolucion') {
           stockDespues = stockAcumulado - cantidad;
         }
-        
+
         movimientosConStock.push({
           ...movimiento,
           stockAntes,
-          stockDespues
+          stockDespues,
         });
-        
+
         stockAcumulado = stockDespues;
       }
     }
@@ -2129,9 +2228,15 @@ export class MovimientosService {
   }
 
   private async enrichMovimientos(rawMovimientos: any[]): Promise<any[]> {
-    const inventariosIds = [...new Set(rawMovimientos.map((m: any) => m.inventarioId).filter((id: any) => id && typeof id === 'number'))] as number[];
+    const inventariosIds = [
+      ...new Set(
+        rawMovimientos
+          .map((m: any) => m.inventarioId)
+          .filter((id: any) => id && typeof id === 'number'),
+      ),
+    ] as number[];
     const inventarioMap = new Map<number, any>();
-    
+
     for (const inventarioId of inventariosIds) {
       try {
         const inventario = await this.inventariosService.findOne(inventarioId);
@@ -2164,7 +2269,8 @@ export class MovimientosService {
           if (inventario) {
             movimientoEnriquecido.inventario = inventario;
             movimientoEnriquecido.bodega = inventario.bodega ?? null;
-            movimientoEnriquecido.bodegaId = inventario.bodegaId ?? inventario.bodega?.bodegaId ?? null;
+            movimientoEnriquecido.bodegaId =
+              inventario.bodegaId ?? inventario.bodega?.bodegaId ?? null;
           }
         }
 
@@ -2211,7 +2317,7 @@ export class MovimientosService {
         }
 
         return movimientoEnriquecido;
-      })
+      }),
     );
   }
 
@@ -2227,4 +2333,3 @@ export class MovimientosService {
     return Boolean(material.materialEsMedidor);
   }
 }
-

@@ -10,7 +10,10 @@ export class CreateInstalacionDto {
   @IsNumber()
   clienteId: number;
 
-  @ApiProperty({ example: 'INST-001', description: 'Código de instalación (obligatorio, único por instalación)' })
+  @ApiProperty({
+    example: 'INST-001',
+    description: 'Código de instalación (obligatorio, único por instalación)',
+  })
   @IsString()
   instalacionCodigo: string;
 
@@ -56,7 +59,11 @@ export class CreateInstalacionDto {
   @IsOptional()
   observacionesTecnico?: string;
 
-  @ApiProperty({ required: false, description: 'Array de IDs de usuarios asignados', type: [Number] })
+  @ApiProperty({
+    required: false,
+    description: 'Array de IDs de usuarios asignados',
+    type: [Number],
+  })
   @IsArray()
   @IsNumber({}, { each: true })
   @IsOptional()

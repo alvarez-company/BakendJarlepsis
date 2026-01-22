@@ -41,7 +41,16 @@ export class InstalacionesController {
   }
 
   @Get()
-  @Roles('superadmin', 'admin', 'administrador', 'almacenista', 'tecnico', 'soldador', 'bodega-internas', 'bodega-redes')
+  @Roles(
+    'superadmin',
+    'admin',
+    'administrador',
+    'almacenista',
+    'tecnico',
+    'soldador',
+    'bodega-internas',
+    'bodega-redes',
+  )
   @ApiOperation({ summary: 'Get all instalaciones' })
   async findAll(@Request() req) {
     try {
@@ -55,7 +64,16 @@ export class InstalacionesController {
   }
 
   @Get(':id')
-  @Roles('superadmin', 'admin', 'administrador', 'almacenista', 'tecnico', 'soldador', 'bodega-internas', 'bodega-redes')
+  @Roles(
+    'superadmin',
+    'admin',
+    'administrador',
+    'almacenista',
+    'tecnico',
+    'soldador',
+    'bodega-internas',
+    'bodega-redes',
+  )
   @ApiOperation({ summary: 'Get an instalacion by ID' })
   findOne(@Param('id') id: string) {
     const instalacionId = parseInt(id, 10);
@@ -68,8 +86,17 @@ export class InstalacionesController {
   @Patch(':id')
   @Roles('superadmin', 'admin', 'tecnico', 'soldador', 'bodega-internas', 'bodega-redes')
   @ApiOperation({ summary: 'Update an instalacion' })
-  update(@Param('id') id: string, @Body() updateInstalacionDto: UpdateInstalacionDto, @Request() req) {
-    return this.instalacionesService.update(+id, updateInstalacionDto, req.user.usuarioId, req.user);
+  update(
+    @Param('id') id: string,
+    @Body() updateInstalacionDto: UpdateInstalacionDto,
+    @Request() req,
+  ) {
+    return this.instalacionesService.update(
+      +id,
+      updateInstalacionDto,
+      req.user.usuarioId,
+      req.user,
+    );
   }
 
   @Delete(':id')
@@ -82,47 +109,76 @@ export class InstalacionesController {
   @Post(':id/actualizar-estado')
   @Roles('superadmin', 'admin', 'tecnico', 'soldador', 'bodega-internas', 'bodega-redes')
   @ApiOperation({ summary: 'Update instalacion status' })
-  actualizarEstado(@Param('id') id: string, @Body() updateEstadoDto: UpdateEstadoInstalacionDto, @Request() req) {
-    return this.instalacionesService.actualizarEstado(+id, updateEstadoDto.estado, req.user.usuarioId, req.user);
+  actualizarEstado(
+    @Param('id') id: string,
+    @Body() updateEstadoDto: UpdateEstadoInstalacionDto,
+    @Request() req,
+  ) {
+    return this.instalacionesService.actualizarEstado(
+      +id,
+      updateEstadoDto.estado,
+      req.user.usuarioId,
+      req.user,
+    );
   }
 
   @Get('export/excel')
-  @Roles('superadmin', 'admin', 'administrador', 'almacenista', 'tecnico', 'soldador', 'bodega-internas', 'bodega-redes')
+  @Roles(
+    'superadmin',
+    'admin',
+    'administrador',
+    'almacenista',
+    'tecnico',
+    'soldador',
+    'bodega-internas',
+    'bodega-redes',
+  )
   @ApiOperation({ summary: 'Export installations to Excel' })
   @ApiQuery({ name: 'filters', required: false, type: String })
   @ApiQuery({ name: 'dateStart', required: false, type: String })
   @ApiQuery({ name: 'dateEnd', required: false, type: String })
-  async exportToExcel(@Request() req, @Res() res: Response, @Query('filters') filters?: string, @Query('dateStart') dateStart?: string, @Query('dateEnd') dateEnd?: string) {
+  async exportToExcel(
+    @Request() req,
+    @Res() res: Response,
+    @Query('filters') filters?: string,
+    @Query('dateStart') dateStart?: string,
+    @Query('dateEnd') dateEnd?: string,
+  ) {
     try {
       const instalaciones = await this.instalacionesService.findAll(req.user);
-      
+
       let filteredData = instalaciones;
-      
+
       // Filtrar por fechas si se proporcionan
       if (dateStart || dateEnd) {
         const startDate = dateStart ? new Date(dateStart) : null;
         const endDate = dateEnd ? new Date(dateEnd) : null;
         if (endDate) endDate.setHours(23, 59, 59, 999);
-        
+
         filteredData = filteredData.filter((i: any) => {
-          const fecha = new Date(i.fechaCreacion || i.instalacionFechaCreacion || i.instalacionFechaInicio);
+          const fecha = new Date(
+            i.fechaCreacion || i.instalacionFechaCreacion || i.instalacionFechaInicio,
+          );
           if (startDate && fecha < startDate) return false;
           if (endDate && fecha > endDate) return false;
           return true;
         });
       }
-      
+
       if (filters) {
         try {
           const filterObj = JSON.parse(filters);
           if (filterObj.search) {
             const search = filterObj.search.toLowerCase();
-            filteredData = filteredData.filter((i: any) =>
-              i.instalacionIdentificadorUnico?.toLowerCase().includes(search) ||
-              i.cliente?.nombreUsuario?.toLowerCase().includes(search)
+            filteredData = filteredData.filter(
+              (i: any) =>
+                i.instalacionIdentificadorUnico?.toLowerCase().includes(search) ||
+                i.cliente?.nombreUsuario?.toLowerCase().includes(search),
             );
           }
-        } catch (e) {}
+        } catch (_e) {
+          // Ignorar errores de filtrado, continuar sin filtrar
+        }
       }
 
       const columns = [
@@ -155,27 +211,35 @@ export class InstalacionesController {
 
       const exportData = filteredData.map((i: any) => {
         // Formatear usuarios asignados
-        const usuariosAsignadosStr = i.usuariosAsignados && Array.isArray(i.usuariosAsignados) && i.usuariosAsignados.length > 0
-          ? i.usuariosAsignados.map((ua: any) => {
-              const usuario = ua.usuario;
-              if (usuario) {
-                return `${usuario.usuarioNombre} ${usuario.usuarioApellido}${ua.rolEnInstalacion ? ` (${ua.rolEnInstalacion})` : ''}`;
-              }
-              return `Usuario ID: ${ua.usuarioId}`;
-            }).join('; ')
-          : 'Sin asignar';
+        const usuariosAsignadosStr =
+          i.usuariosAsignados &&
+          Array.isArray(i.usuariosAsignados) &&
+          i.usuariosAsignados.length > 0
+            ? i.usuariosAsignados
+                .map((ua: any) => {
+                  const usuario = ua.usuario;
+                  if (usuario) {
+                    return `${usuario.usuarioNombre} ${usuario.usuarioApellido}${ua.rolEnInstalacion ? ` (${ua.rolEnInstalacion})` : ''}`;
+                  }
+                  return `Usuario ID: ${ua.usuarioId}`;
+                })
+                .join('; ')
+            : 'Sin asignar';
 
         // Formatear materiales instalados si existen
         let materialesStr = '-';
         if (i.materialesInstalados) {
           try {
-            const materiales = typeof i.materialesInstalados === 'string' 
-              ? JSON.parse(i.materialesInstalados) 
-              : i.materialesInstalados;
+            const materiales =
+              typeof i.materialesInstalados === 'string'
+                ? JSON.parse(i.materialesInstalados)
+                : i.materialesInstalados;
             if (Array.isArray(materiales) && materiales.length > 0) {
-              materialesStr = materiales.map((m: any) => 
-                `${m.nombre || m.materialNombre || 'Material'} (${m.cantidad || 0})`
-              ).join('; ');
+              materialesStr = materiales
+                .map(
+                  (m: any) => `${m.nombre || m.materialNombre || 'Material'} (${m.cantidad || 0})`,
+                )
+                .join('; ');
             }
           } catch (e) {
             materialesStr = 'Error al parsear';
@@ -193,23 +257,37 @@ export class InstalacionesController {
           instalacionMedidorNumero: i.instalacionMedidorNumero || '-',
           instalacionSelloNumero: i.instalacionSelloNumero || '-',
           instalacionSelloRegulador: i.instalacionSelloRegulador || '-',
-          instalacionFecha: i.instalacionFecha ? new Date(i.instalacionFecha).toLocaleDateString('es-CO') : '-',
+          instalacionFecha: i.instalacionFecha
+            ? new Date(i.instalacionFecha).toLocaleDateString('es-CO')
+            : '-',
           estado: i.estado || '-',
-          fechaAsignacion: i.fechaAsignacion ? new Date(i.fechaAsignacion).toLocaleString('es-CO') : '-',
-          fechaConstruccion: i.fechaConstruccion ? new Date(i.fechaConstruccion).toLocaleString('es-CO') : '-',
-          fechaCertificacion: i.fechaCertificacion ? new Date(i.fechaCertificacion).toLocaleString('es-CO') : '-',
-          fechaFinalizacion: i.fechaFinalizacion ? new Date(i.fechaFinalizacion).toLocaleString('es-CO') : '-',
+          fechaAsignacion: i.fechaAsignacion
+            ? new Date(i.fechaAsignacion).toLocaleString('es-CO')
+            : '-',
+          fechaConstruccion: i.fechaConstruccion
+            ? new Date(i.fechaConstruccion).toLocaleString('es-CO')
+            : '-',
+          fechaCertificacion: i.fechaCertificacion
+            ? new Date(i.fechaCertificacion).toLocaleString('es-CO')
+            : '-',
+          fechaFinalizacion: i.fechaFinalizacion
+            ? new Date(i.fechaFinalizacion).toLocaleString('es-CO')
+            : '-',
           fechaNovedad: i.fechaNovedad ? new Date(i.fechaNovedad).toLocaleString('es-CO') : '-',
-          fechaAnulacion: i.fechaAnulacion ? new Date(i.fechaAnulacion).toLocaleString('es-CO') : '-',
+          fechaAnulacion: i.fechaAnulacion
+            ? new Date(i.fechaAnulacion).toLocaleString('es-CO')
+            : '-',
           usuariosAsignados: usuariosAsignadosStr,
           bodega: i.bodega?.bodegaNombre || '-',
-          usuarioRegistrador: i.usuarioRegistrador 
-            ? `${i.usuarioRegistrador.usuarioNombre} ${i.usuarioRegistrador.usuarioApellido}` 
+          usuarioRegistrador: i.usuarioRegistrador
+            ? `${i.usuarioRegistrador.usuarioNombre} ${i.usuarioRegistrador.usuarioApellido}`
             : '-',
           instalacionObservaciones: i.instalacionObservaciones || '-',
           observacionesTecnico: i.observacionesTecnico || '-',
           fechaCreacion: i.fechaCreacion ? new Date(i.fechaCreacion).toLocaleString('es-CO') : '-',
-          fechaActualizacion: i.fechaActualizacion ? new Date(i.fechaActualizacion).toLocaleString('es-CO') : '-',
+          fechaActualizacion: i.fechaActualizacion
+            ? new Date(i.fechaActualizacion).toLocaleString('es-CO')
+            : '-',
         };
       });
 
@@ -219,7 +297,10 @@ export class InstalacionesController {
         filename: 'reporte-instalaciones',
       });
 
-      res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+      res.setHeader(
+        'Content-Type',
+        'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+      );
       res.setHeader('Content-Disposition', 'attachment; filename="reporte-instalaciones.xlsx"');
       res.send(buffer);
     } catch (error) {
@@ -228,42 +309,62 @@ export class InstalacionesController {
   }
 
   @Get('export/pdf')
-  @Roles('superadmin', 'admin', 'administrador', 'almacenista', 'tecnico', 'soldador', 'bodega-internas', 'bodega-redes')
+  @Roles(
+    'superadmin',
+    'admin',
+    'administrador',
+    'almacenista',
+    'tecnico',
+    'soldador',
+    'bodega-internas',
+    'bodega-redes',
+  )
   @ApiOperation({ summary: 'Export installations to PDF' })
   @ApiQuery({ name: 'filters', required: false, type: String })
   @ApiQuery({ name: 'dateStart', required: false, type: String })
   @ApiQuery({ name: 'dateEnd', required: false, type: String })
-  async exportToPdf(@Request() req, @Res() res: Response, @Query('filters') filters?: string, @Query('dateStart') dateStart?: string, @Query('dateEnd') dateEnd?: string) {
+  async exportToPdf(
+    @Request() req,
+    @Res() res: Response,
+    @Query('filters') filters?: string,
+    @Query('dateStart') dateStart?: string,
+    @Query('dateEnd') dateEnd?: string,
+  ) {
     try {
       const instalaciones = await this.instalacionesService.findAll(req.user);
-      
+
       let filteredData = instalaciones;
-      
+
       // Filtrar por fechas si se proporcionan
       if (dateStart || dateEnd) {
         const startDate = dateStart ? new Date(dateStart) : null;
         const endDate = dateEnd ? new Date(dateEnd) : null;
         if (endDate) endDate.setHours(23, 59, 59, 999);
-        
+
         filteredData = filteredData.filter((i: any) => {
-          const fecha = new Date(i.fechaCreacion || i.instalacionFechaCreacion || i.instalacionFechaInicio);
+          const fecha = new Date(
+            i.fechaCreacion || i.instalacionFechaCreacion || i.instalacionFechaInicio,
+          );
           if (startDate && fecha < startDate) return false;
           if (endDate && fecha > endDate) return false;
           return true;
         });
       }
-      
+
       if (filters) {
         try {
           const filterObj = JSON.parse(filters);
           if (filterObj.search) {
             const search = filterObj.search.toLowerCase();
-            filteredData = filteredData.filter((i: any) =>
-              i.instalacionIdentificadorUnico?.toLowerCase().includes(search) ||
-              i.cliente?.nombreUsuario?.toLowerCase().includes(search)
+            filteredData = filteredData.filter(
+              (i: any) =>
+                i.instalacionIdentificadorUnico?.toLowerCase().includes(search) ||
+                i.cliente?.nombreUsuario?.toLowerCase().includes(search),
             );
           }
-        } catch (e) {}
+        } catch (_e) {
+          // Ignorar errores de filtrado, continuar sin filtrar
+        }
       }
 
       const columns = [
@@ -296,27 +397,35 @@ export class InstalacionesController {
 
       const exportData = filteredData.map((i: any) => {
         // Formatear usuarios asignados
-        const usuariosAsignadosStr = i.usuariosAsignados && Array.isArray(i.usuariosAsignados) && i.usuariosAsignados.length > 0
-          ? i.usuariosAsignados.map((ua: any) => {
-              const usuario = ua.usuario;
-              if (usuario) {
-                return `${usuario.usuarioNombre} ${usuario.usuarioApellido}${ua.rolEnInstalacion ? ` (${ua.rolEnInstalacion})` : ''}`;
-              }
-              return `Usuario ID: ${ua.usuarioId}`;
-            }).join('; ')
-          : 'Sin asignar';
+        const usuariosAsignadosStr =
+          i.usuariosAsignados &&
+          Array.isArray(i.usuariosAsignados) &&
+          i.usuariosAsignados.length > 0
+            ? i.usuariosAsignados
+                .map((ua: any) => {
+                  const usuario = ua.usuario;
+                  if (usuario) {
+                    return `${usuario.usuarioNombre} ${usuario.usuarioApellido}${ua.rolEnInstalacion ? ` (${ua.rolEnInstalacion})` : ''}`;
+                  }
+                  return `Usuario ID: ${ua.usuarioId}`;
+                })
+                .join('; ')
+            : 'Sin asignar';
 
         // Formatear materiales instalados si existen
         let materialesStr = '-';
         if (i.materialesInstalados) {
           try {
-            const materiales = typeof i.materialesInstalados === 'string' 
-              ? JSON.parse(i.materialesInstalados) 
-              : i.materialesInstalados;
+            const materiales =
+              typeof i.materialesInstalados === 'string'
+                ? JSON.parse(i.materialesInstalados)
+                : i.materialesInstalados;
             if (Array.isArray(materiales) && materiales.length > 0) {
-              materialesStr = materiales.map((m: any) => 
-                `${m.nombre || m.materialNombre || 'Material'} (${m.cantidad || 0})`
-              ).join('; ');
+              materialesStr = materiales
+                .map(
+                  (m: any) => `${m.nombre || m.materialNombre || 'Material'} (${m.cantidad || 0})`,
+                )
+                .join('; ');
             }
           } catch (e) {
             materialesStr = 'Error al parsear';
@@ -334,23 +443,37 @@ export class InstalacionesController {
           instalacionMedidorNumero: i.instalacionMedidorNumero || '-',
           instalacionSelloNumero: i.instalacionSelloNumero || '-',
           instalacionSelloRegulador: i.instalacionSelloRegulador || '-',
-          instalacionFecha: i.instalacionFecha ? new Date(i.instalacionFecha).toLocaleDateString('es-CO') : '-',
+          instalacionFecha: i.instalacionFecha
+            ? new Date(i.instalacionFecha).toLocaleDateString('es-CO')
+            : '-',
           estado: i.estado || '-',
-          fechaAsignacion: i.fechaAsignacion ? new Date(i.fechaAsignacion).toLocaleString('es-CO') : '-',
-          fechaConstruccion: i.fechaConstruccion ? new Date(i.fechaConstruccion).toLocaleString('es-CO') : '-',
-          fechaCertificacion: i.fechaCertificacion ? new Date(i.fechaCertificacion).toLocaleString('es-CO') : '-',
-          fechaFinalizacion: i.fechaFinalizacion ? new Date(i.fechaFinalizacion).toLocaleString('es-CO') : '-',
+          fechaAsignacion: i.fechaAsignacion
+            ? new Date(i.fechaAsignacion).toLocaleString('es-CO')
+            : '-',
+          fechaConstruccion: i.fechaConstruccion
+            ? new Date(i.fechaConstruccion).toLocaleString('es-CO')
+            : '-',
+          fechaCertificacion: i.fechaCertificacion
+            ? new Date(i.fechaCertificacion).toLocaleString('es-CO')
+            : '-',
+          fechaFinalizacion: i.fechaFinalizacion
+            ? new Date(i.fechaFinalizacion).toLocaleString('es-CO')
+            : '-',
           fechaNovedad: i.fechaNovedad ? new Date(i.fechaNovedad).toLocaleString('es-CO') : '-',
-          fechaAnulacion: i.fechaAnulacion ? new Date(i.fechaAnulacion).toLocaleString('es-CO') : '-',
+          fechaAnulacion: i.fechaAnulacion
+            ? new Date(i.fechaAnulacion).toLocaleString('es-CO')
+            : '-',
           usuariosAsignados: usuariosAsignadosStr,
           bodega: i.bodega?.bodegaNombre || '-',
-          usuarioRegistrador: i.usuarioRegistrador 
-            ? `${i.usuarioRegistrador.usuarioNombre} ${i.usuarioRegistrador.usuarioApellido}` 
+          usuarioRegistrador: i.usuarioRegistrador
+            ? `${i.usuarioRegistrador.usuarioNombre} ${i.usuarioRegistrador.usuarioApellido}`
             : '-',
           instalacionObservaciones: i.instalacionObservaciones || '-',
           observacionesTecnico: i.observacionesTecnico || '-',
           fechaCreacion: i.fechaCreacion ? new Date(i.fechaCreacion).toLocaleString('es-CO') : '-',
-          fechaActualizacion: i.fechaActualizacion ? new Date(i.fechaActualizacion).toLocaleString('es-CO') : '-',
+          fechaActualizacion: i.fechaActualizacion
+            ? new Date(i.fechaActualizacion).toLocaleString('es-CO')
+            : '-',
         };
       });
 

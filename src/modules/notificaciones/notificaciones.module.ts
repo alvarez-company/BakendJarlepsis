@@ -6,13 +6,9 @@ import { Notificacion } from './notificacion.entity';
 import { ChatModule } from '../chat/chat.module';
 
 @Module({
-  imports: [
-    TypeOrmModule.forFeature([Notificacion]),
-    forwardRef(() => ChatModule),
-  ],
+  imports: [TypeOrmModule.forFeature([Notificacion]), forwardRef(() => ChatModule)],
   controllers: [NotificacionesController],
   providers: [NotificacionesService],
   exports: [NotificacionesService],
 })
 export class NotificacionesModule {}
-
