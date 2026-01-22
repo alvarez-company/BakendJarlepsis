@@ -16,7 +16,7 @@ import { UsersService } from './users.service';
 import { CreateUserDto } from './dto/create-user.dto';
 import { UpdateUserDto } from './dto/update-user.dto';
 import { ChangeRoleDto } from './dto/change-role.dto';
-import { UpdateEstadoDto } from './dto/update-estado.dto';
+import { UpdateEstadoUsuarioDto } from './dto/update-estado.dto';
 import { ChangePasswordDto } from './dto/change-password.dto';
 import { PaginationDto } from '../../common/dto/pagination.dto';
 import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard';
@@ -96,7 +96,7 @@ export class UsersController {
   @Patch(':id/estado')
   @Roles('superadmin', 'admin')
   @ApiOperation({ summary: 'Update user status (Admin/SuperAdmin only)' })
-  updateEstado(@Param('id') id: string, @Body() updateEstadoDto: UpdateEstadoDto) {
+  updateEstado(@Param('id') id: string, @Body() updateEstadoDto: UpdateEstadoUsuarioDto) {
     return this.usersService.updateEstado(+id, updateEstadoDto.usuarioEstado);
   }
 
@@ -110,8 +110,9 @@ export class UsersController {
   @Patch(':id')
   @Roles('superadmin', 'admin', 'bodega-internas', 'bodega-redes')
   @ApiOperation({ summary: 'Update a user' })
-  update(@Param('id') id: string, @Body() updateUserDto: UpdateUserDto) {
-    return this.usersService.update(+id, updateUserDto);
+  update(@Param('id') id: string, @Body() updateUserDto: UpdateUserDto, @Request() req) {
+    const rolTipo = req.user.usuarioRol?.rolTipo || req.user.role;
+    return this.usersService.update(+id, updateUserDto, req.user.usuarioId, rolTipo);
   }
 
   @Delete(':id')

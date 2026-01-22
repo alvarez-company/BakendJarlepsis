@@ -51,6 +51,11 @@ export class AuthService {
 
       const rolTipo = user.usuarioRol?.rolTipo || 'empleado';
       
+      // Restringir login de técnico y soldador en el sistema principal (solo miniapp)
+      if (rolTipo === 'tecnico' || rolTipo === 'soldador') {
+        throw new UnauthorizedException('Los técnicos y soldadores solo pueden iniciar sesión en la aplicación móvil');
+      }
+      
       const payload = {
         email: user.usuarioCorreo,
         sub: user.usuarioId,

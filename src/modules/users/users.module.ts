@@ -9,6 +9,7 @@ import { InventarioTecnicoModule } from '../inventario-tecnico/inventario-tecnic
 import { MovimientosModule } from '../movimientos/movimientos.module';
 import { InventariosModule } from '../inventarios/inventarios.module';
 import { BodegasModule } from '../bodegas/bodegas.module';
+import { RolesModule } from '../roles/roles.module';
 
 @Module({
   imports: [
@@ -19,6 +20,7 @@ import { BodegasModule } from '../bodegas/bodegas.module';
     forwardRef(() => MovimientosModule),
     forwardRef(() => InventariosModule),
     forwardRef(() => BodegasModule),
+    forwardRef(() => RolesModule),
   ],
   controllers: [UsersController],
   providers: [UsersService],

@@ -2,7 +2,7 @@ import { ApiProperty } from '@nestjs/swagger';
 import { IsEnum, IsNotEmpty } from 'class-validator';
 import { EstadoInstalacion } from '../instalacion.entity';
 
-export class UpdateEstadoDto {
+export class UpdateEstadoInstalacionDto {
   @ApiProperty({ 
     enum: EstadoInstalacion,
     example: EstadoInstalacion.PENDIENTE,

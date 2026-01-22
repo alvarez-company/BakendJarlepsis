@@ -32,28 +32,28 @@ export class ClientesController {
   ) {}
 
   @Post()
-  @Roles('superadmin', 'admin', 'tecnico')
+  @Roles('superadmin', 'admin', 'tecnico', 'soldador', 'bodega-internas', 'bodega-redes')
   @ApiOperation({ summary: 'Create a new cliente' })
   create(@Body() createClienteDto: CreateClienteDto, @Request() req) {
     return this.clientesService.create(createClienteDto, req.user.usuarioId);
   }
 
   @Get()
-  @Roles('superadmin', 'admin', 'tecnico')
+  @Roles('superadmin', 'admin', 'administrador', 'almacenista', 'tecnico', 'soldador', 'bodega-internas', 'bodega-redes')
   @ApiOperation({ summary: 'Get all clientes' })
   findAll() {
     return this.clientesService.findAll();
   }
 
   @Get(':id')
-  @Roles('superadmin', 'admin', 'tecnico')
+  @Roles('superadmin', 'admin', 'administrador', 'almacenista', 'tecnico', 'soldador', 'bodega-internas', 'bodega-redes')
   @ApiOperation({ summary: 'Get a cliente by ID' })
   findOne(@Param('id') id: string) {
     return this.clientesService.findOne(+id);
   }
 
   @Patch(':id')
-  @Roles('superadmin', 'admin', 'tecnico')
+  @Roles('superadmin', 'admin', 'tecnico', 'soldador', 'bodega-internas', 'bodega-redes')
   @ApiOperation({ summary: 'Update a cliente' })
   update(@Param('id') id: string, @Body() updateClienteDto: UpdateClienteDto) {
     return this.clientesService.update(+id, updateClienteDto);
@@ -67,7 +67,7 @@ export class ClientesController {
   }
 
   @Get('export/excel')
-  @Roles('superadmin', 'admin', 'tecnico')
+  @Roles('superadmin', 'admin', 'administrador', 'almacenista', 'tecnico', 'soldador', 'bodega-internas', 'bodega-redes')
   @ApiOperation({ summary: 'Export clients to Excel' })
   @ApiQuery({ name: 'filters', required: false, type: String })
   async exportToExcel(@Res() res: Response, @Query('filters') filters?: string) {
@@ -116,7 +116,7 @@ export class ClientesController {
   }
 
   @Get('export/pdf')
-  @Roles('superadmin', 'admin', 'tecnico')
+  @Roles('superadmin', 'admin', 'administrador', 'almacenista', 'tecnico', 'soldador', 'bodega-internas', 'bodega-redes')
   @ApiOperation({ summary: 'Export clients to PDF' })
   @ApiQuery({ name: 'filters', required: false, type: String })
   async exportToPdf(@Res() res: Response, @Query('filters') filters?: string) {

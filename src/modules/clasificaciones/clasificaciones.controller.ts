@@ -21,13 +21,13 @@ export class ClasificacionesController {
   }
 
   @Get()
-  @Roles('superadmin', 'admin', 'tecnico', 'instalaciones')
+  @Roles('superadmin', 'admin', 'administrador', 'almacenista', 'tecnico', 'soldador', 'bodega-internas', 'bodega-redes')
   findAll() {
     return this.clasificacionesService.findAll();
   }
 
   @Get(':id')
-  @Roles('superadmin', 'admin', 'tecnico', 'instalaciones')
+  @Roles('superadmin', 'admin', 'administrador', 'almacenista', 'tecnico', 'soldador', 'bodega-internas', 'bodega-redes')
   findOne(@Param('id') id: string) {
     return this.clasificacionesService.findOne(+id);
   }

@@ -513,6 +513,7 @@ export class InstalacionesService {
       `SELECT 
         i.instalacionId,
         i.identificadorUnico,
+        i.instalacionCodigo,
         i.tipoInstalacionId,
         i.clienteId,
         i.instalacionMedidorNumero,
@@ -657,6 +658,7 @@ export class InstalacionesService {
       bodegaId: row.bodegaId,
       fechaCreacion: row.fechaCreacion,
       fechaActualizacion: row.fechaActualizacion,
+      instalacionCodigo: row.instalacionCodigo || row.identificadorUnico,
       tipoInstalacion,
       usuariosAsignados,
       cliente,

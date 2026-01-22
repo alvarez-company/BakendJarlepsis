@@ -14,6 +14,7 @@ import { InventarioTecnicoService } from '../inventario-tecnico/inventario-tecni
 import { MovimientosService } from '../movimientos/movimientos.service';
 import { InventariosService } from '../inventarios/inventarios.service';
 import { BodegasService } from '../bodegas/bodegas.service';
+import { RolesService } from '../roles/roles.service';
 import { TipoMovimiento } from '../movimientos/movimiento-inventario.entity';
 
 @Injectable()
@@ -33,6 +34,8 @@ export class UsersService {
     private inventariosService: InventariosService,
     @Inject(forwardRef(() => BodegasService))
     private bodegasService: BodegasService,
+    @Inject(forwardRef(() => RolesService))
+    private rolesService: RolesService,
   ) {}
 
   async create(createUserDto: CreateUserDto, creadorId?: number): Promise<User> {
@@ -166,8 +169,24 @@ export class UsersService {
     });
   }
 
-  async update(id: number, updateUserDto: UpdateUserDto): Promise<User> {
+  async update(id: number, updateUserDto: UpdateUserDto, requestingUserId?: number, requestingUserRole?: string): Promise<User> {
     const user = await this.findOne(id);
+    
+    // Si se intenta cambiar la contraseña, solo superadmin puede cambiar contraseñas de otros usuarios
+    if (updateUserDto.usuarioContrasena) {
+      // Si el usuario que solicita no es superadmin y no está actualizando su propio perfil
+      if (requestingUserId && requestingUserRole !== 'superadmin' && requestingUserId !== id) {
+        throw new BadRequestException('Solo puedes cambiar tu propia contraseña. Los cambios de contraseña de otros usuarios solo pueden ser realizados por el superadmin.');
+      }
+      updateUserDto.usuarioContrasena = await bcrypt.hash(updateUserDto.usuarioContrasena, 10);
+    }
+    
+    // Si se intenta cambiar el rol, solo superadmin puede hacerlo
+    if (updateUserDto.usuarioRolId !== undefined && updateUserDto.usuarioRolId !== user.usuarioRolId) {
+      if (requestingUserRole !== 'superadmin') {
+        throw new BadRequestException('Solo el superadmin puede cambiar roles de usuarios');
+      }
+    }
     
     // Validar que el correo no esté en uso por otro usuario
     if (updateUserDto.usuarioCorreo && updateUserDto.usuarioCorreo !== user.usuarioCorreo) {
@@ -185,10 +204,6 @@ export class UsersService {
       }
     }
 
-    if (updateUserDto.usuarioContrasena) {
-      updateUserDto.usuarioContrasena = await bcrypt.hash(updateUserDto.usuarioContrasena, 10);
-    }
-
     // Convertir valores 0 a null para campos opcionales
     if (updateUserDto.usuarioSede === 0) {
       updateUserDto.usuarioSede = null;
@@ -198,8 +213,35 @@ export class UsersService {
     }
 
     // Actualizar explícitamente el rol si viene en el DTO
-    if (updateUserDto.usuarioRolId !== undefined) {
+    if (updateUserDto.usuarioRolId !== undefined && updateUserDto.usuarioRolId !== user.usuarioRolId) {
+      // Obtener el nuevo rol para validar qué campos requiere
+      const newRole = await this.rolesService.findOne(updateUserDto.usuarioRolId);
+      const rolTipo = newRole.rolTipo?.toLowerCase();
+      
+      // Actualizar el rol
       user.usuarioRolId = updateUserDto.usuarioRolId;
+      
+      // Limpiar campos según el nuevo rol
+      // Roles que requieren centro operativo: admin, administrador, almacenista, tecnico, soldador
+      const rolesRequierenCentroOperativo = ['admin', 'administrador', 'almacenista', 'tecnico', 'soldador'];
+      // Roles que requieren bodega: bodega-internas, bodega-redes
+      const rolesRequierenBodega = ['bodega-internas', 'bodega-redes'];
+      
+      if (rolTipo === 'superadmin') {
+        // SuperAdmin no necesita centro operativo ni bodega
+        user.usuarioSede = null;
+        user.usuarioBodega = null;
+      } else if (rolesRequierenBodega.includes(rolTipo)) {
+        // Si el nuevo rol requiere bodega, limpiar centro operativo
+        user.usuarioSede = null;
+        // Si no viene usuarioBodega en el DTO y el usuario no tenía bodega, mantener null
+        // El frontend debe enviar usuarioBodega si es requerido
+      } else if (rolesRequierenCentroOperativo.includes(rolTipo)) {
+        // Si el nuevo rol requiere centro operativo, limpiar bodega
+        user.usuarioBodega = null;
+        // Si no viene usuarioSede en el DTO y el usuario no tenía sede, mantener null
+        // El frontend debe enviar usuarioSede si es requerido
+      }
     }
 
     Object.assign(user, updateUserDto);
@@ -210,9 +252,54 @@ export class UsersService {
   }
 
   async changeRole(id: number, newRoleId: number): Promise<User> {
+    // Validar que el usuario existe
     const user = await this.findOne(id);
+    
+    // Validar que el nuevo rol existe
+    if (!newRoleId || newRoleId <= 0) {
+      throw new BadRequestException('El ID del rol es inválido');
+    }
+    
+    // Obtener el nuevo rol para validar qué campos requiere
+    const newRole = await this.rolesService.findOne(newRoleId);
+    if (!newRole || !newRole.rolEstado) {
+      throw new BadRequestException('El rol seleccionado no existe o está inactivo');
+    }
+    
+    const rolTipo = newRole.rolTipo?.toLowerCase();
+    
+    // Validar que no se esté cambiando al mismo rol
+    if (user.usuarioRolId === newRoleId) {
+      throw new BadRequestException('El usuario ya tiene este rol asignado');
+    }
+    
+    // Actualizar el rol
     user.usuarioRolId = newRoleId;
-    return this.usersRepository.save(user);
+    
+    // Limpiar campos según el nuevo rol
+    // Roles que requieren centro operativo: admin, administrador, almacenista, tecnico, soldador
+    const rolesRequierenCentroOperativo = ['admin', 'administrador', 'almacenista', 'tecnico', 'soldador'];
+    // Roles que requieren bodega: bodega-internas, bodega-redes
+    const rolesRequierenBodega = ['bodega-internas', 'bodega-redes'];
+    
+    if (rolTipo === 'superadmin') {
+      // SuperAdmin no necesita centro operativo ni bodega
+      user.usuarioSede = null;
+      user.usuarioBodega = null;
+    } else if (rolesRequierenBodega.includes(rolTipo)) {
+      // Si el nuevo rol requiere bodega, limpiar centro operativo
+      user.usuarioSede = null;
+      // Mantener usuarioBodega si ya está asignado, de lo contrario se debe asignar en el frontend
+    } else if (rolesRequierenCentroOperativo.includes(rolTipo)) {
+      // Si el nuevo rol requiere centro operativo, limpiar bodega
+      user.usuarioBodega = null;
+      // Mantener usuarioSede si ya está asignado, de lo contrario se debe asignar en el frontend
+    }
+    
+    const savedUser = await this.usersRepository.save(user);
+    
+    // Recargar el usuario con sus relaciones para asegurar que el cambio se refleje
+    return this.findOne(savedUser.usuarioId);
   }
 
   async changePassword(userId: number, changePasswordDto: ChangePasswordDto): Promise<User> {

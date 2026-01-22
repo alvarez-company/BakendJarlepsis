@@ -7,6 +7,10 @@ import { AsignacionTecnico } from './asignacion-tecnico.entity';
 import { UsersService } from '../users/users.service';
 import { MaterialesService } from '../materiales/materiales.service';
 import { InventariosService } from '../inventarios/inventarios.service';
+import { MovimientosService } from '../movimientos/movimientos.service';
+import { InventarioTecnicoService } from '../inventario-tecnico/inventario-tecnico.service';
+import { NumerosMedidorService } from '../numeros-medidor/numeros-medidor.service';
+import { AuditoriaService } from '../auditoria/auditoria.service';
 
 describe('AsignacionesTecnicosService - Permisos', () => {
   let service: AsignacionesTecnicosService;
@@ -31,6 +35,11 @@ describe('AsignacionesTecnicosService - Permisos', () => {
     findOne: jest.fn(),
   };
 
+  const mockMovimientosService = {};
+  const mockInventarioTecnicoService = {};
+  const mockNumerosMedidorService = {};
+  const mockAuditoriaService = {};
+
   beforeEach(async () => {
     const module: TestingModule = await Test.createTestingModule({
       providers: [
@@ -50,6 +59,22 @@ describe('AsignacionesTecnicosService - Permisos', () => {
         {
           provide: InventariosService,
           useValue: mockInventariosService,
+        },
+        {
+          provide: MovimientosService,
+          useValue: mockMovimientosService,
+        },
+        {
+          provide: InventarioTecnicoService,
+          useValue: mockInventarioTecnicoService,
+        },
+        {
+          provide: NumerosMedidorService,
+          useValue: mockNumerosMedidorService,
+        },
+        {
+          provide: AuditoriaService,
+          useValue: mockAuditoriaService,
         },
       ],
     }).compile();

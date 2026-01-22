@@ -1,7 +1,7 @@
 import { ApiProperty } from '@nestjs/swagger';
 import { IsBoolean } from 'class-validator';
 
-export class UpdateEstadoDto {
+export class UpdateEstadoUsuarioDto {
   @ApiProperty({ example: true })
   @IsBoolean()
   usuarioEstado: boolean;

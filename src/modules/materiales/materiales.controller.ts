@@ -42,14 +42,14 @@ export class MaterialesController {
   }
 
   @Get()
-  @Roles('superadmin', 'admin', 'administrador', 'almacenista', 'tecnico', 'soldador', 'bodega', 'bodega-internas', 'bodega-redes', 'inventario')
+  @Roles('superadmin', 'admin', 'administrador', 'almacenista', 'tecnico', 'soldador', 'bodega-internas', 'bodega-redes')
   @ApiOperation({ summary: 'Get all materiales' })
   findAll(@Request() req) {
     return this.materialesService.findAll(req.user);
   }
 
   @Get(':id')
-  @Roles('superadmin', 'admin', 'administrador', 'almacenista', 'tecnico', 'soldador', 'bodega', 'bodega-internas', 'bodega-redes')
+  @Roles('superadmin', 'admin', 'administrador', 'almacenista', 'tecnico', 'soldador', 'bodega-internas', 'bodega-redes')
   @ApiOperation({ summary: 'Get a material by ID' })
   findOne(@Param('id') id: string) {
     return this.materialesService.findOne(+id);
@@ -63,7 +63,7 @@ export class MaterialesController {
   }
 
   @Post(':id/ajustar-stock')
-  @Roles('superadmin', 'admin', 'tecnico', 'almacenista')
+  @Roles('superadmin', 'almacenista')
   @ApiOperation({ summary: 'Ajustar stock de un material' })
   ajustarStock(@Param('id') id: string, @Body() ajustarStockDto: AjustarStockDto, @Request() req) {
     return this.materialesService.ajustarStock(
@@ -82,7 +82,7 @@ export class MaterialesController {
   }
 
   @Post(':id/asignar-numeros-medidor')
-  @Roles('superadmin', 'admin')
+  @Roles('superadmin', 'admin', 'almacenista')
   @ApiOperation({ summary: 'Asignar números de medidor a un material. El material se marcará automáticamente como medidor si no lo está.' })
   async asignarNumerosMedidor(
     @Param('id') id: string,
@@ -99,7 +99,7 @@ export class MaterialesController {
   }
 
   @Get('export/excel')
-  @Roles('superadmin', 'admin', 'tecnico', 'bodega', 'inventario')
+  @Roles('superadmin', 'admin', 'administrador', 'almacenista', 'tecnico', 'bodega-internas', 'bodega-redes')
   @ApiOperation({ summary: 'Export materials to Excel' })
   @ApiQuery({ name: 'filters', required: false, type: String })
   async exportToExcel(@Request() req, @Res() res: Response, @Query('filters') filters?: string) {
@@ -163,7 +163,7 @@ export class MaterialesController {
   }
 
   @Get('export/pdf')
-  @Roles('superadmin', 'admin', 'tecnico', 'bodega', 'inventario')
+  @Roles('superadmin', 'admin', 'administrador', 'almacenista', 'tecnico', 'bodega-internas', 'bodega-redes')
   @ApiOperation({ summary: 'Export materials to PDF' })
   @ApiQuery({ name: 'filters', required: false, type: String })
   async exportToPdf(@Request() req, @Res() res: Response, @Query('filters') filters?: string) {

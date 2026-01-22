@@ -14,14 +14,14 @@ export class InstalacionesMaterialesController {
   constructor(private readonly service: InstalacionesMaterialesService) {}
 
   @Post()
-  @Roles('superadmin', 'admin', 'tecnico', 'instalaciones')
+  @Roles('superadmin', 'admin', 'tecnico', 'soldador')
   @ApiOperation({ summary: 'Crear registro de material utilizado en instalación' })
   create(@Body() createDto: CreateInstalacionMaterialDto) {
     return this.service.create(createDto);
   }
 
   @Post('instalacion/:instalacionId/asignar')
-  @Roles('superadmin', 'admin', 'tecnico', 'instalaciones')
+  @Roles('superadmin', 'admin', 'tecnico', 'soldador')
   @ApiOperation({ summary: 'Asignar múltiples materiales a una instalación' })
   asignarMateriales(
     @Param('instalacionId') instalacionId: string,
@@ -31,63 +31,63 @@ export class InstalacionesMaterialesController {
   }
 
   @Get()
-  @Roles('superadmin', 'admin', 'instalaciones')
+  @Roles('superadmin', 'admin', 'administrador', 'almacenista', 'tecnico', 'soldador', 'bodega-internas', 'bodega-redes')
   @ApiOperation({ summary: 'Obtener todos los materiales utilizados en instalaciones' })
   findAll() {
     return this.service.findAll();
   }
 
   @Get('instalacion/:instalacionId')
-  @Roles('superadmin', 'admin', 'administrador', 'almacenista', 'tecnico', 'soldador', 'empleado', 'instalaciones')
+  @Roles('superadmin', 'admin', 'administrador', 'almacenista', 'tecnico', 'soldador', 'bodega-internas', 'bodega-redes')
   @ApiOperation({ summary: 'Obtener materiales utilizados en una instalación específica' })
   findByInstalacion(@Param('instalacionId') instalacionId: string) {
     return this.service.findByInstalacion(+instalacionId);
   }
 
   @Get('material/:materialId')
-  @Roles('superadmin', 'admin', 'instalaciones')
+  @Roles('superadmin', 'admin', 'administrador', 'almacenista', 'tecnico', 'soldador', 'bodega-internas', 'bodega-redes')
   @ApiOperation({ summary: 'Obtener instalaciones que utilizaron un material específico' })
   findByMaterial(@Param('materialId') materialId: string) {
     return this.service.findByMaterial(+materialId);
   }
 
   @Get(':id')
-  @Roles('superadmin', 'admin', 'instalaciones')
+  @Roles('superadmin', 'admin', 'administrador', 'almacenista', 'tecnico', 'soldador', 'bodega-internas', 'bodega-redes')
   @ApiOperation({ summary: 'Obtener un registro de material de instalación por ID' })
   findOne(@Param('id') id: string) {
     return this.service.findOne(+id);
   }
 
   @Put(':id')
-  @Roles('superadmin', 'admin', 'tecnico', 'instalaciones')
+  @Roles('superadmin', 'admin', 'tecnico', 'soldador')
   @ApiOperation({ summary: 'Actualizar material de instalación' })
   update(@Param('id') id: string, @Body() updateDto: UpdateInstalacionMaterialDto) {
     return this.service.update(+id, updateDto);
   }
 
   @Patch(':id')
-  @Roles('superadmin', 'admin', 'tecnico', 'instalaciones')
+  @Roles('superadmin', 'admin', 'tecnico', 'soldador')
   @ApiOperation({ summary: 'Actualizar parcialmente material de instalación' })
   patch(@Param('id') id: string, @Body() updateDto: UpdateInstalacionMaterialDto) {
     return this.service.update(+id, updateDto);
   }
 
   @Delete(':id')
-  @Roles('superadmin', 'admin', 'instalaciones')
+  @Roles('superadmin', 'admin')
   @ApiOperation({ summary: 'Eliminar registro de material de instalación' })
   remove(@Param('id') id: string) {
     return this.service.remove(+id);
   }
 
   @Delete('instalacion/:instalacionId')
-  @Roles('superadmin', 'admin', 'instalaciones')
+  @Roles('superadmin', 'admin')
   @ApiOperation({ summary: 'Eliminar todos los materiales de una instalación' })
   removeByInstalacion(@Param('instalacionId') instalacionId: string) {
     return this.service.removeByInstalacion(+instalacionId);
   }
 
   @Post(':id/aprobar')
-  @Roles('superadmin', 'admin', 'almacenista', 'tecnico', 'instalaciones')
+  @Roles('superadmin', 'admin', 'almacenista')
   @ApiOperation({ summary: 'Aprobar o desaprobar un material utilizado' })
   aprobarMaterial(
     @Param('id') id: string,

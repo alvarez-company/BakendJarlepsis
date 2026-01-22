@@ -13,19 +13,19 @@ export class GruposController {
   constructor(private readonly service: GruposService) {}
 
   @Get('general')
-  @Roles('superadmin', 'admin', 'tecnico', 'empleado')
+  @Roles('superadmin', 'admin', 'administrador', 'almacenista', 'tecnico', 'soldador', 'bodega-internas', 'bodega-redes')
   obtenerGrupoGeneral() {
     return this.service.obtenerGrupoGeneral();
   }
 
   @Get('mis-grupos')
-  @Roles('superadmin', 'admin', 'tecnico', 'empleado')
+  @Roles('superadmin', 'admin', 'administrador', 'almacenista', 'tecnico', 'soldador', 'bodega-internas', 'bodega-redes')
   obtenerMisGrupos(@Request() req) {
     return this.service.obtenerMisGruposConInfo(req.user.usuarioId);
   }
 
   @Get('entidad/:tipoGrupo/:entidadId')
-  @Roles('superadmin', 'admin', 'tecnico', 'empleado')
+  @Roles('superadmin', 'admin', 'administrador', 'almacenista', 'tecnico', 'soldador', 'bodega-internas', 'bodega-redes')
   obtenerGrupoPorEntidad(
     @Request() req,
     @Param('tipoGrupo') tipoGrupo: string,
@@ -35,7 +35,7 @@ export class GruposController {
   }
 
   @Get('directo/:usuarioId')
-  @Roles('superadmin', 'admin', 'tecnico', 'empleado')
+  @Roles('superadmin', 'admin', 'administrador', 'almacenista', 'tecnico', 'soldador', 'bodega-internas', 'bodega-redes')
   @ApiOperation({ summary: 'Obtener o crear chat directo con un usuario' })
   async obtenerOCrearChatDirecto(@Request() req, @Param('usuarioId') usuarioId: string) {
     try {
@@ -49,7 +49,7 @@ export class GruposController {
   }
 
   @Get(':grupoId')
-  @Roles('superadmin', 'admin', 'tecnico', 'empleado')
+  @Roles('superadmin', 'admin', 'administrador', 'almacenista', 'tecnico', 'soldador', 'bodega-internas', 'bodega-redes')
   obtenerGrupoPorId(@Param('grupoId') grupoId: string) {
     return this.service.obtenerGrupoPorId(+grupoId);
   }
