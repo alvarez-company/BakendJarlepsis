@@ -31,14 +31,14 @@ export class MunicipiosController {
   }
 
   @Get()
-  @Roles('superadmin', 'admin', 'tecnico', 'instalaciones')
+  @Roles('superadmin', 'admin', 'administrador', 'almacenista', 'tecnico', 'soldador', 'bodega-internas', 'bodega-redes')
   @ApiOperation({ summary: 'Get all municipios' })
   findAll() {
     return this.municipiosService.findAll();
   }
 
   @Get(':id')
-  @Roles('superadmin', 'admin', 'tecnico', 'instalaciones')
+  @Roles('superadmin', 'admin', 'administrador', 'almacenista', 'tecnico', 'soldador', 'bodega-internas', 'bodega-redes')
   @ApiOperation({ summary: 'Get a municipio by ID' })
   findOne(@Param('id') id: string) {
     return this.municipiosService.findOne(+id);
@@ -58,4 +58,3 @@ export class MunicipiosController {
     return this.municipiosService.remove(+id);
   }
 }
-

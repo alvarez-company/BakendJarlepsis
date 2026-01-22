@@ -21,7 +21,7 @@ export class AsignacionesTecnicosController {
   ) {}
 
   @Post()
-  @Roles('superadmin', 'admin', 'almacenista')
+  @Roles('superadmin', 'admin', 'almacenista', 'bodega-internas', 'bodega-redes')
   @ApiOperation({ summary: 'Crear una nueva asignación' })
   create(@Body() createDto: CreateAsignacionTecnicoDto, @Request() req) {
     return this.service.create(createDto, req.user);
@@ -49,7 +49,7 @@ export class AsignacionesTecnicosController {
   }
 
   @Put(':id')
-  @Roles('superadmin', 'admin', 'almacenista')
+  @Roles('superadmin', 'admin', 'almacenista', 'bodega-internas', 'bodega-redes')
   @ApiOperation({ summary: 'Actualizar una asignación' })
   update(@Param('id') id: string, @Body() updateDto: UpdateAsignacionTecnicoDto) {
     return this.service.update(+id, updateDto);
@@ -70,7 +70,7 @@ export class AsignacionesTecnicosController {
   }
 
   @Delete(':id')
-  @Roles('superadmin', 'admin', 'almacenista')
+  @Roles('superadmin', 'admin', 'almacenista', 'bodega-internas', 'bodega-redes')
   @ApiOperation({ summary: 'Eliminar una asignación' })
   remove(@Param('id') id: string, @Request() req) {
     return this.service.remove(+id, req.user.usuarioId);

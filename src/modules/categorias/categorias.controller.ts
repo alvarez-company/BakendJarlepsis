@@ -31,14 +31,14 @@ export class CategoriasController {
   }
 
   @Get()
-  @Roles('superadmin', 'admin', 'tecnico')
+  @Roles('superadmin', 'admin', 'administrador', 'almacenista', 'tecnico', 'soldador', 'bodega-internas', 'bodega-redes')
   @ApiOperation({ summary: 'Get all categorias' })
   findAll() {
     return this.categoriasService.findAll();
   }
 
   @Get(':id')
-  @Roles('superadmin', 'admin', 'tecnico')
+  @Roles('superadmin', 'admin', 'administrador', 'almacenista', 'tecnico', 'soldador', 'bodega-internas', 'bodega-redes')
   @ApiOperation({ summary: 'Get a categoria by ID' })
   findOne(@Param('id') id: string) {
     return this.categoriasService.findOne(+id);

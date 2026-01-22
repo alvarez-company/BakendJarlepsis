@@ -32,14 +32,14 @@ export class BodegasController {
   }
 
   @Get()
-  @Roles('superadmin', 'admin', 'administrador', 'bodega', 'bodega-internas', 'bodega-redes', 'almacenista')
+  @Roles('superadmin', 'admin', 'administrador', 'bodega-internas', 'bodega-redes', 'almacenista', 'tecnico', 'soldador')
   @ApiOperation({ summary: 'Get all bodegas' })
   findAll(@Request() req) {
     return this.bodegasService.findAll(req.user);
   }
 
   @Get(':id')
-  @Roles('superadmin', 'admin', 'administrador', 'bodega', 'bodega-internas', 'bodega-redes', 'almacenista')
+  @Roles('superadmin', 'admin', 'administrador', 'bodega-internas', 'bodega-redes', 'almacenista', 'tecnico', 'soldador')
   @ApiOperation({ summary: 'Get a bodega by ID' })
   findOne(@Param('id') id: string) {
     return this.bodegasService.findOne(+id);

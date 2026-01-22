@@ -4,6 +4,13 @@ import { Repository } from 'typeorm';
 import { NotFoundException } from '@nestjs/common';
 import { UsersService } from './users.service';
 import { User } from './user.entity';
+import { GruposService } from '../grupos/grupos.service';
+import { UsuariosGruposService } from '../usuarios-grupos/usuarios-grupos.service';
+import { InventarioTecnicoService } from '../inventario-tecnico/inventario-tecnico.service';
+import { MovimientosService } from '../movimientos/movimientos.service';
+import { InventariosService } from '../inventarios/inventarios.service';
+import { BodegasService } from '../bodegas/bodegas.service';
+import { RolesService } from '../roles/roles.service';
 
 describe('UsersService', () => {
   let service: UsersService;
@@ -17,6 +24,22 @@ describe('UsersService', () => {
     remove: jest.fn(),
   };
 
+  const mockGruposService = {
+    findOrCreateGrupoGeneral: jest.fn(),
+    findOrCreateGrupoSede: jest.fn(),
+    findOrCreateGrupoBodega: jest.fn(),
+  };
+
+  const mockUsuariosGruposService = {
+    agregarUsuarioGrupo: jest.fn(),
+  };
+
+  const mockInventarioTecnicoService = {};
+  const mockMovimientosService = {};
+  const mockInventariosService = {};
+  const mockBodegasService = {};
+  const mockRolesService = {};
+
   beforeEach(async () => {
     const module: TestingModule = await Test.createTestingModule({
       providers: [
@@ -24,6 +47,34 @@ describe('UsersService', () => {
         {
           provide: getRepositoryToken(User),
           useValue: mockRepository,
+        },
+        {
+          provide: GruposService,
+          useValue: mockGruposService,
+        },
+        {
+          provide: UsuariosGruposService,
+          useValue: mockUsuariosGruposService,
+        },
+        {
+          provide: InventarioTecnicoService,
+          useValue: mockInventarioTecnicoService,
+        },
+        {
+          provide: MovimientosService,
+          useValue: mockMovimientosService,
+        },
+        {
+          provide: InventariosService,
+          useValue: mockInventariosService,
+        },
+        {
+          provide: BodegasService,
+          useValue: mockBodegasService,
+        },
+        {
+          provide: RolesService,
+          useValue: mockRolesService,
         },
       ],
     }).compile();

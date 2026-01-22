@@ -31,28 +31,28 @@ export class InventariosController {
   ) {}
 
   @Post()
-  @Roles('superadmin', 'admin')
+  @Roles('superadmin', 'almacenista')
   @ApiOperation({ summary: 'Create a new inventario' })
   create(@Body() createInventarioDto: CreateInventarioDto) {
     return this.inventariosService.create(createInventarioDto);
   }
 
   @Get()
-  @Roles('superadmin', 'admin', 'tecnico')
+  @Roles('superadmin', 'admin', 'administrador', 'almacenista', 'tecnico', 'soldador', 'bodega-internas', 'bodega-redes')
   @ApiOperation({ summary: 'Get all inventarios' })
   findAll() {
     return this.inventariosService.findAll();
   }
 
   @Get(':id')
-  @Roles('superadmin', 'admin', 'tecnico')
+  @Roles('superadmin', 'admin', 'administrador', 'almacenista', 'tecnico', 'soldador', 'bodega-internas', 'bodega-redes')
   @ApiOperation({ summary: 'Get an inventario by ID' })
   findOne(@Param('id') id: string) {
     return this.inventariosService.findOne(+id);
   }
 
   @Patch(':id')
-  @Roles('superadmin', 'admin')
+  @Roles('superadmin', 'almacenista')
   @ApiOperation({ summary: 'Update an inventario' })
   update(@Param('id') id: string, @Body() updateInventarioDto: UpdateInventarioDto) {
     return this.inventariosService.update(+id, updateInventarioDto);
@@ -66,7 +66,7 @@ export class InventariosController {
   }
 
   @Get('export/excel')
-  @Roles('superadmin', 'admin', 'tecnico')
+  @Roles('superadmin', 'admin', 'administrador', 'almacenista', 'tecnico', 'soldador')
   @ApiOperation({ summary: 'Export inventories to Excel' })
   @ApiQuery({ name: 'filters', required: false, type: String })
   async exportToExcel(@Res() res: Response, @Query('filters') filters?: string) {
@@ -116,7 +116,7 @@ export class InventariosController {
   }
 
   @Get('export/pdf')
-  @Roles('superadmin', 'admin', 'tecnico')
+  @Roles('superadmin', 'admin', 'administrador', 'almacenista', 'tecnico', 'soldador')
   @ApiOperation({ summary: 'Export inventories to PDF' })
   @ApiQuery({ name: 'filters', required: false, type: String })
   async exportToPdf(@Res() res: Response, @Query('filters') filters?: string) {

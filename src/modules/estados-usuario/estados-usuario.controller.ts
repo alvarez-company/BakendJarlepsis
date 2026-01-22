@@ -14,19 +14,19 @@ export class EstadosUsuarioController {
   constructor(private readonly service: EstadosUsuarioService) {}
 
   @Post('actualizar')
-  @Roles('superadmin', 'admin', 'tecnico', 'empleado')
+  @Roles('superadmin', 'admin', 'administrador', 'almacenista', 'tecnico', 'soldador', 'bodega-internas', 'bodega-redes')
   actualizarEstado(@Request() req, @Body() body: { estado: string; mensajeEstado?: string }) {
     return this.service.actualizarEstado(req.user.usuarioId, body.estado as any, body.mensajeEstado);
   }
 
   @Get('mi-estado')
-  @Roles('superadmin', 'admin', 'tecnico', 'empleado')
+  @Roles('superadmin', 'admin', 'administrador', 'almacenista', 'tecnico', 'soldador', 'bodega-internas', 'bodega-redes')
   obtenerMiEstado(@Request() req) {
     return this.service.obtenerEstado(req.user.usuarioId);
   }
 
   @Get('usuarios-en-linea')
-  @Roles('superadmin', 'admin', 'tecnico', 'empleado')
+  @Roles('superadmin', 'admin', 'administrador', 'almacenista', 'tecnico', 'soldador', 'bodega-internas', 'bodega-redes')
   obtenerUsuariosEnLinea() {
     return this.service.obtenerUsuariosEnLinea();
   }

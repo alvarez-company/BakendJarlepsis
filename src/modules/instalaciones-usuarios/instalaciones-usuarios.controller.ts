@@ -14,7 +14,7 @@ export class InstalacionesUsuariosController {
   constructor(private readonly service: InstalacionesUsuariosService) {}
 
   @Post(':instalacionId/asignar')
-  @Roles('superadmin', 'admin', 'instalaciones')
+  @Roles('superadmin', 'admin', 'bodega-internas', 'bodega-redes')
   @ApiOperation({ summary: 'Asignar múltiples usuarios a una instalación' })
   asignarUsuarios(
     @Param('instalacionId') instalacionId: string,
@@ -24,21 +24,21 @@ export class InstalacionesUsuariosController {
   }
 
   @Get('instalacion/:instalacionId')
-  @Roles('superadmin', 'admin', 'tecnico', 'empleado', 'instalaciones')
+  @Roles('superadmin', 'admin', 'administrador', 'almacenista', 'tecnico', 'soldador', 'bodega-internas', 'bodega-redes')
   @ApiOperation({ summary: 'Obtener usuarios asignados a una instalación' })
   findByInstalacion(@Param('instalacionId') instalacionId: string) {
     return this.service.findByInstalacion(+instalacionId);
   }
 
   @Get('usuario/:usuarioId')
-  @Roles('superadmin', 'admin', 'tecnico', 'empleado')
+  @Roles('superadmin', 'admin', 'administrador', 'almacenista', 'tecnico', 'soldador', 'bodega-internas', 'bodega-redes')
   @ApiOperation({ summary: 'Obtener instalaciones asignadas a un usuario' })
   findByUsuario(@Param('usuarioId') usuarioId: string) {
     return this.service.findByUsuario(+usuarioId);
   }
 
   @Delete(':id')
-  @Roles('superadmin', 'admin', 'instalaciones')
+  @Roles('superadmin', 'admin', 'bodega-internas', 'bodega-redes')
   @ApiOperation({ summary: 'Desasignar usuario de instalación' })
   remove(@Param('id') id: string) {
     return this.service.remove(+id);

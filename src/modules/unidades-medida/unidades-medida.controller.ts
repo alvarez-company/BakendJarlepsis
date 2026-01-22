@@ -21,13 +21,13 @@ export class UnidadesMedidaController {
   }
 
   @Get()
-  @Roles('superadmin', 'admin', 'tecnico', 'bodega', 'inventario')
+  @Roles('superadmin', 'admin', 'administrador', 'almacenista', 'tecnico', 'soldador', 'bodega-internas', 'bodega-redes')
   findAll() {
     return this.unidadesMedidaService.findAll();
   }
 
   @Get(':id')
-  @Roles('superadmin', 'admin', 'tecnico', 'bodega', 'inventario')
+  @Roles('superadmin', 'admin', 'administrador', 'almacenista', 'tecnico', 'soldador', 'bodega-internas', 'bodega-redes')
   findOne(@Param('id') id: string) {
     return this.unidadesMedidaService.findOne(+id);
   }

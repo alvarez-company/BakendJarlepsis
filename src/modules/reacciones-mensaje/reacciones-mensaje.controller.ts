@@ -13,15 +13,14 @@ export class ReaccionesMensajeController {
   constructor(private readonly service: ReaccionesMensajeService) {}
 
   @Post(':mensajeId')
-  @Roles('superadmin', 'admin', 'tecnico', 'empleado')
+  @Roles('superadmin', 'admin', 'administrador', 'almacenista', 'tecnico', 'soldador', 'bodega-internas', 'bodega-redes')
   agregarReaccion(@Request() req, @Param('mensajeId') mensajeId: string, @Body() body: { tipoReaccion: string }) {
     return this.service.agregarReaccion(+mensajeId, req.user.usuarioId, body.tipoReaccion);
   }
 
   @Delete(':mensajeId')
-  @Roles('superadmin', 'admin', 'tecnico', 'empleado')
+  @Roles('superadmin', 'admin', 'administrador', 'almacenista', 'tecnico', 'soldador', 'bodega-internas', 'bodega-redes')
   eliminarReaccion(@Request() req, @Param('mensajeId') mensajeId: string) {
     return this.service.eliminarReaccion(+mensajeId, req.user.usuarioId);
   }
 }
-

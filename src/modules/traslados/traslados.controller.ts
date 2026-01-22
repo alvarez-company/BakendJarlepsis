@@ -33,63 +33,63 @@ export class TrasladosController {
   ) {}
 
   @Post()
-  @Roles('superadmin', 'admin', 'almacenista', 'traslados')
+  @Roles('superadmin', 'almacenista')
   @ApiOperation({ summary: 'Create a new traslado' })
   create(@Body() createTrasladoDto: CreateTrasladoDto) {
     return this.trasladosService.create(createTrasladoDto);
   }
 
   @Get()
-  @Roles('superadmin', 'admin', 'administrador', 'almacenista', 'traslados')
+  @Roles('superadmin', 'admin', 'administrador', 'almacenista', 'tecnico', 'soldador', 'bodega-internas', 'bodega-redes')
   @ApiOperation({ summary: 'Get all traslados' })
   findAll(@Query() paginationDto?: PaginationDto) {
     return this.trasladosService.findAll(paginationDto);
   }
 
   @Get('codigo/:codigo')
-  @Roles('superadmin', 'admin', 'tecnico', 'traslados')
+  @Roles('superadmin', 'admin', 'administrador', 'almacenista', 'tecnico', 'soldador')
   @ApiOperation({ summary: 'Get traslados by código' })
   findByCodigo(@Param('codigo') codigo: string) {
     return this.trasladosService.findByCodigo(codigo);
   }
 
   @Get(':id')
-  @Roles('superadmin', 'admin', 'administrador', 'almacenista', 'tecnico')
+  @Roles('superadmin', 'admin', 'administrador', 'almacenista', 'tecnico', 'soldador', 'bodega-internas', 'bodega-redes')
   @ApiOperation({ summary: 'Get a traslado by ID' })
   findOne(@Param('id') id: string) {
     return this.trasladosService.findOne(+id);
   }
 
   @Post(':id/completar')
-  @Roles('superadmin', 'admin', 'almacenista', 'traslados')
+  @Roles('superadmin', 'almacenista')
   @ApiOperation({ summary: 'Completar traslado (crea movimientos automáticamente)' })
   completarTraslado(@Param('id') id: string) {
     return this.trasladosService.completarTraslado(+id);
   }
 
   @Post(':id/cancelar')
-  @Roles('superadmin', 'admin')
+  @Roles('superadmin', 'almacenista')
   @ApiOperation({ summary: 'Cancelar traslado' })
   cancelarTraslado(@Param('id') id: string) {
     return this.trasladosService.cancelarTraslado(+id);
   }
 
   @Patch(':id')
-  @Roles('superadmin', 'admin')
+  @Roles('superadmin', 'almacenista')
   @ApiOperation({ summary: 'Update a traslado' })
   update(@Param('id') id: string, @Body() updateTrasladoDto: UpdateTrasladoDto) {
     return this.trasladosService.update(+id, updateTrasladoDto);
   }
 
   @Delete(':id')
-  @Roles('superadmin', 'admin')
+  @Roles('superadmin', 'almacenista')
   @ApiOperation({ summary: 'Delete a traslado' })
   remove(@Param('id') id: string, @Request() req) {
     return this.trasladosService.remove(+id, req.user.usuarioId);
   }
 
   @Get('export/excel')
-  @Roles('superadmin', 'admin', 'traslados')
+  @Roles('superadmin', 'admin', 'administrador', 'almacenista', 'tecnico', 'soldador')
   @ApiOperation({ summary: 'Export transfers to Excel' })
   @ApiQuery({ name: 'filters', required: false, type: String })
   @ApiQuery({ name: 'dateStart', required: false, type: String })
@@ -164,7 +164,7 @@ export class TrasladosController {
   }
 
   @Get('export/pdf')
-  @Roles('superadmin', 'admin', 'traslados')
+  @Roles('superadmin', 'admin', 'administrador', 'almacenista', 'tecnico', 'soldador')
   @ApiOperation({ summary: 'Export transfers to PDF' })
   @ApiQuery({ name: 'filters', required: false, type: String })
   @ApiQuery({ name: 'dateStart', required: false, type: String })

@@ -13,7 +13,7 @@ export class EstadosMovimientoController {
   constructor(private readonly estadosMovimientoService: EstadosMovimientoService) {}
 
   @Get()
-  @Roles('superadmin', 'admin', 'tecnico', 'bodega', 'inventario')
+  @Roles('superadmin', 'admin', 'administrador', 'almacenista', 'tecnico', 'soldador', 'bodega-internas', 'bodega-redes')
   @ApiOperation({ summary: 'Get all estados de movimiento' })
   findAll() {
     return this.estadosMovimientoService.findAll();

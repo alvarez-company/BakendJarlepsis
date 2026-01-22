@@ -4,6 +4,11 @@ import { Repository } from 'typeorm';
 import { NotFoundException } from '@nestjs/common';
 import { MaterialesService } from './materiales.service';
 import { Material } from './material.entity';
+import { MaterialBodega } from './material-bodega.entity';
+import { InventariosService } from '../inventarios/inventarios.service';
+import { InventarioTecnicoService } from '../inventario-tecnico/inventario-tecnico.service';
+import { NumerosMedidorService } from '../numeros-medidor/numeros-medidor.service';
+import { AuditoriaInventarioService } from '../auditoria-inventario/auditoria-inventario.service';
 
 describe('MaterialesService', () => {
   let service: MaterialesService;
@@ -15,7 +20,28 @@ describe('MaterialesService', () => {
     find: jest.fn(),
     findOne: jest.fn(),
     remove: jest.fn(),
+    update: jest.fn().mockResolvedValue(undefined),
   };
+
+  const mockMaterialBodegaRepository = {
+    find: jest.fn(),
+    findOne: jest.fn(),
+    save: jest.fn(),
+    remove: jest.fn(),
+    create: jest.fn(),
+    createQueryBuilder: jest.fn(() => ({
+      select: jest.fn().mockReturnThis(),
+      where: jest.fn().mockReturnThis(),
+      getRawOne: jest.fn().mockResolvedValue({ total: '150' }),
+    })),
+  };
+
+  const mockInventariosService = {};
+  const mockInventarioTecnicoService = {
+    findByMaterial: jest.fn().mockResolvedValue([]),
+  };
+  const mockNumerosMedidorService = {};
+  const mockAuditoriaInventarioService = {};
 
   beforeEach(async () => {
     const module: TestingModule = await Test.createTestingModule({
@@ -24,6 +50,26 @@ describe('MaterialesService', () => {
         {
           provide: getRepositoryToken(Material),
           useValue: mockRepository,
+        },
+        {
+          provide: getRepositoryToken(MaterialBodega),
+          useValue: mockMaterialBodegaRepository,
+        },
+        {
+          provide: InventariosService,
+          useValue: mockInventariosService,
+        },
+        {
+          provide: InventarioTecnicoService,
+          useValue: mockInventarioTecnicoService,
+        },
+        {
+          provide: NumerosMedidorService,
+          useValue: mockNumerosMedidorService,
+        },
+        {
+          provide: AuditoriaInventarioService,
+          useValue: mockAuditoriaInventarioService,
         },
       ],
     }).compile();
@@ -42,13 +88,30 @@ describe('MaterialesService', () => {
         materialId: 1,
         materialStock: 100,
       };
-      mockRepository.findOne.mockResolvedValue(mockMaterial);
+      const mockMaterialActualizado = {
+        materialId: 1,
+        materialStock: 150,
+      };
+      const mockMaterialBodega = {
+        materialBodegaId: 1,
+        materialId: 1,
+        bodegaId: 1,
+        stock: 100,
+      };
+      // Primera llamada a findOne para obtener el material antes
+      // Segunda llamada a findOne para obtener el material después del ajuste
+      mockRepository.findOne
+        .mockResolvedValueOnce(mockMaterial)
+        .mockResolvedValueOnce(mockMaterialActualizado);
+      mockMaterialBodegaRepository.findOne.mockResolvedValue(mockMaterialBodega);
+      mockMaterialBodegaRepository.create.mockReturnValue({ materialId: 1, bodegaId: 1, stock: 0 });
+      mockMaterialBodegaRepository.save.mockResolvedValue({ ...mockMaterialBodega, stock: 150 });
       mockRepository.save.mockResolvedValue({ ...mockMaterial, materialStock: 150 });
 
-      const result = await service.ajustarStock(1, 50);
+      const result = await service.ajustarStock(1, 50, 1);
 
       expect(result.materialStock).toBe(150);
-      expect(mockRepository.save).toHaveBeenCalled();
+      expect(mockRepository.update).toHaveBeenCalled();
     });
   });
 
