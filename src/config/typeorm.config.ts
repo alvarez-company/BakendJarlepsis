@@ -13,7 +13,7 @@ export default new DataSource({
   entities: [__dirname + '/../**/*.entity{.ts,.js}'],
   migrations: [__dirname + '/../migrations/*{.ts,.js}'],
   synchronize: false,
-  logging: false,
+  logging: process.env.NODE_ENV === 'development' || process.env.MIGRATION_LOGGING === 'true',
   charset: 'utf8mb4',
   timezone: 'Z',
 });

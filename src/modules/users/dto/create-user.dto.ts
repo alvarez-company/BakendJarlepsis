@@ -33,11 +33,6 @@ export class CreateUserDto {
   @IsOptional()
   usuarioTelefono?: string;
 
-  @ApiProperty({ required: false, example: 1 })
-  @IsNumber()
-  @IsOptional()
-  tipoDocumentoId?: number;
-
   @ApiProperty({ example: '1234567890' })
   @IsString()
   usuarioDocumento: string;
