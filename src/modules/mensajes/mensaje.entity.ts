@@ -59,4 +59,3 @@ export class Mensaje {
   @UpdateDateColumn()
   fechaActualizacion: Date;
 }
-

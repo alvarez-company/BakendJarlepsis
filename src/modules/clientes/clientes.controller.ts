@@ -39,14 +39,32 @@ export class ClientesController {
   }
 
   @Get()
-  @Roles('superadmin', 'admin', 'administrador', 'almacenista', 'tecnico', 'soldador', 'bodega-internas', 'bodega-redes')
+  @Roles(
+    'superadmin',
+    'admin',
+    'administrador',
+    'almacenista',
+    'tecnico',
+    'soldador',
+    'bodega-internas',
+    'bodega-redes',
+  )
   @ApiOperation({ summary: 'Get all clientes' })
   findAll() {
     return this.clientesService.findAll();
   }
 
   @Get(':id')
-  @Roles('superadmin', 'admin', 'administrador', 'almacenista', 'tecnico', 'soldador', 'bodega-internas', 'bodega-redes')
+  @Roles(
+    'superadmin',
+    'admin',
+    'administrador',
+    'almacenista',
+    'tecnico',
+    'soldador',
+    'bodega-internas',
+    'bodega-redes',
+  )
   @ApiOperation({ summary: 'Get a cliente by ID' })
   findOne(@Param('id') id: string) {
     return this.clientesService.findOne(+id);
@@ -67,13 +85,22 @@ export class ClientesController {
   }
 
   @Get('export/excel')
-  @Roles('superadmin', 'admin', 'administrador', 'almacenista', 'tecnico', 'soldador', 'bodega-internas', 'bodega-redes')
+  @Roles(
+    'superadmin',
+    'admin',
+    'administrador',
+    'almacenista',
+    'tecnico',
+    'soldador',
+    'bodega-internas',
+    'bodega-redes',
+  )
   @ApiOperation({ summary: 'Export clients to Excel' })
   @ApiQuery({ name: 'filters', required: false, type: String })
   async exportToExcel(@Res() res: Response, @Query('filters') filters?: string) {
     try {
       const clientes = await this.clientesService.findAll();
-      
+
       let filteredData = clientes;
       if (filters) {
         try {
@@ -81,10 +108,12 @@ export class ClientesController {
           if (filterObj.search) {
             const search = filterObj.search.toLowerCase();
             filteredData = filteredData.filter((c: any) =>
-              c.nombreUsuario?.toLowerCase().includes(search)
+              c.nombreUsuario?.toLowerCase().includes(search),
             );
           }
-        } catch (e) {}
+        } catch (_e) {
+          // Ignorar errores de filtrado, continuar sin filtrar
+        }
       }
 
       const columns = [
@@ -107,7 +136,10 @@ export class ClientesController {
         filename: 'reporte-clientes',
       });
 
-      res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+      res.setHeader(
+        'Content-Type',
+        'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+      );
       res.setHeader('Content-Disposition', 'attachment; filename="reporte-clientes.xlsx"');
       res.send(buffer);
     } catch (error) {
@@ -116,13 +148,22 @@ export class ClientesController {
   }
 
   @Get('export/pdf')
-  @Roles('superadmin', 'admin', 'administrador', 'almacenista', 'tecnico', 'soldador', 'bodega-internas', 'bodega-redes')
+  @Roles(
+    'superadmin',
+    'admin',
+    'administrador',
+    'almacenista',
+    'tecnico',
+    'soldador',
+    'bodega-internas',
+    'bodega-redes',
+  )
   @ApiOperation({ summary: 'Export clients to PDF' })
   @ApiQuery({ name: 'filters', required: false, type: String })
   async exportToPdf(@Res() res: Response, @Query('filters') filters?: string) {
     try {
       const clientes = await this.clientesService.findAll();
-      
+
       let filteredData = clientes;
       if (filters) {
         try {
@@ -130,10 +171,12 @@ export class ClientesController {
           if (filterObj.search) {
             const search = filterObj.search.toLowerCase();
             filteredData = filteredData.filter((c: any) =>
-              c.nombreUsuario?.toLowerCase().includes(search)
+              c.nombreUsuario?.toLowerCase().includes(search),
             );
           }
-        } catch (e) {}
+        } catch (_e) {
+          // Ignorar errores de filtrado, continuar sin filtrar
+        }
       }
 
       const columns = [
@@ -164,4 +207,3 @@ export class ClientesController {
     }
   }
 }
-

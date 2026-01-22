@@ -11,4 +11,3 @@ import { EstadosInstalacionController } from './estados-instalacion.controller';
   exports: [EstadosInstalacionService],
 })
 export class EstadosInstalacionModule {}
-

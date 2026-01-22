@@ -204,7 +204,8 @@ describe('NotificacionesService', () => {
       const notificacion = {
         ...mockNotificacion,
         tipoNotificacion: TipoNotificacion.INSTALACION_NOVEDAD,
-        contenido: 'La instalación INST-001 para el cliente Test Client tiene una novedad técnica: Test motivo.',
+        contenido:
+          'La instalación INST-001 para el cliente Test Client tiene una novedad técnica: Test motivo.',
         datosAdicionales: {
           instalacionId: 1,
           instalacionCodigo: 'INST-001',
@@ -363,7 +364,10 @@ describe('NotificacionesService', () => {
 
       expect(result.leida).toBe(true);
       expect(result.fechaLectura).toBeDefined();
-      expect(mockChatGateway.emitirNotificacionActualizada).toHaveBeenCalledWith(1, notificacionLeida);
+      expect(mockChatGateway.emitirNotificacionActualizada).toHaveBeenCalledWith(
+        1,
+        notificacionLeida,
+      );
     });
 
     it('should return notification if already read', async () => {
@@ -490,7 +494,9 @@ describe('NotificacionesService', () => {
     it('should throw error if notification not found', async () => {
       mockRepository.delete.mockResolvedValue({ affected: 0 });
 
-      await expect(service.eliminarNotificacion(1, 1)).rejects.toThrow('Notificación no encontrada');
+      await expect(service.eliminarNotificacion(1, 1)).rejects.toThrow(
+        'Notificación no encontrada',
+      );
     });
   });
 

@@ -26,7 +26,7 @@ export class ProyectosService {
       .execute();
 
     const proyectoId = insertResult.identifiers[0].proyectoId;
-    
+
     // Usar QueryBuilder también para obtener el proyecto, evitando metadatos en caché
     const proyecto = await this.proyectosRepository
       .createQueryBuilder('proyecto')
@@ -43,11 +43,11 @@ export class ProyectosService {
       .leftJoinAndSelect('proyecto.items', 'items')
       .where('proyecto.proyectoId = :id', { id: proyectoId })
       .getOne();
-    
+
     if (!proyecto) {
       throw new NotFoundException(`Proyecto con ID ${proyectoId} no encontrado`);
     }
-    
+
     return proyecto;
   }
 
@@ -66,14 +66,15 @@ export class ProyectosService {
 
   async update(id: number, data: any): Promise<Proyecto> {
     const proyecto = await this.findOne(id);
-    
+
     // Solo actualizar campos válidos, ignorar tipoProyectoId si viene
     const updateData: any = {};
     if (data.proyectoNombre !== undefined) updateData.proyectoNombre = data.proyectoNombre;
-    if (data.proyectoDescripcion !== undefined) updateData.proyectoDescripcion = data.proyectoDescripcion || null;
+    if (data.proyectoDescripcion !== undefined)
+      updateData.proyectoDescripcion = data.proyectoDescripcion || null;
     if (data.proyectoCodigo !== undefined) updateData.proyectoCodigo = data.proyectoCodigo || null;
     if (data.proyectoEstado !== undefined) updateData.proyectoEstado = data.proyectoEstado;
-    
+
     Object.assign(proyecto, updateData);
     return this.proyectosRepository.save(proyecto);
   }
@@ -83,4 +84,3 @@ export class ProyectosService {
     await this.proyectosRepository.remove(proyecto);
   }
 }
-

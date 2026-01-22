@@ -13,35 +13,78 @@ export class MensajesController {
   constructor(private readonly service: MensajesService) {}
 
   @Post('enviar')
-  @Roles('superadmin', 'admin', 'administrador', 'almacenista', 'tecnico', 'soldador', 'bodega-internas', 'bodega-redes')
-  enviarMensaje(@Request() req, @Body() body: { grupoId: number; texto: string; mensajeRespuestaId?: number }) {
-    return this.service.enviarMensaje(body.grupoId, req.user.usuarioId, body.texto, body.mensajeRespuestaId);
-  }
-
-  @Get('grupo/:grupoId')
-  @Roles('superadmin', 'admin', 'administrador', 'almacenista', 'tecnico', 'soldador', 'bodega-internas', 'bodega-redes')
-  obtenerMensajes(
-    @Param('grupoId') grupoId: string, 
-    @Query('limit') limit?: string,
-    @Query('offset') offset?: string
+  @Roles(
+    'superadmin',
+    'admin',
+    'administrador',
+    'almacenista',
+    'tecnico',
+    'soldador',
+    'bodega-internas',
+    'bodega-redes',
+  )
+  enviarMensaje(
+    @Request() req,
+    @Body() body: { grupoId: number; texto: string; mensajeRespuestaId?: number },
   ) {
-    return this.service.obtenerMensajesGrupo(
-      +grupoId, 
-      limit ? +limit : 50,
-      offset ? +offset : 0
+    return this.service.enviarMensaje(
+      body.grupoId,
+      req.user.usuarioId,
+      body.texto,
+      body.mensajeRespuestaId,
     );
   }
 
+  @Get('grupo/:grupoId')
+  @Roles(
+    'superadmin',
+    'admin',
+    'administrador',
+    'almacenista',
+    'tecnico',
+    'soldador',
+    'bodega-internas',
+    'bodega-redes',
+  )
+  obtenerMensajes(
+    @Param('grupoId') grupoId: string,
+    @Query('limit') limit?: string,
+    @Query('offset') offset?: string,
+  ) {
+    return this.service.obtenerMensajesGrupo(+grupoId, limit ? +limit : 50, offset ? +offset : 0);
+  }
+
   @Post(':mensajeId/editar')
-  @Roles('superadmin', 'admin', 'administrador', 'almacenista', 'tecnico', 'soldador', 'bodega-internas', 'bodega-redes')
-  editarMensaje(@Request() req, @Param('mensajeId') mensajeId: string, @Body() body: { texto: string }) {
+  @Roles(
+    'superadmin',
+    'admin',
+    'administrador',
+    'almacenista',
+    'tecnico',
+    'soldador',
+    'bodega-internas',
+    'bodega-redes',
+  )
+  editarMensaje(
+    @Request() req,
+    @Param('mensajeId') mensajeId: string,
+    @Body() body: { texto: string },
+  ) {
     return this.service.editarMensaje(+mensajeId, body.texto, req.user.usuarioId);
   }
 
   @Post(':mensajeId/eliminar')
-  @Roles('superadmin', 'admin', 'administrador', 'almacenista', 'tecnico', 'soldador', 'bodega-internas', 'bodega-redes')
+  @Roles(
+    'superadmin',
+    'admin',
+    'administrador',
+    'almacenista',
+    'tecnico',
+    'soldador',
+    'bodega-internas',
+    'bodega-redes',
+  )
   eliminarMensaje(@Request() req, @Param('mensajeId') mensajeId: string) {
     return this.service.eliminarMensaje(+mensajeId, req.user.usuarioId);
   }
 }
-

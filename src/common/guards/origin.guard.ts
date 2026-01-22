@@ -23,4 +23,3 @@ export class OriginGuard implements CanActivate {
     return true; // La lógica de filtrado se hace en el servicio
   }
 }
-

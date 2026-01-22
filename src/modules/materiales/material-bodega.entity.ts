@@ -41,4 +41,3 @@ export class MaterialBodega {
   @UpdateDateColumn()
   fechaActualizacion: Date;
 }
-

@@ -11,4 +11,3 @@ import { AuditoriaInventarioController } from './auditoria-inventario.controller
   exports: [AuditoriaInventarioService],
 })
 export class AuditoriaInventarioModule {}
-

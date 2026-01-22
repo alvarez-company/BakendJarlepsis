@@ -1,4 +1,14 @@
-import { Controller, Get, Post, Body, Patch, Param, Delete, UseGuards, Request } from '@nestjs/common';
+import {
+  Controller,
+  Get,
+  Post,
+  Body,
+  Patch,
+  Param,
+  Delete,
+  UseGuards,
+  Request,
+} from '@nestjs/common';
 import { ApiTags, ApiBearerAuth } from '@nestjs/swagger';
 import { TiposInstalacionService } from './tipos-instalacion.service';
 import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard';
@@ -19,13 +29,31 @@ export class TiposInstalacionController {
   }
 
   @Get()
-  @Roles('superadmin', 'admin', 'administrador', 'almacenista', 'tecnico', 'soldador', 'bodega-internas', 'bodega-redes')
+  @Roles(
+    'superadmin',
+    'admin',
+    'administrador',
+    'almacenista',
+    'tecnico',
+    'soldador',
+    'bodega-internas',
+    'bodega-redes',
+  )
   findAll(@Request() req) {
     return this.service.findAll(req.user);
   }
 
   @Get(':id')
-  @Roles('superadmin', 'admin', 'administrador', 'almacenista', 'tecnico', 'soldador', 'bodega-internas', 'bodega-redes')
+  @Roles(
+    'superadmin',
+    'admin',
+    'administrador',
+    'almacenista',
+    'tecnico',
+    'soldador',
+    'bodega-internas',
+    'bodega-redes',
+  )
   findOne(@Param('id') id: string) {
     return this.service.findOne(+id);
   }
@@ -42,4 +70,3 @@ export class TiposInstalacionController {
     return this.service.remove(+id);
   }
 }
-

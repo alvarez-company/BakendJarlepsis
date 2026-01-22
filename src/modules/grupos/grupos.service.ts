@@ -1,4 +1,10 @@
-import { Injectable, Inject, forwardRef, NotFoundException, BadRequestException } from '@nestjs/common';
+import {
+  Injectable,
+  Inject,
+  forwardRef,
+  NotFoundException,
+  BadRequestException,
+} from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { Grupo, TipoGrupo } from './grupo.entity';
@@ -41,23 +47,22 @@ export class GruposService {
       entidadId: sedeId,
     });
     const savedGrupo = await this.gruposRepository.save(grupo);
-    
+
     // Asignar usuarios al grupo (superadmins y usuarios con esta sede)
     await this.asignarUsuariosAGrupo(savedGrupo.grupoId, TipoGrupo.SEDE, sedeId);
-    
+
     // Crear mensaje automático de bienvenida
     try {
       await this.crearMensajeSistema(
         savedGrupo.grupoId,
-        `🏢 Grupo creado para la sede "${sedeNombre}". Este es el espacio de comunicación para coordinar actividades relacionadas con esta sede.`
+        `🏢 Grupo creado para la sede "${sedeNombre}". Este es el espacio de comunicación para coordinar actividades relacionadas con esta sede.`,
       );
     } catch (error) {
       console.error(`[GruposService] Error al crear mensaje automático para sede:`, error);
     }
-    
+
     return savedGrupo;
   }
-
 
   async crearGrupoBodega(bodegaId: number, bodegaNombre: string): Promise<Grupo> {
     // Verificar si ya existe un grupo para esta bodega
@@ -73,20 +78,20 @@ export class GruposService {
       entidadId: bodegaId,
     });
     const savedGrupo = await this.gruposRepository.save(grupo);
-    
+
     // Asignar usuarios al grupo (superadmins y usuarios con esta bodega)
     await this.asignarUsuariosAGrupo(savedGrupo.grupoId, TipoGrupo.BODEGA, bodegaId);
-    
+
     // Crear mensaje automático de bienvenida
     try {
       await this.crearMensajeSistema(
         savedGrupo.grupoId,
-        `🏭 Grupo creado para la bodega "${bodegaNombre}". Este es el espacio de comunicación para coordinar actividades relacionadas con esta bodega.`
+        `🏭 Grupo creado para la bodega "${bodegaNombre}". Este es el espacio de comunicación para coordinar actividades relacionadas con esta bodega.`,
       );
     } catch (error) {
       console.error(`[GruposService] Error al crear mensaje automático para bodega:`, error);
     }
-    
+
     return savedGrupo;
   }
 
@@ -104,7 +109,7 @@ export class GruposService {
       entidadId: instalacionId,
     });
     const savedGrupo = await this.gruposRepository.save(grupo);
-    
+
     // Asignar superadmins al grupo de instalación
     const superadmins = await this.obtenerSuperadmins();
     if (superadmins.length > 0) {
@@ -116,17 +121,17 @@ export class GruposService {
         }
       }
     }
-    
+
     // Crear mensaje automático de bienvenida
     try {
       await this.crearMensajeSistema(
         savedGrupo.grupoId,
-        `🔧 Grupo creado para la instalación "${instalacionCodigo}". Este es el espacio de comunicación para coordinar el trabajo de esta instalación.`
+        `🔧 Grupo creado para la instalación "${instalacionCodigo}". Este es el espacio de comunicación para coordinar el trabajo de esta instalación.`,
       );
     } catch (error) {
       console.error(`[GruposService] Error al crear mensaje automático para instalación:`, error);
     }
-    
+
     return savedGrupo;
   }
 
@@ -139,7 +144,7 @@ export class GruposService {
         tipoGrupo: TipoGrupo.GENERAL,
       });
       grupo = await this.gruposRepository.save(grupo);
-      
+
       // Asignar todos los usuarios existentes al grupo general
       try {
         await this.asignarTodosUsuariosAGrupoGeneral(grupo.grupoId);
@@ -168,8 +173,8 @@ export class GruposService {
   }
 
   async obtenerGrupoPorId(grupoId: number): Promise<Grupo> {
-    const grupo = await this.gruposRepository.findOne({ 
-      where: { grupoId, grupoActivo: true } 
+    const grupo = await this.gruposRepository.findOne({
+      where: { grupoId, grupoActivo: true },
     });
     if (!grupo) {
       throw new NotFoundException(`Grupo con ID ${grupoId} no encontrado`);
@@ -211,7 +216,9 @@ export class GruposService {
         usuario1 = await this.usersService.findOne(usuarioId1);
         // Validar que el usuario esté activo
         if (!usuario1 || !usuario1.usuarioEstado) {
-          throw new BadRequestException(`No se puede crear un chat con un usuario bloqueado o inactivo`);
+          throw new BadRequestException(
+            `No se puede crear un chat con un usuario bloqueado o inactivo`,
+          );
         }
       } catch (error) {
         console.error(`[GruposService] Error al buscar usuario ${usuarioId1}:`, error);
@@ -228,7 +235,9 @@ export class GruposService {
         usuario2 = await this.usersService.findOne(usuarioId2);
         // Validar que el usuario esté activo
         if (!usuario2 || !usuario2.usuarioEstado) {
-          throw new BadRequestException(`No se puede crear un chat con un usuario bloqueado o inactivo`);
+          throw new BadRequestException(
+            `No se puede crear un chat con un usuario bloqueado o inactivo`,
+          );
         }
       } catch (error) {
         console.error(`[GruposService] Error al buscar usuario ${usuarioId2}:`, error);
@@ -240,9 +249,15 @@ export class GruposService {
         }
         throw error;
       }
-      
-      const nombreUsuario1 = `${usuario1?.usuarioNombre || ''} ${usuario1?.usuarioApellido || ''}`.trim() || usuario1?.usuarioCorreo || 'Usuario';
-      const nombreUsuario2 = `${usuario2?.usuarioNombre || ''} ${usuario2?.usuarioApellido || ''}`.trim() || usuario2?.usuarioCorreo || 'Usuario';
+
+      const nombreUsuario1 =
+        `${usuario1?.usuarioNombre || ''} ${usuario1?.usuarioApellido || ''}`.trim() ||
+        usuario1?.usuarioCorreo ||
+        'Usuario';
+      const nombreUsuario2 =
+        `${usuario2?.usuarioNombre || ''} ${usuario2?.usuarioApellido || ''}`.trim() ||
+        usuario2?.usuarioCorreo ||
+        'Usuario';
 
       const nuevoGrupo = this.gruposRepository.create({
         grupoNombre: `${nombreUsuario1} - ${nombreUsuario2}`,
@@ -269,23 +284,31 @@ export class GruposService {
         try {
           await this.gruposRepository.remove(grupoGuardado);
         } catch (removeError) {
-          console.error('[GruposService] Error al eliminar grupo después de fallo en asignación:', removeError);
+          console.error(
+            '[GruposService] Error al eliminar grupo después de fallo en asignación:',
+            removeError,
+          );
         }
         // Propagar el error original si es una excepción de NestJS, sino crear una nueva
         if (error instanceof Error) {
           throw error;
         }
-        throw new Error(`Error al asignar usuarios al grupo directo: ${error.message || String(error)}`);
+        throw new Error(
+          `Error al asignar usuarios al grupo directo: ${error.message || String(error)}`,
+        );
       }
 
       // Crear mensaje de bienvenida
       try {
         await this.crearMensajeSistema(
           grupoGuardado.grupoId,
-          `💬 Chat directo creado. Puedes comenzar a chatear.`
+          `💬 Chat directo creado. Puedes comenzar a chatear.`,
         );
       } catch (error) {
-        console.error('[GruposService] Error al crear mensaje automático para chat directo:', error);
+        console.error(
+          '[GruposService] Error al crear mensaje automático para chat directo:',
+          error,
+        );
         // No lanzar error, el grupo ya está creado
       }
 
@@ -310,7 +333,7 @@ export class GruposService {
       // Obtener el usuario para verificar si es superadmin y sus asignaciones
       const usuario = await this.usersService.findOne(usuarioId);
       const esSuperadmin = usuario?.usuarioRol?.rolTipo === 'superadmin';
-      
+
       // Si es superadmin, retornar todos los grupos activos
       if (esSuperadmin) {
         const todosLosGrupos = await this.gruposRepository.find({
@@ -319,7 +342,7 @@ export class GruposService {
         });
         return todosLosGrupos;
       }
-      
+
       // Si no es superadmin, filtrar grupos según asignaciones
       const gruposAsignados = await this.gruposRepository
         .createQueryBuilder('grupo')
@@ -330,36 +353,36 @@ export class GruposService {
         .getMany();
 
       // Filtrar grupos según las asignaciones del usuario
-      const gruposFiltrados = gruposAsignados.filter(grupo => {
+      const gruposFiltrados = gruposAsignados.filter((grupo) => {
         // Siempre incluir grupo general y chats directos
         if (grupo.tipoGrupo === TipoGrupo.GENERAL || grupo.tipoGrupo === TipoGrupo.DIRECTO) {
           return true;
         }
-        
+
         // Para grupos de sede y bodega: verificar que el usuario esté asignado a esa entidad
         if (grupo.tipoGrupo === TipoGrupo.SEDE && grupo.entidadId) {
           return usuario?.usuarioSede === grupo.entidadId;
         }
-        
+
         if (grupo.tipoGrupo === TipoGrupo.BODEGA && grupo.entidadId) {
           return usuario?.usuarioBodega === grupo.entidadId;
         }
-        
+
         // Para instalaciones: verificar que el usuario esté asignado a esa instalación
         if (grupo.tipoGrupo === TipoGrupo.INSTALACION && grupo.entidadId) {
           // Verificar si el usuario está asignado a esta instalación
           // Esto se verifica por la relación UsuarioGrupo, así que si llegó aquí, está asignado
           return true;
         }
-        
+
         return false;
       });
-      
+
       // Ordenar por fecha de creación descendente
-      gruposFiltrados.sort((a, b) => 
-        new Date(b.fechaCreacion).getTime() - new Date(a.fechaCreacion).getTime()
+      gruposFiltrados.sort(
+        (a, b) => new Date(b.fechaCreacion).getTime() - new Date(a.fechaCreacion).getTime(),
       );
-      
+
       return gruposFiltrados;
     } catch (error) {
       console.error('[GruposService] ❌ Error al obtener grupos del usuario:', error);
@@ -375,26 +398,28 @@ export class GruposService {
         const ultimoMensaje = await this.mensajesService.obtenerUltimoMensaje(grupo.grupoId);
         const notificaciones = await this.notificacionesService.obtenerNotificacionesPorGrupo(
           grupo.grupoId,
-          usuarioId
+          usuarioId,
         );
-        const noLeidas = notificaciones.filter(n => !n.leida).length;
+        const noLeidas = notificaciones.filter((n) => !n.leida).length;
 
         return {
           ...grupo,
-          ultimoMensaje: ultimoMensaje ? {
-            mensajeId: ultimoMensaje.mensajeId,
-            mensajeTexto: ultimoMensaje.mensajeTexto,
-            fechaCreacion: ultimoMensaje.fechaCreacion,
-            usuario: ultimoMensaje.usuario,
-          } : null,
+          ultimoMensaje: ultimoMensaje
+            ? {
+                mensajeId: ultimoMensaje.mensajeId,
+                mensajeTexto: ultimoMensaje.mensajeTexto,
+                fechaCreacion: ultimoMensaje.fechaCreacion,
+                usuario: ultimoMensaje.usuario,
+              }
+            : null,
           noLeidas,
         };
-      })
+      }),
     );
 
     // Ordenar por último mensaje (más reciente primero) o por fecha de creación
     gruposConInfo.sort((a, b) => {
-      const fechaA = a.ultimoMensaje 
+      const fechaA = a.ultimoMensaje
         ? new Date(a.ultimoMensaje.fechaCreacion).getTime()
         : new Date(a.fechaCreacion).getTime();
       const fechaB = b.ultimoMensaje
@@ -421,11 +446,15 @@ export class GruposService {
     }
   }
 
-  private async asignarUsuariosAGrupo(grupoId: number, tipoGrupo: TipoGrupo, entidadId: number): Promise<void> {
+  private async asignarUsuariosAGrupo(
+    grupoId: number,
+    tipoGrupo: TipoGrupo,
+    entidadId: number,
+  ): Promise<void> {
     try {
       // Asignar todos los superadmins al grupo
       const superadmins = await this.obtenerSuperadmins();
-      
+
       if (superadmins.length > 0) {
         for (const superadminId of superadmins) {
           try {
@@ -438,24 +467,24 @@ export class GruposService {
 
       // Asignar usuarios que tienen esta entidad asignada
       const usuarios = await this.usersService.findAll({ page: 1, limit: 10000 });
-      
+
       if (usuarios.data && usuarios.data.length > 0) {
         const usuariosParaAsignar: number[] = [];
-        
+
         for (const usuario of usuarios.data) {
           let debeAsignar = false;
-          
+
           if (tipoGrupo === TipoGrupo.SEDE && usuario.usuarioSede === entidadId) {
             debeAsignar = true;
           } else if (tipoGrupo === TipoGrupo.BODEGA && usuario.usuarioBodega === entidadId) {
             debeAsignar = true;
           }
-          
+
           if (debeAsignar) {
             usuariosParaAsignar.push(usuario.usuarioId);
           }
         }
-        
+
         // Asignar usuarios a el grupo
         for (const usuarioId of usuariosParaAsignar) {
           try {
@@ -487,8 +516,8 @@ export class GruposService {
       const usuarios = await this.usersService.findAll({ page: 1, limit: 100 });
       if (usuarios.data && usuarios.data.length > 0) {
         // Buscar un superadmin
-        const superadmin = usuarios.data.find((u: any) => 
-          u.usuarioRol?.rolTipo === 'superadmin' || u.role === 'superadmin'
+        const superadmin = usuarios.data.find(
+          (u: any) => u.usuarioRol?.rolTipo === 'superadmin' || u.role === 'superadmin',
         );
         if (superadmin) {
           this.sistemaUsuarioId = superadmin.usuarioId;
@@ -551,12 +580,16 @@ export class GruposService {
   private async obtenerUsuariosDelGrupo(grupoId: number): Promise<number[]> {
     const resultado = await this.gruposRepository.query(
       'SELECT DISTINCT usuarioId FROM usuarios_grupos WHERE grupoId = ? AND activo = true',
-      [grupoId]
+      [grupoId],
     );
     return resultado.map((row: any) => row.usuarioId);
   }
 
-  async sincronizarGruposYUsuarios(): Promise<{ gruposSincronizados: number; usuariosAsignados: number; errores: string[] }> {
+  async sincronizarGruposYUsuarios(): Promise<{
+    gruposSincronizados: number;
+    usuariosAsignados: number;
+    errores: string[];
+  }> {
     const errores: string[] = [];
     let gruposSincronizados = 0;
     let usuariosAsignados = 0;
@@ -592,19 +625,24 @@ export class GruposService {
             for (const usuario of todosLosUsuarios) {
               if (usuario.usuarioSede === grupo.entidadId) {
                 try {
-                  await this.usuariosGruposService.agregarUsuarioGrupo(grupo.grupoId, usuario.usuarioId);
+                  await this.usuariosGruposService.agregarUsuarioGrupo(
+                    grupo.grupoId,
+                    usuario.usuarioId,
+                  );
                   usuariosAsignados++;
                 } catch (error) {
                   // Ignorar si ya está asignado
                 }
               }
             }
-          }
-          else if (grupo.tipoGrupo === TipoGrupo.BODEGA && grupo.entidadId) {
+          } else if (grupo.tipoGrupo === TipoGrupo.BODEGA && grupo.entidadId) {
             for (const usuario of todosLosUsuarios) {
               if (usuario.usuarioBodega === grupo.entidadId) {
                 try {
-                  await this.usuariosGruposService.agregarUsuarioGrupo(grupo.grupoId, usuario.usuarioId);
+                  await this.usuariosGruposService.agregarUsuarioGrupo(
+                    grupo.grupoId,
+                    usuario.usuarioId,
+                  );
                   usuariosAsignados++;
                 } catch (error) {
                   // Ignorar si ya está asignado
@@ -623,10 +661,13 @@ export class GruposService {
 
       // Asegurar que todos los usuarios estén en el grupo general
       const grupoGeneral = await this.obtenerGrupoGeneral();
-      
+
       for (const usuario of todosLosUsuarios) {
         try {
-          await this.usuariosGruposService.agregarUsuarioGrupo(grupoGeneral.grupoId, usuario.usuarioId);
+          await this.usuariosGruposService.agregarUsuarioGrupo(
+            grupoGeneral.grupoId,
+            usuario.usuarioId,
+          );
           usuariosAsignados++;
         } catch (error) {
           // Ignorar si ya está asignado
@@ -641,4 +682,3 @@ export class GruposService {
     return { gruposSincronizados, usuariosAsignados, errores };
   }
 }
-

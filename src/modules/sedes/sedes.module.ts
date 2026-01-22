@@ -19,4 +19,3 @@ import { RolesModule } from '../roles/roles.module';
   exports: [SedesService],
 })
 export class SedesModule {}
-

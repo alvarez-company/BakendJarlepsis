@@ -97,7 +97,11 @@ export class CreateMaterialDto {
   @IsOptional()
   materialEstado?: boolean;
 
-  @ApiProperty({ required: false, default: false, description: 'Indica si el material es un medidor que requiere números únicos' })
+  @ApiProperty({
+    required: false,
+    default: false,
+    description: 'Indica si el material es un medidor que requiere números únicos',
+  })
   @IsBoolean()
   @IsOptional()
   materialEsMedidor?: boolean;
@@ -112,4 +116,3 @@ export class CreateMaterialDto {
   @Type(() => MaterialBodegaInputDto)
   bodegas?: MaterialBodegaInputDto[];
 }
-

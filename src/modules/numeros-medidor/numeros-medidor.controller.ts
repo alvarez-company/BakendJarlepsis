@@ -10,7 +10,11 @@ import {
   UseGuards,
 } from '@nestjs/common';
 import { NumerosMedidorService } from './numeros-medidor.service';
-import { CreateNumeroMedidorDto, UpdateNumeroMedidorDto, AsignarNumerosMedidorDto } from './dto/create-numero-medidor.dto';
+import {
+  CreateNumeroMedidorDto,
+  UpdateNumeroMedidorDto,
+  AsignarNumerosMedidorDto,
+} from './dto/create-numero-medidor.dto';
 import { EstadoNumeroMedidor } from './numero-medidor.entity';
 import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard';
 import { PaginationDto } from '../../common/dto/pagination.dto';
@@ -41,7 +45,7 @@ export class NumerosMedidorController {
   @Get('material/:materialId')
   findByMaterial(
     @Param('materialId') materialId: string,
-    @Query('estado') estado?: EstadoNumeroMedidor
+    @Query('estado') estado?: EstadoNumeroMedidor,
   ) {
     return this.numerosMedidorService.findByMaterial(+materialId, estado);
   }
@@ -72,20 +76,29 @@ export class NumerosMedidorController {
   }
 
   @Post('asignar-tecnico')
-  asignarATecnico(@Body() body: { numerosMedidorIds: number[]; usuarioId: number; inventarioTecnicoId: number }) {
+  asignarATecnico(
+    @Body() body: { numerosMedidorIds: number[]; usuarioId: number; inventarioTecnicoId: number },
+  ) {
     return this.numerosMedidorService.asignarATecnico(
       body.numerosMedidorIds,
       body.usuarioId,
-      body.inventarioTecnicoId
+      body.inventarioTecnicoId,
     );
   }
 
   @Post('asignar-instalacion')
-  asignarAInstalacion(@Body() body: { numerosMedidorIds: number[]; instalacionId: number; instalacionMaterialId: number }) {
+  asignarAInstalacion(
+    @Body()
+    body: {
+      numerosMedidorIds: number[];
+      instalacionId: number;
+      instalacionMaterialId: number;
+    },
+  ) {
     return this.numerosMedidorService.asignarAInstalacion(
       body.numerosMedidorIds,
       body.instalacionId,
-      body.instalacionMaterialId
+      body.instalacionMaterialId,
     );
   }
 

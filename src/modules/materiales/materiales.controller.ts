@@ -42,14 +42,32 @@ export class MaterialesController {
   }
 
   @Get()
-  @Roles('superadmin', 'admin', 'administrador', 'almacenista', 'tecnico', 'soldador', 'bodega-internas', 'bodega-redes')
+  @Roles(
+    'superadmin',
+    'admin',
+    'administrador',
+    'almacenista',
+    'tecnico',
+    'soldador',
+    'bodega-internas',
+    'bodega-redes',
+  )
   @ApiOperation({ summary: 'Get all materiales' })
   findAll(@Request() req) {
     return this.materialesService.findAll(req.user);
   }
 
   @Get(':id')
-  @Roles('superadmin', 'admin', 'administrador', 'almacenista', 'tecnico', 'soldador', 'bodega-internas', 'bodega-redes')
+  @Roles(
+    'superadmin',
+    'admin',
+    'administrador',
+    'almacenista',
+    'tecnico',
+    'soldador',
+    'bodega-internas',
+    'bodega-redes',
+  )
   @ApiOperation({ summary: 'Get a material by ID' })
   findOne(@Param('id') id: string) {
     return this.materialesService.findOne(+id);
@@ -83,11 +101,11 @@ export class MaterialesController {
 
   @Post(':id/asignar-numeros-medidor')
   @Roles('superadmin', 'admin', 'almacenista')
-  @ApiOperation({ summary: 'Asignar números de medidor a un material. El material se marcará automáticamente como medidor si no lo está.' })
-  async asignarNumerosMedidor(
-    @Param('id') id: string,
-    @Body() body: { numerosMedidor: string[] }
-  ) {
+  @ApiOperation({
+    summary:
+      'Asignar números de medidor a un material. El material se marcará automáticamente como medidor si no lo está.',
+  })
+  async asignarNumerosMedidor(@Param('id') id: string, @Body() body: { numerosMedidor: string[] }) {
     return this.numerosMedidorService.crearMultiples(+id, body.numerosMedidor);
   }
 
@@ -99,13 +117,21 @@ export class MaterialesController {
   }
 
   @Get('export/excel')
-  @Roles('superadmin', 'admin', 'administrador', 'almacenista', 'tecnico', 'bodega-internas', 'bodega-redes')
+  @Roles(
+    'superadmin',
+    'admin',
+    'administrador',
+    'almacenista',
+    'tecnico',
+    'bodega-internas',
+    'bodega-redes',
+  )
   @ApiOperation({ summary: 'Export materials to Excel' })
   @ApiQuery({ name: 'filters', required: false, type: String })
   async exportToExcel(@Request() req, @Res() res: Response, @Query('filters') filters?: string) {
     try {
       const materiales = await this.materialesService.findAll(req.user);
-      
+
       // Parsear filtros si existen
       let filteredData = materiales;
       if (filters) {
@@ -114,9 +140,10 @@ export class MaterialesController {
           // Aplicar filtros básicos
           if (filterObj.search) {
             const search = filterObj.search.toLowerCase();
-            filteredData = filteredData.filter((m: any) =>
-              m.materialNombre?.toLowerCase().includes(search) ||
-              m.materialCodigo?.toLowerCase().includes(search)
+            filteredData = filteredData.filter(
+              (m: any) =>
+                m.materialNombre?.toLowerCase().includes(search) ||
+                m.materialCodigo?.toLowerCase().includes(search),
             );
           }
         } catch (e) {
@@ -144,7 +171,8 @@ export class MaterialesController {
         proveedor: m.proveedor?.proveedorNombre || 'Sin proveedor',
         materialStock: m.materialStock || 0,
         materialPrecio: m.materialPrecio || 0,
-        unidadMedida: m.unidadMedida?.unidadMedidaNombre || m.unidadMedida?.unidadMedidaSimbolo || '-',
+        unidadMedida:
+          m.unidadMedida?.unidadMedidaNombre || m.unidadMedida?.unidadMedidaSimbolo || '-',
         materialEstado: m.materialEstado ? 'Activo' : 'Inactivo',
       }));
 
@@ -154,7 +182,10 @@ export class MaterialesController {
         filename: 'reporte-materiales',
       });
 
-      res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+      res.setHeader(
+        'Content-Type',
+        'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+      );
       res.setHeader('Content-Disposition', 'attachment; filename="reporte-materiales.xlsx"');
       res.send(buffer);
     } catch (error) {
@@ -163,13 +194,21 @@ export class MaterialesController {
   }
 
   @Get('export/pdf')
-  @Roles('superadmin', 'admin', 'administrador', 'almacenista', 'tecnico', 'bodega-internas', 'bodega-redes')
+  @Roles(
+    'superadmin',
+    'admin',
+    'administrador',
+    'almacenista',
+    'tecnico',
+    'bodega-internas',
+    'bodega-redes',
+  )
   @ApiOperation({ summary: 'Export materials to PDF' })
   @ApiQuery({ name: 'filters', required: false, type: String })
   async exportToPdf(@Request() req, @Res() res: Response, @Query('filters') filters?: string) {
     try {
       const materiales = await this.materialesService.findAll(req.user);
-      
+
       // Parsear filtros si existen
       let filteredData = materiales;
       if (filters) {
@@ -177,9 +216,10 @@ export class MaterialesController {
           const filterObj = JSON.parse(filters);
           if (filterObj.search) {
             const search = filterObj.search.toLowerCase();
-            filteredData = filteredData.filter((m: any) =>
-              m.materialNombre?.toLowerCase().includes(search) ||
-              m.materialCodigo?.toLowerCase().includes(search)
+            filteredData = filteredData.filter(
+              (m: any) =>
+                m.materialNombre?.toLowerCase().includes(search) ||
+                m.materialCodigo?.toLowerCase().includes(search),
             );
           }
         } catch (e) {
@@ -207,7 +247,8 @@ export class MaterialesController {
         proveedor: m.proveedor?.proveedorNombre || 'Sin proveedor',
         materialStock: m.materialStock || 0,
         materialPrecio: m.materialPrecio || 0,
-        unidadMedida: m.unidadMedida?.unidadMedidaNombre || m.unidadMedida?.unidadMedidaSimbolo || '-',
+        unidadMedida:
+          m.unidadMedida?.unidadMedidaNombre || m.unidadMedida?.unidadMedidaSimbolo || '-',
         materialEstado: m.materialEstado ? 'Activo' : 'Inactivo',
       }));
 
@@ -225,4 +266,3 @@ export class MaterialesController {
     }
   }
 }
-

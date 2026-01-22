@@ -6,10 +6,7 @@ import { NumeroMedidor } from './numero-medidor.entity';
 import { MaterialesModule } from '../materiales/materiales.module';
 
 @Module({
-  imports: [
-    TypeOrmModule.forFeature([NumeroMedidor]),
-    forwardRef(() => MaterialesModule),
-  ],
+  imports: [TypeOrmModule.forFeature([NumeroMedidor]), forwardRef(() => MaterialesModule)],
   controllers: [NumerosMedidorController],
   providers: [NumerosMedidorService],
   exports: [NumerosMedidorService],

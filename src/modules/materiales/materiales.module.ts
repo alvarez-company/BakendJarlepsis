@@ -24,4 +24,3 @@ import { AuditoriaInventarioModule } from '../auditoria-inventario/auditoria-inv
   exports: [MaterialesService],
 })
 export class MaterialesModule {}
-

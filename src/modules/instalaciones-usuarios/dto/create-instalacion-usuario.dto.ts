@@ -24,4 +24,3 @@ export class CreateInstalacionUsuarioDto {
   @IsOptional()
   activo?: boolean;
 }
-

@@ -11,4 +11,3 @@ import { Municipio } from './municipio.entity';
   exports: [MunicipiosService],
 })
 export class MunicipiosModule {}
-

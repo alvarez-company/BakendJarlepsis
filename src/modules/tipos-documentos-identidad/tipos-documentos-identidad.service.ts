@@ -44,7 +44,10 @@ export class TiposDocumentosIdentidadService {
     return tipoDocumento;
   }
 
-  async update(id: number, updateDto: UpdateTipoDocumentoIdentidadDto): Promise<TipoDocumentoIdentidad> {
+  async update(
+    id: number,
+    updateDto: UpdateTipoDocumentoIdentidadDto,
+  ): Promise<TipoDocumentoIdentidad> {
     const tipoDocumento = await this.findOne(id);
     Object.assign(tipoDocumento, updateDto);
     return this.tiposDocumentosRepository.save(tipoDocumento);
@@ -55,4 +58,3 @@ export class TiposDocumentosIdentidadService {
     await this.tiposDocumentosRepository.remove(tipoDocumento);
   }
 }
-

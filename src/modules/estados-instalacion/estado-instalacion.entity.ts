@@ -31,4 +31,3 @@ export class EstadoInstalacionEntity {
   @UpdateDateColumn()
   fechaActualizacion: Date;
 }
-

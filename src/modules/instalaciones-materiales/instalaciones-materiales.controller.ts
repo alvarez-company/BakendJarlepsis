@@ -1,7 +1,11 @@
 import { Controller, Get, Post, Body, Param, Delete, Put, Patch, UseGuards } from '@nestjs/common';
 import { ApiTags, ApiBearerAuth, ApiOperation } from '@nestjs/swagger';
 import { InstalacionesMaterialesService } from './instalaciones-materiales.service';
-import { CreateInstalacionMaterialDto, UpdateInstalacionMaterialDto, AssignMaterialesToInstalacionDto } from './dto/create-instalacion-material.dto';
+import {
+  CreateInstalacionMaterialDto,
+  UpdateInstalacionMaterialDto,
+  AssignMaterialesToInstalacionDto,
+} from './dto/create-instalacion-material.dto';
 import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard';
 import { RolesGuard } from '../../common/guards/roles.guard';
 import { Roles } from '../../common/decorators/roles.decorator';
@@ -31,28 +35,64 @@ export class InstalacionesMaterialesController {
   }
 
   @Get()
-  @Roles('superadmin', 'admin', 'administrador', 'almacenista', 'tecnico', 'soldador', 'bodega-internas', 'bodega-redes')
+  @Roles(
+    'superadmin',
+    'admin',
+    'administrador',
+    'almacenista',
+    'tecnico',
+    'soldador',
+    'bodega-internas',
+    'bodega-redes',
+  )
   @ApiOperation({ summary: 'Obtener todos los materiales utilizados en instalaciones' })
   findAll() {
     return this.service.findAll();
   }
 
   @Get('instalacion/:instalacionId')
-  @Roles('superadmin', 'admin', 'administrador', 'almacenista', 'tecnico', 'soldador', 'bodega-internas', 'bodega-redes')
+  @Roles(
+    'superadmin',
+    'admin',
+    'administrador',
+    'almacenista',
+    'tecnico',
+    'soldador',
+    'bodega-internas',
+    'bodega-redes',
+  )
   @ApiOperation({ summary: 'Obtener materiales utilizados en una instalación específica' })
   findByInstalacion(@Param('instalacionId') instalacionId: string) {
     return this.service.findByInstalacion(+instalacionId);
   }
 
   @Get('material/:materialId')
-  @Roles('superadmin', 'admin', 'administrador', 'almacenista', 'tecnico', 'soldador', 'bodega-internas', 'bodega-redes')
+  @Roles(
+    'superadmin',
+    'admin',
+    'administrador',
+    'almacenista',
+    'tecnico',
+    'soldador',
+    'bodega-internas',
+    'bodega-redes',
+  )
   @ApiOperation({ summary: 'Obtener instalaciones que utilizaron un material específico' })
   findByMaterial(@Param('materialId') materialId: string) {
     return this.service.findByMaterial(+materialId);
   }
 
   @Get(':id')
-  @Roles('superadmin', 'admin', 'administrador', 'almacenista', 'tecnico', 'soldador', 'bodega-internas', 'bodega-redes')
+  @Roles(
+    'superadmin',
+    'admin',
+    'administrador',
+    'almacenista',
+    'tecnico',
+    'soldador',
+    'bodega-internas',
+    'bodega-redes',
+  )
   @ApiOperation({ summary: 'Obtener un registro de material de instalación por ID' })
   findOne(@Param('id') id: string) {
     return this.service.findOne(+id);
@@ -89,11 +129,7 @@ export class InstalacionesMaterialesController {
   @Post(':id/aprobar')
   @Roles('superadmin', 'admin', 'almacenista')
   @ApiOperation({ summary: 'Aprobar o desaprobar un material utilizado' })
-  aprobarMaterial(
-    @Param('id') id: string,
-    @Body() body: { aprobado: boolean }
-  ) {
+  aprobarMaterial(@Param('id') id: string, @Body() body: { aprobado: boolean }) {
     return this.service.aprobarMaterial(+id, body.aprobado);
   }
 }
-

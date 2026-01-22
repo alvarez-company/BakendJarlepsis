@@ -30,4 +30,3 @@ export class TipoDocumentoIdentidad {
   @UpdateDateColumn()
   fechaActualizacion: Date;
 }
-

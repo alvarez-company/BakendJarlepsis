@@ -1,13 +1,4 @@
-import {
-  Controller,
-  Get,
-  Post,
-  Body,
-  Patch,
-  Param,
-  Delete,
-  UseGuards,
-} from '@nestjs/common';
+import { Controller, Get, Post, Body, Patch, Param, Delete, UseGuards } from '@nestjs/common';
 import { ApiTags, ApiBearerAuth, ApiOperation } from '@nestjs/swagger';
 import { TiposDocumentosIdentidadService } from './tipos-documentos-identidad.service';
 import { CreateTipoDocumentoIdentidadDto } from './dto/create-tipo-documento-identidad.dto';
@@ -58,4 +49,3 @@ export class TiposDocumentosIdentidadController {
     return this.tiposDocumentosService.remove(+id);
   }
 }
-

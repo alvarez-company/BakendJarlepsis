@@ -29,4 +29,3 @@ export class EstadoMovimientoEntity {
   @UpdateDateColumn()
   fechaActualizacion: Date;
 }
-

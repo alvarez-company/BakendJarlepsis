@@ -11,4 +11,3 @@ import { TipoDocumentoIdentidad } from './tipo-documento-identidad.entity';
   exports: [TiposDocumentosIdentidadService],
 })
 export class TiposDocumentosIdentidadModule {}
-

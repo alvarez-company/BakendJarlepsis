@@ -31,4 +31,3 @@ import { NumerosMedidorModule } from '../numeros-medidor/numeros-medidor.module'
   exports: [MovimientosService],
 })
 export class MovimientosModule {}
-

@@ -78,4 +78,3 @@ export class Notificacion {
   @UpdateDateColumn()
   fechaActualizacion: Date;
 }
-

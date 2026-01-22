@@ -44,4 +44,3 @@ import { NumerosMedidorModule } from '../numeros-medidor/numeros-medidor.module'
   exports: [InstalacionesService],
 })
 export class InstalacionesModule {}
-

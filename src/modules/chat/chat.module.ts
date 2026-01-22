@@ -22,4 +22,3 @@ import type { StringValue } from 'ms';
   exports: [ChatGateway],
 })
 export class ChatModule {}
-

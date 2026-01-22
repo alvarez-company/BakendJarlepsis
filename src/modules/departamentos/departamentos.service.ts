@@ -43,4 +43,3 @@ export class DepartamentosService {
     await this.departamentosRepository.remove(departamento);
   }
 }
-

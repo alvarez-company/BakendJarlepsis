@@ -49,4 +49,3 @@ export class RolesService {
     await this.rolesRepository.remove(role);
   }
 }
-

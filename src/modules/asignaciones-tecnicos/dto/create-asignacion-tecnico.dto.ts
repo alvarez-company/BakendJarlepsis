@@ -14,7 +14,11 @@ export class MaterialAsignacionDto {
 }
 
 export class CreateAsignacionTecnicoDto {
-  @ApiProperty({ required: false, example: 'ASIG-1', description: 'Código de asignación. Si no se proporciona, se generará automáticamente' })
+  @ApiProperty({
+    required: false,
+    example: 'ASIG-1',
+    description: 'Código de asignación. Si no se proporciona, se generará automáticamente',
+  })
   @IsString()
   @IsOptional()
   asignacionCodigo?: string;
@@ -42,4 +46,3 @@ export class CreateAsignacionTecnicoDto {
   @IsOptional()
   observaciones?: string;
 }
-

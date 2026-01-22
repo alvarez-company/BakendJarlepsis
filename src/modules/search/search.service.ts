@@ -9,13 +9,13 @@ import { ProyectosService } from '../proyectos/proyectos.service';
 import { BodegasService } from '../bodegas/bodegas.service';
 import { SedesService } from '../sedes/sedes.service';
 
-export type SearchResultType = 
-  | 'material' 
-  | 'instalacion' 
-  | 'movimiento' 
-  | 'traslado' 
-  | 'usuario' 
-  | 'cliente' 
+export type SearchResultType =
+  | 'material'
+  | 'instalacion'
+  | 'movimiento'
+  | 'traslado'
+  | 'usuario'
+  | 'cliente'
   | 'proyecto'
   | 'bodega'
   | 'sede';
@@ -86,14 +86,15 @@ export class SearchService {
 
     // Procesar materiales
     if (materiales.status === 'fulfilled') {
-      const materialesData = Array.isArray(materiales.value) 
-        ? materiales.value 
+      const materialesData = Array.isArray(materiales.value)
+        ? materiales.value
         : (materiales.value as any)?.data || [];
-      
+
       materialesData
-        .filter((m: any) => 
-          m.materialNombre?.toLowerCase().includes(searchLower) ||
-          m.materialCodigo?.toLowerCase().includes(searchLower)
+        .filter(
+          (m: any) =>
+            m.materialNombre?.toLowerCase().includes(searchLower) ||
+            m.materialCodigo?.toLowerCase().includes(searchLower),
         )
         .forEach((m: any) => {
           results.push({
@@ -109,22 +110,25 @@ export class SearchService {
 
     // Procesar instalaciones
     if (instalaciones.status === 'fulfilled') {
-      const instalacionesData = Array.isArray(instalaciones.value) 
-        ? instalaciones.value 
+      const instalacionesData = Array.isArray(instalaciones.value)
+        ? instalaciones.value
         : (instalaciones.value as any)?.data || [];
-      
+
       instalacionesData
-        .filter((i: any) => 
-          i.instalacionCodigo?.toLowerCase().includes(searchLower) ||
-          i.cliente?.clienteNombre?.toLowerCase().includes(searchLower) ||
-          i.cliente?.clienteApellido?.toLowerCase().includes(searchLower) ||
-          i.cliente?.nombreUsuario?.toLowerCase().includes(searchLower)
+        .filter(
+          (i: any) =>
+            i.instalacionCodigo?.toLowerCase().includes(searchLower) ||
+            i.cliente?.clienteNombre?.toLowerCase().includes(searchLower) ||
+            i.cliente?.clienteApellido?.toLowerCase().includes(searchLower) ||
+            i.cliente?.nombreUsuario?.toLowerCase().includes(searchLower),
         )
         .forEach((i: any) => {
-          const clienteNombre = i.cliente 
-            ? (i.cliente.nombreUsuario || `${i.cliente.clienteNombre || ''} ${i.cliente.clienteApellido || ''}`.trim() || 'Sin cliente')
+          const clienteNombre = i.cliente
+            ? i.cliente.nombreUsuario ||
+              `${i.cliente.clienteNombre || ''} ${i.cliente.clienteApellido || ''}`.trim() ||
+              'Sin cliente'
             : 'Sin cliente';
-          
+
           results.push({
             id: i.instalacionId,
             type: 'instalacion',
@@ -137,14 +141,15 @@ export class SearchService {
 
     // Procesar movimientos
     if (movimientos.status === 'fulfilled') {
-      const movimientosData = Array.isArray(movimientos.value) 
-        ? movimientos.value 
+      const movimientosData = Array.isArray(movimientos.value)
+        ? movimientos.value
         : (movimientos.value as any)?.data || [];
-      
+
       movimientosData
-        .filter((m: any) => 
-          m.movimientoCodigo?.toLowerCase().includes(searchLower) ||
-          m.movimientoTipo?.toLowerCase().includes(searchLower)
+        .filter(
+          (m: any) =>
+            m.movimientoCodigo?.toLowerCase().includes(searchLower) ||
+            m.movimientoTipo?.toLowerCase().includes(searchLower),
         )
         .forEach((m: any) => {
           results.push({
@@ -159,14 +164,12 @@ export class SearchService {
 
     // Procesar traslados
     if (traslados.status === 'fulfilled') {
-      const trasladosData = Array.isArray(traslados.value) 
-        ? traslados.value 
+      const trasladosData = Array.isArray(traslados.value)
+        ? traslados.value
         : (traslados.value as any)?.data || [];
-      
+
       trasladosData
-        .filter((t: any) => 
-          t.trasladoCodigo?.toLowerCase().includes(searchLower)
-        )
+        .filter((t: any) => t.trasladoCodigo?.toLowerCase().includes(searchLower))
         .forEach((t: any) => {
           results.push({
             id: t.trasladoId,
@@ -185,12 +188,13 @@ export class SearchService {
       } else if ((usuarios.value as any)?.data) {
         usuariosData = (usuarios.value as any).data;
       }
-      
+
       usuariosData
-        .filter((u: any) => 
-          u.usuarioNombre?.toLowerCase().includes(searchLower) ||
-          u.usuarioApellido?.toLowerCase().includes(searchLower) ||
-          u.usuarioCorreo?.toLowerCase().includes(searchLower)
+        .filter(
+          (u: any) =>
+            u.usuarioNombre?.toLowerCase().includes(searchLower) ||
+            u.usuarioApellido?.toLowerCase().includes(searchLower) ||
+            u.usuarioCorreo?.toLowerCase().includes(searchLower),
         )
         .forEach((u: any) => {
           results.push({
@@ -206,15 +210,16 @@ export class SearchService {
 
     // Procesar clientes
     if (clientes.status === 'fulfilled') {
-      const clientesData = Array.isArray(clientes.value) 
-        ? clientes.value 
+      const clientesData = Array.isArray(clientes.value)
+        ? clientes.value
         : (clientes.value as any)?.data || [];
-      
+
       clientesData
-        .filter((c: any) => 
-          c.clienteNombre?.toLowerCase().includes(searchLower) ||
-          c.clienteApellido?.toLowerCase().includes(searchLower) ||
-          c.nombreUsuario?.toLowerCase().includes(searchLower)
+        .filter(
+          (c: any) =>
+            c.clienteNombre?.toLowerCase().includes(searchLower) ||
+            c.clienteApellido?.toLowerCase().includes(searchLower) ||
+            c.nombreUsuario?.toLowerCase().includes(searchLower),
         )
         .forEach((c: any) => {
           results.push({
@@ -229,14 +234,12 @@ export class SearchService {
 
     // Procesar proyectos
     if (proyectos.status === 'fulfilled') {
-      const proyectosData = Array.isArray(proyectos.value) 
-        ? proyectos.value 
+      const proyectosData = Array.isArray(proyectos.value)
+        ? proyectos.value
         : (proyectos.value as any)?.data || [];
-      
+
       proyectosData
-        .filter((p: any) => 
-          p.proyectoNombre?.toLowerCase().includes(searchLower)
-        )
+        .filter((p: any) => p.proyectoNombre?.toLowerCase().includes(searchLower))
         .forEach((p: any) => {
           results.push({
             id: p.proyectoId,
@@ -249,14 +252,12 @@ export class SearchService {
 
     // Procesar bodegas
     if (bodegas.status === 'fulfilled') {
-      const bodegasData = Array.isArray(bodegas.value) 
-        ? bodegas.value 
+      const bodegasData = Array.isArray(bodegas.value)
+        ? bodegas.value
         : (bodegas.value as any)?.data || [];
-      
+
       bodegasData
-        .filter((b: any) => 
-          b.bodegaNombre?.toLowerCase().includes(searchLower)
-        )
+        .filter((b: any) => b.bodegaNombre?.toLowerCase().includes(searchLower))
         .forEach((b: any) => {
           results.push({
             id: b.bodegaId,
@@ -270,14 +271,10 @@ export class SearchService {
 
     // Procesar sedes
     if (sedes.status === 'fulfilled') {
-      const sedesData = Array.isArray(sedes.value) 
-        ? sedes.value 
-        : (sedes.value as any)?.data || [];
-      
+      const sedesData = Array.isArray(sedes.value) ? sedes.value : (sedes.value as any)?.data || [];
+
       sedesData
-        .filter((s: any) => 
-          s.sedeNombre?.toLowerCase().includes(searchLower)
-        )
+        .filter((s: any) => s.sedeNombre?.toLowerCase().includes(searchLower))
         .forEach((s: any) => {
           results.push({
             id: s.sedeId,
@@ -295,4 +292,3 @@ export class SearchService {
     };
   }
 }
-

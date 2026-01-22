@@ -67,4 +67,3 @@ export class Cliente {
   @UpdateDateColumn()
   fechaActualizacion: Date;
 }
-

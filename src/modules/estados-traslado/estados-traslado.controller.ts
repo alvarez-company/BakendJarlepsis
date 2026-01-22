@@ -13,10 +13,18 @@ export class EstadosTrasladoController {
   constructor(private readonly estadosTrasladoService: EstadosTrasladoService) {}
 
   @Get()
-  @Roles('superadmin', 'admin', 'administrador', 'almacenista', 'tecnico', 'soldador', 'bodega-internas', 'bodega-redes')
+  @Roles(
+    'superadmin',
+    'admin',
+    'administrador',
+    'almacenista',
+    'tecnico',
+    'soldador',
+    'bodega-internas',
+    'bodega-redes',
+  )
   @ApiOperation({ summary: 'Get all estados de traslado' })
   findAll() {
     return this.estadosTrasladoService.findAll();
   }
 }
-

@@ -40,9 +40,12 @@ export class CreateBodegaDto {
   @IsOptional()
   bodegaEstado?: boolean;
 
-  @ApiProperty({ required: false, enum: ['internas', 'redes'], description: 'Tipo de bodega: internas o redes' })
+  @ApiProperty({
+    required: false,
+    enum: ['internas', 'redes'],
+    description: 'Tipo de bodega: internas o redes',
+  })
   @IsString()
   @IsOptional()
   bodegaTipo?: string;
 }
-

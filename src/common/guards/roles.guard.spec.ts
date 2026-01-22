@@ -1,12 +1,9 @@
 import { Test, TestingModule } from '@nestjs/testing';
-import { ExecutionContext } from '@nestjs/common';
 import { Reflector } from '@nestjs/core';
 import { RolesGuard } from './roles.guard';
-import { Roles } from '../decorators/roles.decorator';
 
 describe('RolesGuard', () => {
   let guard: RolesGuard;
-  let reflector: Reflector;
 
   const mockReflector = {
     get: jest.fn(),
@@ -39,7 +36,6 @@ describe('RolesGuard', () => {
     }).compile();
 
     guard = module.get<RolesGuard>(RolesGuard);
-    reflector = module.get<Reflector>(Reflector);
   });
 
   afterEach(() => {
@@ -48,7 +44,10 @@ describe('RolesGuard', () => {
 
   describe('canActivate', () => {
     it('should allow access when no roles are required', () => {
-      const context = createMockExecutionContext({ usuarioRol: { rolTipo: 'superadmin' } }, undefined);
+      const context = createMockExecutionContext(
+        { usuarioRol: { rolTipo: 'superadmin' } },
+        undefined,
+      );
       expect(guard.canActivate(context)).toBe(true);
     });
 
@@ -101,4 +100,3 @@ describe('RolesGuard', () => {
     });
   });
 });
-

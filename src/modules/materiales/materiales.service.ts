@@ -1,4 +1,10 @@
-import { Injectable, NotFoundException, ConflictException, Inject, forwardRef } from '@nestjs/common';
+import {
+  Injectable,
+  NotFoundException,
+  ConflictException,
+  Inject,
+  forwardRef,
+} from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { Material } from './material.entity';
@@ -30,20 +36,24 @@ export class MaterialesService {
     console.error('=== INICIANDO CREACIÓN DE MATERIAL (ERROR STREAM) ===');
     console.error('Payload recibido - inventarioId:', createMaterialDto.inventarioId);
     console.error('Payload recibido - bodegas:', JSON.stringify(createMaterialDto.bodegas));
-    
+
     try {
       const { bodegas = [], materialStock, inventarioId, ...rest } = createMaterialDto;
 
       // Validar que el código del material no esté duplicado
       const materialExistentePorCodigo = await this.findByCodigo(rest.materialCodigo);
       if (materialExistentePorCodigo) {
-        throw new ConflictException(`El código de material '${rest.materialCodigo}' ya está en uso. Los códigos deben ser únicos.`);
+        throw new ConflictException(
+          `El código de material '${rest.materialCodigo}' ya está en uso. Los códigos deben ser únicos.`,
+        );
       }
 
       // Validar que el nombre del material no esté duplicado
       const materialExistentePorNombre = await this.findByNombre(rest.materialNombre);
       if (materialExistentePorNombre) {
-        throw new ConflictException(`El nombre de material '${rest.materialNombre}' ya está en uso. Los nombres deben ser únicos.`);
+        throw new ConflictException(
+          `El nombre de material '${rest.materialNombre}' ya está en uso. Los nombres deben ser únicos.`,
+        );
       }
 
       const materialData: any = {
@@ -59,7 +69,7 @@ export class MaterialesService {
       if (inventarioId === undefined || inventarioId === null || inventarioId <= 0) {
         // Usar la primera bodega de la distribución para crear el inventario
         let bodegaIdForInventario: number | null = null;
-        
+
         if (bodegas.length > 0 && bodegas[0]?.bodegaId) {
           bodegaIdForInventario = bodegas[0].bodegaId;
         } else {
@@ -71,7 +81,7 @@ export class MaterialesService {
             .where('bodega.bodegaEstado = :estado', { estado: true })
             .orderBy('bodega.bodegaId', 'ASC')
             .getRawOne<{ bodegaId: number }>();
-          
+
           if (defaultBodega?.bodegaId) {
             bodegaIdForInventario = defaultBodega.bodegaId;
           } else {
@@ -92,10 +102,14 @@ export class MaterialesService {
             materialData.inventarioId = finalInventarioId;
           } catch (error) {
             console.error('Error al crear inventario automático:', error);
-            throw new Error(`No se pudo crear el inventario automático para el material. ${error instanceof Error ? error.message : String(error)}`);
+            throw new Error(
+              `No se pudo crear el inventario automático para el material. ${error instanceof Error ? error.message : String(error)}`,
+            );
           }
         } else {
-          throw new Error('No se pudo crear el inventario automático: no hay bodegas disponibles. Debe asignar al menos una bodega al material.');
+          throw new Error(
+            'No se pudo crear el inventario automático: no hay bodegas disponibles. Debe asignar al menos una bodega al material.',
+          );
         }
       } else {
         // Si se proporciona inventarioId, usarlo
@@ -105,16 +119,23 @@ export class MaterialesService {
 
       // Verificar que inventarioId esté presente antes de guardar
       if (!materialData.inventarioId || materialData.inventarioId <= 0) {
-        throw new Error('El inventarioId es requerido. No se pudo crear automáticamente y no se proporcionó uno.');
+        throw new Error(
+          'El inventarioId es requerido. No se pudo crear automáticamente y no se proporcionó uno.',
+        );
       }
-      
+
       const material = this.materialesRepository.create(materialData);
       const savedResult = await this.materialesRepository.save(material);
-      
+
       // TypeORM save() puede devolver un array si se pasa un array, pero aquí siempre es un objeto
       const savedMaterial = Array.isArray(savedResult) ? savedResult[0] : savedResult;
 
-      await this.applyBodegaDistribution(savedMaterial.materialId, bodegas, materialStock, finalInventarioId || null);
+      await this.applyBodegaDistribution(
+        savedMaterial.materialId,
+        bodegas,
+        materialStock,
+        finalInventarioId || null,
+      );
 
       // Registrar en auditoría
       if (usuarioId) {
@@ -147,29 +168,40 @@ export class MaterialesService {
       // Los materiales se comparten entre todos los centros operativos
       // Todos los usuarios ven los mismos materiales, pero el stock se calcula por centro operativo
       const allMateriales = await this.materialesRepository.find({
-        relations: ['categoria', 'proveedor', 'inventario', 'materialBodegas', 'materialBodegas.bodega', 'materialBodegas.bodega.sede', 'unidadMedida'],
+        relations: [
+          'categoria',
+          'proveedor',
+          'inventario',
+          'materialBodegas',
+          'materialBodegas.bodega',
+          'materialBodegas.bodega.sede',
+          'unidadMedida',
+        ],
       });
-    
+
       // Si hay un usuario, calcular el stock por su centro operativo
       if (user?.usuarioSede) {
         // Calcular stock para cada material de forma asíncrona
         const materialesConStock = await Promise.all(
           allMateriales.map(async (material) => {
             // Calcular stock del material en el centro operativo del usuario
-            const stockEnCentroOperativo = await this.calculateStockBySede(material, user.usuarioSede);
-            
+            const stockEnCentroOperativo = await this.calculateStockBySede(
+              material,
+              user.usuarioSede,
+            );
+
             // Crear una copia del material con el stock ajustado
             return {
               ...material,
               materialStock: stockEnCentroOperativo,
               // Mantener materialBodegas para referencia, pero el stock total ya está calculado
             };
-          })
+          }),
         );
-        
+
         return materialesConStock;
       }
-      
+
       // Si no hay usuario o es superadmin, devolver todos los materiales con su stock total
       return allMateriales;
     } catch (error) {
@@ -188,30 +220,43 @@ export class MaterialesService {
     // Sumar stock de bodegas del centro operativo
     if (material.materialBodegas && material.materialBodegas.length > 0) {
       const stockBodegas = material.materialBodegas
-        .filter(mb => mb.bodega?.sedeId === sedeId)
+        .filter((mb) => mb.bodega?.sedeId === sedeId)
         .reduce((sum, mb) => sum + Number(mb.stock || 0), 0);
       stockTotal += stockBodegas;
     }
 
     // Sumar stock en técnicos del centro operativo
     try {
-      const inventariosTecnicos = await this.inventarioTecnicoService.findByMaterial(material.materialId);
+      const inventariosTecnicos = await this.inventarioTecnicoService.findByMaterial(
+        material.materialId,
+      );
       const stockTecnicos = inventariosTecnicos
-        .filter(inv => inv.usuario?.usuarioSede === sedeId)
+        .filter((inv) => inv.usuario?.usuarioSede === sedeId)
         .reduce((sum, inv) => sum + Number(inv.cantidad || 0), 0);
       stockTotal += stockTecnicos;
     } catch (error) {
-      console.error(`Error al calcular stock en técnicos para material ${material.materialId} y sede ${sedeId}:`, error);
+      console.error(
+        `Error al calcular stock en técnicos para material ${material.materialId} y sede ${sedeId}:`,
+        error,
+      );
       // Continuar con stockTecnicos = 0 si hay error
     }
-    
+
     return stockTotal;
   }
 
   async findOne(id: number): Promise<Material> {
     const material = await this.materialesRepository.findOne({
       where: { materialId: id },
-      relations: ['categoria', 'proveedor', 'inventario', 'materialBodegas', 'materialBodegas.bodega', 'materialBodegas.bodega.sede', 'unidadMedida'],
+      relations: [
+        'categoria',
+        'proveedor',
+        'inventario',
+        'materialBodegas',
+        'materialBodegas.bodega',
+        'materialBodegas.bodega.sede',
+        'unidadMedida',
+      ],
     });
     if (!material) {
       throw new NotFoundException(`Material con ID ${id} no encontrado`);
@@ -233,7 +278,11 @@ export class MaterialesService {
     });
   }
 
-  async update(id: number, updateMaterialDto: UpdateMaterialDto, usuarioId?: number): Promise<Material> {
+  async update(
+    id: number,
+    updateMaterialDto: UpdateMaterialDto,
+    usuarioId?: number,
+  ): Promise<Material> {
     const material = await this.findOne(id);
     const materialAnterior = { ...material };
     const { bodegas, materialStock, inventarioId, ...rest } = updateMaterialDto;
@@ -242,7 +291,9 @@ export class MaterialesService {
     if (rest.materialCodigo && rest.materialCodigo !== material.materialCodigo) {
       const materialExistentePorCodigo = await this.findByCodigo(rest.materialCodigo);
       if (materialExistentePorCodigo && materialExistentePorCodigo.materialId !== id) {
-        throw new ConflictException(`El código de material '${rest.materialCodigo}' ya está en uso. Los códigos deben ser únicos.`);
+        throw new ConflictException(
+          `El código de material '${rest.materialCodigo}' ya está en uso. Los códigos deben ser únicos.`,
+        );
       }
     }
 
@@ -250,14 +301,15 @@ export class MaterialesService {
     if (rest.materialNombre && rest.materialNombre !== material.materialNombre) {
       const materialExistentePorNombre = await this.findByNombre(rest.materialNombre);
       if (materialExistentePorNombre && materialExistentePorNombre.materialId !== id) {
-        throw new ConflictException(`El nombre de material '${rest.materialNombre}' ya está en uso. Los nombres deben ser únicos.`);
+        throw new ConflictException(
+          `El nombre de material '${rest.materialNombre}' ya está en uso. Los nombres deben ser únicos.`,
+        );
       }
     }
 
     const updateData: any = {
       ...rest,
-      materialStock:
-        materialStock !== undefined ? Number(materialStock) : material.materialStock,
+      materialStock: materialStock !== undefined ? Number(materialStock) : material.materialStock,
     };
 
     // Solo incluir inventarioId si tiene un valor válido
@@ -276,7 +328,13 @@ export class MaterialesService {
 
     if (bodegas) {
       await this.materialesBodegasRepository.delete({ materialId: material.materialId });
-      await this.applyBodegaDistribution(material.materialId, bodegas, materialStock, updateData.inventarioId || null, usuarioId);
+      await this.applyBodegaDistribution(
+        material.materialId,
+        bodegas,
+        materialStock,
+        updateData.inventarioId || null,
+        usuarioId,
+      );
     } else if (materialStock !== undefined) {
       await this.syncMaterialStock(material.materialId);
     }
@@ -305,33 +363,39 @@ export class MaterialesService {
         },
         cantidadAnterior: materialAnterior.materialStock,
         cantidadNueva: materialActualizado.materialStock,
-        diferencia: Number(materialActualizado.materialStock) - Number(materialAnterior.materialStock),
+        diferencia:
+          Number(materialActualizado.materialStock) - Number(materialAnterior.materialStock),
       });
     }
 
     return this.findOne(material.materialId);
   }
 
-  async ajustarStock(id: number, cantidad: number, bodegaId?: number, usuarioId?: number): Promise<Material> {
+  async ajustarStock(
+    id: number,
+    cantidad: number,
+    bodegaId?: number,
+    usuarioId?: number,
+  ): Promise<Material> {
     if (!bodegaId) {
       throw new Error('Debe especificar la bodega para ajustar el stock.');
     }
-    
+
     const materialAntes = await this.findOne(id);
     const stockBodegaAntes = await this.materialesBodegasRepository.findOne({
       where: { materialId: id, bodegaId },
     });
     const cantidadAnterior = stockBodegaAntes ? Number(stockBodegaAntes.stock) : 0;
-    
+
     await this.adjustStockForBodega(id, bodegaId, cantidad);
     await this.syncMaterialStock(id);
-    
+
     const materialDespues = await this.findOne(id);
     const stockBodegaDespues = await this.materialesBodegasRepository.findOne({
       where: { materialId: id, bodegaId },
     });
     const cantidadNueva = stockBodegaDespues ? Number(stockBodegaDespues.stock) : 0;
-    
+
     // Registrar en auditoría
     if (usuarioId) {
       await this.auditoriaService.registrarCambio({
@@ -346,7 +410,7 @@ export class MaterialesService {
         observaciones: `Stock ajustado manualmente en bodega`,
       });
     }
-    
+
     return materialDespues;
   }
 
@@ -361,39 +425,39 @@ export class MaterialesService {
   /**
    * Ajusta el stock general del material sin asignarlo a una bodega específica.
    * Esto se usa cuando el stock va directamente a la sede.
-   * 
+   *
    * IMPORTANTE: Este método NO debe modificar directamente materialStock.
    * En su lugar, debe crear un registro en materiales_bodegas con bodegaId = null
    * o usar una bodega especial para "sede", y luego sincronizar.
-   * 
+   *
    * Por ahora, actualizamos materialStock directamente pero luego sincronizamos
    * para asegurar consistencia.
    */
   async ajustarStockSede(id: number, cantidad: number): Promise<Material> {
     const cantidadNumerica = Number(cantidad) || 0;
-    
+
     // Obtener el material actual
     const material = await this.findOne(id);
     const stockActual = Number(material.materialStock || 0);
     const nuevoStock = Math.max(0, stockActual + cantidadNumerica);
-    
+
     // Actualizar el stock total
     await this.materialesRepository.update(id, {
-      materialStock: nuevoStock
+      materialStock: nuevoStock,
     });
-    
+
     // IMPORTANTE: Sincronizar después para asegurar que el stock total
     // refleje correctamente la suma de bodegas + técnicos
     // Si el nuevoStock es diferente a la suma real, la sincronización lo corregirá
     await this.syncMaterialStock(id);
-    
+
     return this.findOne(id);
   }
 
   async actualizarInventarioYPrecio(
-    id: number, 
-    inventarioId?: number, 
-    precio?: number
+    id: number,
+    inventarioId?: number,
+    precio?: number,
   ): Promise<Material> {
     const material = await this.findOne(id);
     if (inventarioId !== undefined) {
@@ -421,7 +485,7 @@ export class MaterialesService {
     materialOriginal: Material,
     nuevoProveedorId: number,
     inventarioId?: number | null,
-    precio?: number
+    precio?: number,
   ): Promise<Material> {
     const varianteData = {
       categoriaId: materialOriginal.categoriaId,
@@ -457,7 +521,7 @@ export class MaterialesService {
 
     // Filtrar solo materiales activos con stock
     const materialesDisponibles = materiales.filter(
-      m => m.materialEstado && Number(m.materialStock || 0) > 0
+      (m) => m.materialEstado && Number(m.materialStock || 0) > 0,
     );
 
     if (materialesDisponibles.length === 0) {
@@ -534,7 +598,7 @@ export class MaterialesService {
       if (!entry?.bodegaId) {
         continue;
       }
-      
+
       try {
         // Verificar si ya existe un registro para este material y bodega
         const existingRecord = await this.materialesBodegasRepository.findOne({
@@ -577,7 +641,10 @@ export class MaterialesService {
           });
         }
       } catch (error) {
-        console.error(`Error al guardar distribución de bodega ${entry.bodegaId} para material ${materialId}:`, error);
+        console.error(
+          `Error al guardar distribución de bodega ${entry.bodegaId} para material ${materialId}:`,
+          error,
+        );
         throw error;
       }
     }
@@ -614,7 +681,7 @@ export class MaterialesService {
    * Sincroniza el stock total del material sumando:
    * - Stock en bodegas (materiales_bodegas)
    * - Stock en técnicos (inventario_tecnicos)
-   * 
+   *
    * El stock en sede se calcula como: materialStock - stockBodegas - stockTecnicos
    */
   private async syncMaterialStock(materialId: number): Promise<void> {
@@ -649,7 +716,7 @@ export class MaterialesService {
 
   async duplicate(id: number, usuarioId?: number): Promise<Material> {
     const materialOriginal = await this.findOne(id);
-    
+
     // Generar nuevo código único
     let nuevoCodigo = `${materialOriginal.materialCodigo}-COPIA`;
     let contador = 1;
@@ -687,6 +754,4 @@ export class MaterialesService {
 
     return this.create(materialDuplicado as CreateMaterialDto, usuarioId);
   }
-
 }
-

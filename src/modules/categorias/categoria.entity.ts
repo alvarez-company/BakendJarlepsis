@@ -33,4 +33,3 @@ export class Categoria {
   @UpdateDateColumn()
   fechaActualizacion: Date;
 }
-

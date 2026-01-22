@@ -41,4 +41,3 @@ export class ItemProyecto {
   @UpdateDateColumn()
   fechaActualizacion: Date;
 }
-

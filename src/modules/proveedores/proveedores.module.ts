@@ -11,4 +11,3 @@ import { Proveedor } from './proveedor.entity';
   exports: [ProveedoresService],
 })
 export class ProveedoresModule {}
-

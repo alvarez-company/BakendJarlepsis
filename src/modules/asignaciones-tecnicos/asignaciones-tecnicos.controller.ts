@@ -1,4 +1,17 @@
-import { Controller, Get, Post, Body, Param, Delete, Put, Patch, UseGuards, Request, Res, Query } from '@nestjs/common';
+import {
+  Controller,
+  Get,
+  Post,
+  Body,
+  Param,
+  Delete,
+  Put,
+  Patch,
+  UseGuards,
+  Request,
+  Res,
+  Query,
+} from '@nestjs/common';
 import { ApiTags, ApiOperation, ApiBearerAuth, ApiQuery } from '@nestjs/swagger';
 import { Response } from 'express';
 import { AsignacionesTecnicosService } from './asignaciones-tecnicos.service';
@@ -42,7 +55,15 @@ export class AsignacionesTecnicosController {
   }
 
   @Get('usuario/:usuarioId')
-  @Roles('superadmin', 'admin', 'administrador', 'almacenista', 'bodega-internas', 'bodega-redes', 'tecnico')
+  @Roles(
+    'superadmin',
+    'admin',
+    'administrador',
+    'almacenista',
+    'bodega-internas',
+    'bodega-redes',
+    'tecnico',
+  )
   @ApiOperation({ summary: 'Obtener asignaciones de un técnico' })
   findByUsuario(@Param('usuarioId') usuarioId: string) {
     return this.service.findByUsuario(+usuarioId);
@@ -80,19 +101,23 @@ export class AsignacionesTecnicosController {
   @ApiOperation({ summary: 'Export assignments to Excel' })
   @ApiQuery({ name: 'dateStart', required: false, type: String })
   @ApiQuery({ name: 'dateEnd', required: false, type: String })
-  async exportToExcel(@Res() res: Response, @Query('dateStart') dateStart?: string, @Query('dateEnd') dateEnd?: string) {
+  async exportToExcel(
+    @Res() res: Response,
+    @Query('dateStart') dateStart?: string,
+    @Query('dateEnd') dateEnd?: string,
+  ) {
     try {
       const resultado = await this.service.findAll({ page: 1, limit: 10000 });
       const asignaciones = resultado.data;
-      
+
       let filteredData = asignaciones;
-      
+
       // Filtrar por fechas si se proporcionan
       if (dateStart || dateEnd) {
         const startDate = dateStart ? new Date(dateStart) : null;
         const endDate = dateEnd ? new Date(dateEnd) : null;
         if (endDate) endDate.setHours(23, 59, 59, 999);
-        
+
         filteredData = filteredData.filter((a: any) => {
           const fecha = new Date(a.fechaCreacion);
           if (startDate && fecha < startDate) return false;
@@ -112,11 +137,16 @@ export class AsignacionesTecnicosController {
 
       const exportData = filteredData.map((a: any) => ({
         asignacionCodigo: a.asignacionCodigo || '-',
-        usuario: `${a.usuario?.usuarioNombre || ''} ${a.usuario?.usuarioApellido || ''}`.trim() || '-',
+        usuario:
+          `${a.usuario?.usuarioNombre || ''} ${a.usuario?.usuarioApellido || ''}`.trim() || '-',
         bodega: a.inventario?.bodega?.bodegaNombre || '-',
         materialesCount: Array.isArray(a.materiales) ? a.materiales.length : 0,
-        usuarioAsignador: `${a.usuarioAsignador?.usuarioNombre || ''} ${a.usuarioAsignador?.usuarioApellido || ''}`.trim() || '-',
-        fechaCreacion: a.fechaCreacion ? new Date(a.fechaCreacion).toLocaleDateString('es-CO') : '-',
+        usuarioAsignador:
+          `${a.usuarioAsignador?.usuarioNombre || ''} ${a.usuarioAsignador?.usuarioApellido || ''}`.trim() ||
+          '-',
+        fechaCreacion: a.fechaCreacion
+          ? new Date(a.fechaCreacion).toLocaleDateString('es-CO')
+          : '-',
       }));
 
       const buffer = await this.exportacionService.exportToExcel({
@@ -125,7 +155,10 @@ export class AsignacionesTecnicosController {
         filename: 'reporte-asignaciones',
       });
 
-      res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+      res.setHeader(
+        'Content-Type',
+        'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+      );
       res.setHeader('Content-Disposition', 'attachment; filename="reporte-asignaciones.xlsx"');
       res.send(buffer);
     } catch (error: any) {
@@ -137,19 +170,23 @@ export class AsignacionesTecnicosController {
   @ApiOperation({ summary: 'Export assignments to PDF' })
   @ApiQuery({ name: 'dateStart', required: false, type: String })
   @ApiQuery({ name: 'dateEnd', required: false, type: String })
-  async exportToPdf(@Res() res: Response, @Query('dateStart') dateStart?: string, @Query('dateEnd') dateEnd?: string) {
+  async exportToPdf(
+    @Res() res: Response,
+    @Query('dateStart') dateStart?: string,
+    @Query('dateEnd') dateEnd?: string,
+  ) {
     try {
       const resultado = await this.service.findAll({ page: 1, limit: 10000 });
       const asignaciones = resultado.data;
-      
+
       let filteredData = asignaciones;
-      
+
       // Filtrar por fechas si se proporcionan
       if (dateStart || dateEnd) {
         const startDate = dateStart ? new Date(dateStart) : null;
         const endDate = dateEnd ? new Date(dateEnd) : null;
         if (endDate) endDate.setHours(23, 59, 59, 999);
-        
+
         filteredData = filteredData.filter((a: any) => {
           const fecha = new Date(a.fechaCreacion);
           if (startDate && fecha < startDate) return false;
@@ -169,11 +206,16 @@ export class AsignacionesTecnicosController {
 
       const exportData = filteredData.map((a: any) => ({
         asignacionCodigo: a.asignacionCodigo || '-',
-        usuario: `${a.usuario?.usuarioNombre || ''} ${a.usuario?.usuarioApellido || ''}`.trim() || '-',
+        usuario:
+          `${a.usuario?.usuarioNombre || ''} ${a.usuario?.usuarioApellido || ''}`.trim() || '-',
         bodega: a.inventario?.bodega?.bodegaNombre || '-',
         materialesCount: Array.isArray(a.materiales) ? a.materiales.length : 0,
-        usuarioAsignador: `${a.usuarioAsignador?.usuarioNombre || ''} ${a.usuarioAsignador?.usuarioApellido || ''}`.trim() || '-',
-        fechaCreacion: a.fechaCreacion ? new Date(a.fechaCreacion).toLocaleDateString('es-CO') : '-',
+        usuarioAsignador:
+          `${a.usuarioAsignador?.usuarioNombre || ''} ${a.usuarioAsignador?.usuarioApellido || ''}`.trim() ||
+          '-',
+        fechaCreacion: a.fechaCreacion
+          ? new Date(a.fechaCreacion).toLocaleDateString('es-CO')
+          : '-',
       }));
 
       const buffer = await this.exportacionService.exportToPdf({
@@ -190,4 +232,3 @@ export class AsignacionesTecnicosController {
     }
   }
 }
-

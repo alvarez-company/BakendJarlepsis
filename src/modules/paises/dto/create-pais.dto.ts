@@ -16,4 +16,3 @@ export class CreatePaisDto {
   @IsOptional()
   paisEstado?: boolean;
 }
-

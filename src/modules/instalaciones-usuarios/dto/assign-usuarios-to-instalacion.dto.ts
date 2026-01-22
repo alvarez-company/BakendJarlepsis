@@ -19,4 +19,3 @@ export class AssignUsuariosToInstalacionDto {
   @Type(() => UsuarioAsignacion)
   usuarios: UsuarioAsignacion[];
 }
-

@@ -19,4 +19,3 @@ export class EstadosInstalacionController {
     return this.estadosInstalacionService.findAll();
   }
 }
-

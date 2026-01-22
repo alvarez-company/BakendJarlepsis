@@ -22,7 +22,7 @@ export class JwtStrategy extends PassportStrategy(Strategy) {
     if (!payload.sub || isNaN(payload.sub)) {
       throw new UnauthorizedException('Token inválido: ID de usuario no encontrado');
     }
-    
+
     const user = await this.usersService.findOne(payload.sub);
     if (!user || !user.usuarioEstado) {
       throw new UnauthorizedException('Usuario no encontrado o inactivo');

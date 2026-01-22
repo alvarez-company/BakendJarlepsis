@@ -21,4 +21,3 @@ export class CreateRoleDto {
   @IsOptional()
   rolEstado?: boolean;
 }
-

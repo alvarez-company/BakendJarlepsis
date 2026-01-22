@@ -28,4 +28,3 @@ import { UsuariosGruposModule } from '../usuarios-grupos/usuarios-grupos.module'
   exports: [InstalacionesUsuariosService],
 })
 export class InstalacionesUsuariosModule {}
-

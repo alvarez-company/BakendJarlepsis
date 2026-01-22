@@ -27,6 +27,8 @@
     "migration:run": "typeorm-ts-node-commonjs migration:run -d src/config/typeorm.config.ts",
     "migration:revert": "typeorm-ts-node-commonjs migration:revert -d src/config/typeorm.config.ts",
     "seed": "node scripts/seed-database.js",
+    "db:reset": "node scripts/reset-database.js",
+    "db:reset:yes": "node scripts/reset-database.js --yes",
     "docker:db:up": "docker-compose up -d mysql",
     "docker:db:down": "docker-compose down",
     "docker:db:stop": "docker-compose stop mysql",
@@ -69,6 +71,7 @@
     "xlsx": "^0.18.5"
   },
   "devDependencies": {
+    "@eslint/js": "^9.39.2",
     "@nestjs/cli": "^11.0.10",
     "@nestjs/schematics": "^11.0.9",
     "@nestjs/testing": "^11.1.9",
@@ -94,7 +97,8 @@
     "ts-node": "^10.9.2",
     "tsc-watch": "^7.2.0",
     "tsconfig-paths": "^4.2.0",
-    "typescript": "^5.9.3"
+    "typescript": "^5.9.3",
+    "typescript-eslint": "^8.53.1"
   },
   "jest": {
     "moduleFileExtensions": [

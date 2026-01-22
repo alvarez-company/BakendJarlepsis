@@ -36,4 +36,3 @@ export class CreateProveedorDto {
   @IsOptional()
   proveedorEstado?: boolean;
 }
-

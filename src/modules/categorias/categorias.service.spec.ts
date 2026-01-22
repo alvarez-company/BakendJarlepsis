@@ -1,6 +1,5 @@
 import { Test, TestingModule } from '@nestjs/testing';
 import { getRepositoryToken } from '@nestjs/typeorm';
-import { Repository } from 'typeorm';
 import { NotFoundException } from '@nestjs/common';
 import { CategoriasService } from './categorias.service';
 import { Categoria } from './categoria.entity';
@@ -8,7 +7,6 @@ import { HasMaterialsException } from '../../common/exceptions/business.exceptio
 
 describe('CategoriasService', () => {
   let service: CategoriasService;
-  let repository: Repository<Categoria>;
 
   const mockRepository = {
     create: jest.fn(),
@@ -30,7 +28,6 @@ describe('CategoriasService', () => {
     }).compile();
 
     service = module.get<CategoriasService>(CategoriasService);
-    repository = module.get<Repository<Categoria>>(getRepositoryToken(Categoria));
   });
 
   afterEach(() => {
@@ -64,4 +61,3 @@ describe('CategoriasService', () => {
     });
   });
 });
-

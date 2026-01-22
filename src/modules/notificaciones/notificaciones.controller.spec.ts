@@ -70,7 +70,16 @@ describe('NotificacionesController - Roles y Permisos', () => {
   });
 
   describe('obtenerMisNotificaciones - Permisos', () => {
-    const allowedRoles = ['superadmin', 'admin', 'administrador', 'almacenista', 'tecnico', 'soldador', 'bodega-internas', 'bodega-redes'];
+    const allowedRoles = [
+      'superadmin',
+      'admin',
+      'administrador',
+      'almacenista',
+      'tecnico',
+      'soldador',
+      'bodega-internas',
+      'bodega-redes',
+    ];
 
     it('should allow all roles to get their notifications', () => {
       allowedRoles.forEach((role) => {
@@ -82,7 +91,16 @@ describe('NotificacionesController - Roles y Permisos', () => {
   });
 
   describe('contarNoLeidas - Permisos', () => {
-    const allowedRoles = ['superadmin', 'admin', 'administrador', 'almacenista', 'tecnico', 'soldador', 'bodega-internas', 'bodega-redes'];
+    const allowedRoles = [
+      'superadmin',
+      'admin',
+      'administrador',
+      'almacenista',
+      'tecnico',
+      'soldador',
+      'bodega-internas',
+      'bodega-redes',
+    ];
 
     it('should allow all roles to count unread notifications', () => {
       allowedRoles.forEach((role) => {
@@ -94,7 +112,16 @@ describe('NotificacionesController - Roles y Permisos', () => {
   });
 
   describe('marcarComoLeida - Permisos', () => {
-    const allowedRoles = ['superadmin', 'admin', 'administrador', 'almacenista', 'tecnico', 'soldador', 'bodega-internas', 'bodega-redes'];
+    const allowedRoles = [
+      'superadmin',
+      'admin',
+      'administrador',
+      'almacenista',
+      'tecnico',
+      'soldador',
+      'bodega-internas',
+      'bodega-redes',
+    ];
 
     it('should allow all roles to mark notifications as read', () => {
       allowedRoles.forEach((role) => {

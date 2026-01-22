@@ -84,7 +84,8 @@ describe('NotificacionesService - Notificaciones de Instalaciones', () => {
         usuarioId: 1,
         tipoNotificacion: TipoNotificacion.INSTALACION_CERTIFICACION,
         titulo: 'Instalación en Certificación',
-        contenido: 'La instalación INST-001 para el cliente Test Client está en proceso de certificación.',
+        contenido:
+          'La instalación INST-001 para el cliente Test Client está en proceso de certificación.',
         datosAdicionales: {
           instalacionId: 1,
           instalacionCodigo: 'INST-001',
@@ -114,7 +115,8 @@ describe('NotificacionesService - Notificaciones de Instalaciones', () => {
         usuarioId: 1,
         tipoNotificacion: TipoNotificacion.INSTALACION_ANULADA,
         titulo: 'Instalación Anulada',
-        contenido: 'La instalación INST-001 para el cliente Test Client ha sido anulada. Motivo: Test motivo.',
+        contenido:
+          'La instalación INST-001 para el cliente Test Client ha sido anulada. Motivo: Test motivo.',
         datosAdicionales: {
           instalacionId: 1,
           instalacionCodigo: 'INST-001',

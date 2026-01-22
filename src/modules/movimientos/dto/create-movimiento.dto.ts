@@ -1,5 +1,14 @@
 import { ApiProperty } from '@nestjs/swagger';
-import { IsNumber, IsEnum, IsString, IsOptional, Min, IsArray, ValidateNested, IsIn } from 'class-validator';
+import {
+  IsNumber,
+  IsEnum,
+  IsString,
+  IsOptional,
+  Min,
+  IsArray,
+  ValidateNested,
+  IsIn,
+} from 'class-validator';
 import { Type } from 'class-transformer';
 import { TipoMovimiento } from '../movimiento-inventario.entity';
 
@@ -18,7 +27,11 @@ export class MaterialMovimientoDto {
   @IsOptional()
   movimientoPrecioUnitario?: number;
 
-  @ApiProperty({ required: false, description: 'Números de medidor específicos para materiales de categoría medidor', type: [String] })
+  @ApiProperty({
+    required: false,
+    description: 'Números de medidor específicos para materiales de categoría medidor',
+    type: [String],
+  })
   @IsArray()
   @IsString({ each: true })
   @IsOptional()
@@ -65,7 +78,10 @@ export class CreateMovimientoDto {
   @IsOptional()
   movimientoCodigo?: string; // Código para agrupar múltiples movimientos
 
-  @ApiProperty({ required: false, description: 'Asignar materiales directamente a técnicos (solo para entradas)' })
+  @ApiProperty({
+    required: false,
+    description: 'Asignar materiales directamente a técnicos (solo para entradas)',
+  })
   @IsArray()
   @IsOptional()
   asignacionesTecnicos?: Array<{
@@ -76,15 +92,22 @@ export class CreateMovimientoDto {
     }>;
   }>;
 
-  @ApiProperty({ required: false, example: 1, description: 'ID del técnico cuando el origen es técnico (para salidas/devoluciones)' })
+  @ApiProperty({
+    required: false,
+    example: 1,
+    description: 'ID del técnico cuando el origen es técnico (para salidas/devoluciones)',
+  })
   @IsNumber()
   @IsOptional()
   tecnicoOrigenId?: number;
 
-  @ApiProperty({ required: false, enum: ['bodega', 'tecnico'], description: 'Tipo de origen del movimiento (para salidas/devoluciones)' })
+  @ApiProperty({
+    required: false,
+    enum: ['bodega', 'tecnico'],
+    description: 'Tipo de origen del movimiento (para salidas/devoluciones)',
+  })
   @IsOptional()
   @IsString()
   @IsIn(['bodega', 'tecnico'])
   origenTipo?: 'bodega' | 'tecnico';
 }
-

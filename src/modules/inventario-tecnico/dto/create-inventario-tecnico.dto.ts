@@ -35,7 +35,11 @@ export class MaterialAsignacionDto {
   @Min(0)
   cantidad: number;
 
-  @ApiProperty({ required: false, description: 'Números de medidor específicos para materiales de categoría medidor', type: [String] })
+  @ApiProperty({
+    required: false,
+    description: 'Números de medidor específicos para materiales de categoría medidor',
+    type: [String],
+  })
   @IsArray()
   @IsString({ each: true })
   @IsOptional()
@@ -49,7 +53,10 @@ export class AssignMaterialesToTecnicoDto {
   @Type(() => MaterialAsignacionDto)
   materiales: MaterialAsignacionDto[];
 
-  @ApiProperty({ required: false, description: 'ID del inventario de origen (para crear movimiento de salida)' })
+  @ApiProperty({
+    required: false,
+    description: 'ID del inventario de origen (para crear movimiento de salida)',
+  })
   @IsNumber()
   @IsOptional()
   inventarioId?: number;
@@ -66,4 +73,3 @@ export class AssignMaterialesToTecnicoDto {
   @IsOptional()
   observaciones?: string;
 }
-

@@ -59,4 +59,3 @@ export class SedesController {
     return this.sedesService.remove(+id, req.user);
   }
 }
-

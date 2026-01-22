@@ -42,4 +42,3 @@ export class TiposProyectoController {
     return this.service.remove(+id);
   }
 }
-

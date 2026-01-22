@@ -11,4 +11,3 @@ import { EstadoUsuario } from './estado-usuario.entity';
   exports: [EstadosUsuarioService],
 })
 export class EstadosUsuarioModule {}
-

@@ -1,4 +1,15 @@
-import { Controller, Get, Post, Body, Patch, Param, Delete, UseGuards, Query, Request } from '@nestjs/common';
+import {
+  Controller,
+  Get,
+  Post,
+  Body,
+  Patch,
+  Param,
+  Delete,
+  UseGuards,
+  Query,
+  Request,
+} from '@nestjs/common';
 import { ApiTags, ApiBearerAuth } from '@nestjs/swagger';
 import { ItemsProyectoService } from './items-proyecto.service';
 import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard';
@@ -45,4 +56,3 @@ export class ItemsProyectoController {
     return this.service.remove(+id);
   }
 }
-

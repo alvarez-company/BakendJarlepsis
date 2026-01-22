@@ -11,4 +11,3 @@ import { EstadosMovimientoController } from './estados-movimiento.controller';
   exports: [EstadosMovimientoService],
 })
 export class EstadosMovimientoModule {}
-

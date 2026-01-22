@@ -74,42 +74,42 @@ describe('InstalacionesMaterialesController - Roles y Permisos', () => {
     it('should allow superadmin to approve material', () => {
       const user = { usuarioRol: { rolTipo: 'superadmin' } };
       const context = createMockExecutionContext(user, ['superadmin', 'admin', 'almacenista']);
-      
+
       expect(rolesGuard.canActivate(context)).toBe(true);
     });
 
     it('should allow admin to approve material', () => {
       const user = { usuarioRol: { rolTipo: 'admin' } };
       const context = createMockExecutionContext(user, ['superadmin', 'admin', 'almacenista']);
-      
+
       expect(rolesGuard.canActivate(context)).toBe(true);
     });
 
     it('should allow almacenista to approve material', () => {
       const user = { usuarioRol: { rolTipo: 'almacenista' } };
       const context = createMockExecutionContext(user, ['superadmin', 'admin', 'almacenista']);
-      
+
       expect(rolesGuard.canActivate(context)).toBe(true);
     });
 
     it('should deny tecnico from approving material', () => {
       const user = { usuarioRol: { rolTipo: 'tecnico' } };
       const context = createMockExecutionContext(user, ['superadmin', 'admin', 'almacenista']);
-      
+
       expect(rolesGuard.canActivate(context)).toBe(false);
     });
 
     it('should deny soldador from approving material', () => {
       const user = { usuarioRol: { rolTipo: 'soldador' } };
       const context = createMockExecutionContext(user, ['superadmin', 'admin', 'almacenista']);
-      
+
       expect(rolesGuard.canActivate(context)).toBe(false);
     });
 
     it('should deny bodega-internas from approving material', () => {
       const user = { usuarioRol: { rolTipo: 'bodega-internas' } };
       const context = createMockExecutionContext(user, ['superadmin', 'admin', 'almacenista']);
-      
+
       expect(rolesGuard.canActivate(context)).toBe(false);
     });
   });
@@ -117,22 +117,37 @@ describe('InstalacionesMaterialesController - Roles y Permisos', () => {
   describe('asignarMateriales - Permisos', () => {
     it('should allow tecnico to assign materials', () => {
       const user = { usuarioRol: { rolTipo: 'tecnico' } };
-      const context = createMockExecutionContext(user, ['superadmin', 'admin', 'tecnico', 'soldador']);
-      
+      const context = createMockExecutionContext(user, [
+        'superadmin',
+        'admin',
+        'tecnico',
+        'soldador',
+      ]);
+
       expect(rolesGuard.canActivate(context)).toBe(true);
     });
 
     it('should deny almacenista from assigning materials to installations', () => {
       const user = { usuarioRol: { rolTipo: 'almacenista' } };
-      const context = createMockExecutionContext(user, ['superadmin', 'admin', 'tecnico', 'soldador']);
-      
+      const context = createMockExecutionContext(user, [
+        'superadmin',
+        'admin',
+        'tecnico',
+        'soldador',
+      ]);
+
       expect(rolesGuard.canActivate(context)).toBe(false);
     });
 
     it('should deny bodega-internas from assigning materials to installations', () => {
       const user = { usuarioRol: { rolTipo: 'bodega-internas' } };
-      const context = createMockExecutionContext(user, ['superadmin', 'admin', 'tecnico', 'soldador']);
-      
+      const context = createMockExecutionContext(user, [
+        'superadmin',
+        'admin',
+        'tecnico',
+        'soldador',
+      ]);
+
       expect(rolesGuard.canActivate(context)).toBe(false);
     });
   });

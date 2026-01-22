@@ -12,7 +12,6 @@ import { AuditoriaInventarioService } from '../auditoria-inventario/auditoria-in
 
 describe('MaterialesService', () => {
   let service: MaterialesService;
-  let repository: Repository<Material>;
 
   const mockRepository = {
     create: jest.fn(),
@@ -75,7 +74,6 @@ describe('MaterialesService', () => {
     }).compile();
 
     service = module.get<MaterialesService>(MaterialesService);
-    repository = module.get<Repository<Material>>(getRepositoryToken(Material));
   });
 
   afterEach(() => {
@@ -123,4 +121,3 @@ describe('MaterialesService', () => {
     });
   });
 });
-

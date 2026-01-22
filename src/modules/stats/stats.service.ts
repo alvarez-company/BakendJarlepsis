@@ -91,7 +91,9 @@ export class StatsService {
           relations: ['categoria', 'proveedor'],
         }),
         // Usar SQL raw para evitar que TypeORM intente cargar relaciones automáticamente
-        this.instalacionesRepository.query(`
+        this.instalacionesRepository
+          .query(
+            `
           SELECT 
             instalacionId,
             identificadorUnico,
@@ -119,40 +121,44 @@ export class StatsService {
             fechaActualizacion
           FROM instalaciones
           ORDER BY fechaCreacion DESC
-        `).then((rows: any[]) => {
-          // Mapear resultados raw a objetos con estructura similar a TypeORM
-          return rows.map((row: any) => ({
-            instalacionId: row.instalacionId,
-            identificadorUnico: row.identificadorUnico,
-            instalacionCodigo: row.instalacionCodigo,
-            tipoInstalacionId: row.tipoInstalacionId,
-            clienteId: row.clienteId,
-            instalacionMedidorNumero: row.instalacionMedidorNumero,
-            instalacionSelloNumero: row.instalacionSelloNumero,
-            instalacionSelloRegulador: row.instalacionSelloRegulador,
-            instalacionFecha: row.instalacionFecha,
-            fechaAsignacion: row.fechaAsignacion,
-            fechaConstruccion: row.fechaConstruccion,
-            fechaCertificacion: row.fechaCertificacion,
-            fechaAnulacion: row.fechaAnulacion,
-            fechaNovedad: row.fechaNovedad,
-            materialesInstalados: typeof row.materialesInstalados === 'string' 
-              ? JSON.parse(row.materialesInstalados) 
-              : row.materialesInstalados,
-            instalacionProyectos: typeof row.instalacionProyectos === 'string'
-              ? JSON.parse(row.instalacionProyectos)
-              : row.instalacionProyectos,
-            instalacionObservaciones: row.instalacionObservaciones,
-            observacionesTecnico: row.observacionesTecnico,
-            estado: row.estado || 'pendiente',
-            estadoInstalacionId: row.estadoInstalacionId,
-            usuarioRegistra: row.usuarioRegistra,
-            bodegaId: row.bodegaId,
-            fechaCreacion: row.fechaCreacion,
-            fechaActualizacion: row.fechaActualizacion,
-            cliente: null as any, // Se asignará después
-          }));
-        }),
+        `,
+          )
+          .then((rows: any[]) => {
+            // Mapear resultados raw a objetos con estructura similar a TypeORM
+            return rows.map((row: any) => ({
+              instalacionId: row.instalacionId,
+              identificadorUnico: row.identificadorUnico,
+              instalacionCodigo: row.instalacionCodigo,
+              tipoInstalacionId: row.tipoInstalacionId,
+              clienteId: row.clienteId,
+              instalacionMedidorNumero: row.instalacionMedidorNumero,
+              instalacionSelloNumero: row.instalacionSelloNumero,
+              instalacionSelloRegulador: row.instalacionSelloRegulador,
+              instalacionFecha: row.instalacionFecha,
+              fechaAsignacion: row.fechaAsignacion,
+              fechaConstruccion: row.fechaConstruccion,
+              fechaCertificacion: row.fechaCertificacion,
+              fechaAnulacion: row.fechaAnulacion,
+              fechaNovedad: row.fechaNovedad,
+              materialesInstalados:
+                typeof row.materialesInstalados === 'string'
+                  ? JSON.parse(row.materialesInstalados)
+                  : row.materialesInstalados,
+              instalacionProyectos:
+                typeof row.instalacionProyectos === 'string'
+                  ? JSON.parse(row.instalacionProyectos)
+                  : row.instalacionProyectos,
+              instalacionObservaciones: row.instalacionObservaciones,
+              observacionesTecnico: row.observacionesTecnico,
+              estado: row.estado || 'pendiente',
+              estadoInstalacionId: row.estadoInstalacionId,
+              usuarioRegistra: row.usuarioRegistra,
+              bodegaId: row.bodegaId,
+              fechaCreacion: row.fechaCreacion,
+              fechaActualizacion: row.fechaActualizacion,
+              cliente: null as any, // Se asignará después
+            }));
+          }),
         this.movimientosRepository.find(),
         this.trasladosRepository.find(),
         this.clientesRepository
@@ -175,7 +181,9 @@ export class StatsService {
           relations: ['usuarioRol'],
         }),
         // Usar SQL raw para evitar que TypeORM intente cargar relaciones automáticamente
-        this.instalacionesUsuariosRepository.query(`
+        this.instalacionesUsuariosRepository
+          .query(
+            `
           SELECT 
             iu.instalacionUsuarioId,
             iu.instalacionId,
@@ -196,46 +204,54 @@ export class StatsService {
           FROM instalaciones_usuarios iu
           LEFT JOIN usuarios u ON iu.usuarioId = u.usuarioId
           LEFT JOIN roles r ON u.usuarioRolId = r.rolId
-        `).then((rows: any[]) => {
-          // Mapear resultados raw a objetos con estructura similar a TypeORM
-          return rows.map((row: any) => ({
-            instalacionUsuarioId: row.instalacionUsuarioId,
-            instalacionId: row.instalacionId,
-            usuarioId: row.usuarioId,
-            rolEnInstalacion: row.rolEnInstalacion,
-            activo: row.activo !== undefined && row.activo !== null ? Boolean(row.activo) : true,
-            usuario: row.u_usuarioId ? {
-              usuarioId: row.u_usuarioId,
-              usuarioNombre: row.usuarioNombre,
-              usuarioApellido: row.usuarioApellido,
-              usuarioCorreo: row.usuarioCorreo,
-              usuarioTelefono: row.usuarioTelefono,
-              usuarioEstado: row.usuarioEstado,
-              usuarioRol: row.r_rolId ? {
-                rolId: row.r_rolId,
-                rolNombre: row.rolNombre,
-                rolTipo: row.rolTipo,
-                rolDescripcion: row.rolDescripcion,
-              } : null,
-            } : null,
-            instalacion: {
+        `,
+          )
+          .then((rows: any[]) => {
+            // Mapear resultados raw a objetos con estructura similar a TypeORM
+            return rows.map((row: any) => ({
+              instalacionUsuarioId: row.instalacionUsuarioId,
               instalacionId: row.instalacionId,
-            },
-          }));
-        }),
+              usuarioId: row.usuarioId,
+              rolEnInstalacion: row.rolEnInstalacion,
+              activo: row.activo !== undefined && row.activo !== null ? Boolean(row.activo) : true,
+              usuario: row.u_usuarioId
+                ? {
+                    usuarioId: row.u_usuarioId,
+                    usuarioNombre: row.usuarioNombre,
+                    usuarioApellido: row.usuarioApellido,
+                    usuarioCorreo: row.usuarioCorreo,
+                    usuarioTelefono: row.usuarioTelefono,
+                    usuarioEstado: row.usuarioEstado,
+                    usuarioRol: row.r_rolId
+                      ? {
+                          rolId: row.r_rolId,
+                          rolNombre: row.rolNombre,
+                          rolTipo: row.rolTipo,
+                          rolDescripcion: row.rolDescripcion,
+                        }
+                      : null,
+                  }
+                : null,
+              instalacion: {
+                instalacionId: row.instalacionId,
+              },
+            }));
+          }),
         this.municipiosRepository.find(),
       ]);
 
       // Cargar clientes manualmente para las instalaciones
-      const clienteIds = [...new Set(instalaciones.map((inst: any) => inst.clienteId).filter(Boolean))];
-      const clientesMap = new Map(clientes.map(c => [c.clienteId, c]));
+      const clienteIds = [
+        ...new Set(instalaciones.map((inst: any) => inst.clienteId).filter(Boolean)),
+      ];
+      const clientesMap = new Map(clientes.map((c) => [c.clienteId, c]));
       instalaciones.forEach((inst: any) => {
         if (inst.clienteId) {
           const cliente = clientesMap.get(inst.clienteId);
           if (cliente) {
             inst.cliente = {
               ...cliente,
-              nombreUsuario: cliente.nombreUsuario || 'Sin nombre'
+              nombreUsuario: cliente.nombreUsuario || 'Sin nombre',
             };
           } else {
             inst.cliente = null;
@@ -258,14 +274,12 @@ export class StatsService {
       }).length;
 
       const movimientosPorTipo = {
-        entrada: movimientos.filter((m) =>
-          (m.movimientoTipo || '').toLowerCase() === 'entrada'
-        ).length,
-        salida: movimientos.filter((m) =>
-          (m.movimientoTipo || '').toLowerCase() === 'salida'
-        ).length,
-        devolucion: movimientos.filter((m) =>
-          (m.movimientoTipo || '').toLowerCase() === 'devolucion'
+        entrada: movimientos.filter((m) => (m.movimientoTipo || '').toLowerCase() === 'entrada')
+          .length,
+        salida: movimientos.filter((m) => (m.movimientoTipo || '').toLowerCase() === 'salida')
+          .length,
+        devolucion: movimientos.filter(
+          (m) => (m.movimientoTipo || '').toLowerCase() === 'devolucion',
         ).length,
       };
 
@@ -278,11 +292,13 @@ export class StatsService {
       const instalacionesPendientes = instalaciones.filter((i) => {
         const estado = (i.estado || '').toLowerCase();
         // Incluir nuevos estados activos y legacy
-        return estado === 'pendiente' || 
-               estado === 'en_proceso' || 
-               estado === 'asignacion' || 
-               estado === 'construccion' || 
-               estado === 'certificacion';
+        return (
+          estado === 'pendiente' ||
+          estado === 'en_proceso' ||
+          estado === 'asignacion' ||
+          estado === 'construccion' ||
+          estado === 'certificacion'
+        );
       }).length;
 
       const trasladosPendientes = traslados.filter((t) => {
@@ -291,7 +307,20 @@ export class StatsService {
       }).length;
 
       // Calcular movimientos por mes (últimos 6 meses)
-      const meses = ['Ene', 'Feb', 'Mar', 'Abr', 'May', 'Jun', 'Jul', 'Ago', 'Sep', 'Oct', 'Nov', 'Dic'];
+      const meses = [
+        'Ene',
+        'Feb',
+        'Mar',
+        'Abr',
+        'May',
+        'Jun',
+        'Jul',
+        'Ago',
+        'Sep',
+        'Oct',
+        'Nov',
+        'Dic',
+      ];
       const movimientosPorMes = [];
       for (let i = 5; i >= 0; i--) {
         const fecha = new Date(ahora.getFullYear(), ahora.getMonth() - i, 1);
@@ -306,9 +335,14 @@ export class StatsService {
 
         movimientosPorMes.push({
           mes: mesNombre,
-          entrada: movimientosMes.filter((m) => (m.movimientoTipo || '').toLowerCase() === 'entrada').length,
-          salida: movimientosMes.filter((m) => (m.movimientoTipo || '').toLowerCase() === 'salida').length,
-          devolucion: movimientosMes.filter((m) => (m.movimientoTipo || '').toLowerCase() === 'devolucion').length,
+          entrada: movimientosMes.filter(
+            (m) => (m.movimientoTipo || '').toLowerCase() === 'entrada',
+          ).length,
+          salida: movimientosMes.filter((m) => (m.movimientoTipo || '').toLowerCase() === 'salida')
+            .length,
+          devolucion: movimientosMes.filter(
+            (m) => (m.movimientoTipo || '').toLowerCase() === 'devolucion',
+          ).length,
         });
       }
 
@@ -334,14 +368,16 @@ export class StatsService {
       });
       const instalacionesPorEstado = Array.from(estadosMap.entries())
         .map(([estado, cantidad]) => ({ estado, cantidad }))
-        .filter(e => e.cantidad > 0); // Solo incluir estados con instalaciones
+        .filter((e) => e.cantidad > 0); // Solo incluir estados con instalaciones
 
       // Calcular técnicos con más instalaciones
       const tecnicosMap = new Map<number, { nombre: string; cantidad: number }>();
       instalacionesUsuarios.forEach((iu) => {
         if (iu.usuario && iu.activo) {
           const usuarioId = iu.usuario.usuarioId;
-          const nombreCompleto = `${iu.usuario.usuarioNombre || ''} ${iu.usuario.usuarioApellido || ''}`.trim() || 'Sin nombre';
+          const nombreCompleto =
+            `${iu.usuario.usuarioNombre || ''} ${iu.usuario.usuarioApellido || ''}`.trim() ||
+            'Sin nombre';
           if (!tecnicosMap.has(usuarioId)) {
             tecnicosMap.set(usuarioId, { nombre: nombreCompleto, cantidad: 0 });
           }
@@ -352,18 +388,18 @@ export class StatsService {
       const tecnicosConMasInstalaciones = Array.from(tecnicosMap.values())
         .sort((a, b) => b.cantidad - a.cantidad)
         .slice(0, 10)
-        .map(t => ({ tecnico: t.nombre, cantidad: t.cantidad }));
+        .map((t) => ({ tecnico: t.nombre, cantidad: t.cantidad }));
 
       // Calcular instalaciones por municipio
       const municipiosMap = new Map<number, { nombre: string; cantidad: number }>();
       instalaciones.forEach((inst: any) => {
         if (inst.clienteId) {
-          const cliente = clientes.find(c => c.clienteId === inst.clienteId);
+          const cliente = clientes.find((c) => c.clienteId === inst.clienteId);
           if (cliente && cliente.municipioId) {
             const municipioId = cliente.municipioId;
-            const municipio = municipios.find(m => m.municipioId === municipioId);
+            const municipio = municipios.find((m) => m.municipioId === municipioId);
             const nombreMunicipio = municipio?.municipioNombre || `Municipio ${municipioId}`;
-            
+
             if (!municipiosMap.has(municipioId)) {
               municipiosMap.set(municipioId, { nombre: nombreMunicipio, cantidad: 0 });
             }
@@ -375,7 +411,7 @@ export class StatsService {
       const instalacionesPorMunicipio = Array.from(municipiosMap.values())
         .sort((a, b) => b.cantidad - a.cantidad)
         .slice(0, 10)
-        .map(m => ({ municipio: m.nombre, cantidad: m.cantidad }));
+        .map((m) => ({ municipio: m.nombre, cantidad: m.cantidad }));
 
       // Obtener últimas instalaciones (últimas 10)
       const ultimasInstalaciones = instalaciones.slice(0, 10).map((inst: any) => {
@@ -432,7 +468,7 @@ export class StatsService {
         ultimasInstalaciones,
         instalacionesPorMes,
       };
-      
+
       return result;
     } catch (error) {
       console.error('Error calculando estadísticas:', error);
@@ -466,4 +502,3 @@ export class StatsService {
     }
   }
 }
-

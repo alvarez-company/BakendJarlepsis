@@ -24,14 +24,32 @@ export class InstalacionesUsuariosController {
   }
 
   @Get('instalacion/:instalacionId')
-  @Roles('superadmin', 'admin', 'administrador', 'almacenista', 'tecnico', 'soldador', 'bodega-internas', 'bodega-redes')
+  @Roles(
+    'superadmin',
+    'admin',
+    'administrador',
+    'almacenista',
+    'tecnico',
+    'soldador',
+    'bodega-internas',
+    'bodega-redes',
+  )
   @ApiOperation({ summary: 'Obtener usuarios asignados a una instalación' })
   findByInstalacion(@Param('instalacionId') instalacionId: string) {
     return this.service.findByInstalacion(+instalacionId);
   }
 
   @Get('usuario/:usuarioId')
-  @Roles('superadmin', 'admin', 'administrador', 'almacenista', 'tecnico', 'soldador', 'bodega-internas', 'bodega-redes')
+  @Roles(
+    'superadmin',
+    'admin',
+    'administrador',
+    'almacenista',
+    'tecnico',
+    'soldador',
+    'bodega-internas',
+    'bodega-redes',
+  )
   @ApiOperation({ summary: 'Obtener instalaciones asignadas a un usuario' })
   findByUsuario(@Param('usuarioId') usuarioId: string) {
     return this.service.findByUsuario(+usuarioId);
@@ -51,4 +69,3 @@ export class InstalacionesUsuariosController {
     return this.service.desasignarUsuarios(+instalacionId);
   }
 }
-

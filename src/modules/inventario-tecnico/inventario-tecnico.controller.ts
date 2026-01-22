@@ -1,7 +1,11 @@
 import { Controller, Get, Post, Body, Param, Delete, Put, UseGuards } from '@nestjs/common';
 import { ApiTags, ApiBearerAuth, ApiOperation } from '@nestjs/swagger';
 import { InventarioTecnicoService } from './inventario-tecnico.service';
-import { CreateInventarioTecnicoDto, UpdateInventarioTecnicoDto, AssignMaterialesToTecnicoDto } from './dto/create-inventario-tecnico.dto';
+import {
+  CreateInventarioTecnicoDto,
+  UpdateInventarioTecnicoDto,
+  AssignMaterialesToTecnicoDto,
+} from './dto/create-inventario-tecnico.dto';
 import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard';
 import { RolesGuard } from '../../common/guards/roles.guard';
 import { Roles } from '../../common/decorators/roles.decorator';
@@ -31,28 +35,64 @@ export class InventarioTecnicoController {
   }
 
   @Get()
-  @Roles('superadmin', 'admin', 'administrador', 'almacenista', 'tecnico', 'soldador', 'bodega-internas', 'bodega-redes')
+  @Roles(
+    'superadmin',
+    'admin',
+    'administrador',
+    'almacenista',
+    'tecnico',
+    'soldador',
+    'bodega-internas',
+    'bodega-redes',
+  )
   @ApiOperation({ summary: 'Obtener todo el inventario de técnicos' })
   findAll() {
     return this.service.findAll();
   }
 
   @Get('usuario/:usuarioId')
-  @Roles('superadmin', 'admin', 'administrador', 'almacenista', 'tecnico', 'soldador', 'bodega-internas', 'bodega-redes')
+  @Roles(
+    'superadmin',
+    'admin',
+    'administrador',
+    'almacenista',
+    'tecnico',
+    'soldador',
+    'bodega-internas',
+    'bodega-redes',
+  )
   @ApiOperation({ summary: 'Obtener inventario de un técnico específico' })
   findByUsuario(@Param('usuarioId') usuarioId: string) {
     return this.service.findByUsuario(+usuarioId);
   }
 
   @Get('material/:materialId')
-  @Roles('superadmin', 'admin', 'administrador', 'almacenista', 'tecnico', 'soldador', 'bodega-internas', 'bodega-redes')
+  @Roles(
+    'superadmin',
+    'admin',
+    'administrador',
+    'almacenista',
+    'tecnico',
+    'soldador',
+    'bodega-internas',
+    'bodega-redes',
+  )
   @ApiOperation({ summary: 'Obtener técnicos que tienen un material específico' })
   findByMaterial(@Param('materialId') materialId: string) {
     return this.service.findByMaterial(+materialId);
   }
 
   @Get(':id')
-  @Roles('superadmin', 'admin', 'administrador', 'almacenista', 'tecnico', 'soldador', 'bodega-internas', 'bodega-redes')
+  @Roles(
+    'superadmin',
+    'admin',
+    'administrador',
+    'almacenista',
+    'tecnico',
+    'soldador',
+    'bodega-internas',
+    'bodega-redes',
+  )
   @ApiOperation({ summary: 'Obtener un registro de inventario técnico por ID' })
   findOne(@Param('id') id: string) {
     return this.service.findOne(+id);
@@ -82,4 +122,3 @@ export class InventarioTecnicoController {
     return this.service.removeByUsuarioAndMaterial(+usuarioId, +materialId);
   }
 }
-

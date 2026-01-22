@@ -19,4 +19,3 @@ export class EstadosClienteController {
     return this.estadosClienteService.findAll();
   }
 }
-

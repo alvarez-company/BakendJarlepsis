@@ -11,4 +11,3 @@ import { EstadosTrasladoController } from './estados-traslado.controller';
   exports: [EstadosTrasladoService],
 })
 export class EstadosTrasladoModule {}
-

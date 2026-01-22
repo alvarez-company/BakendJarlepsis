@@ -81,7 +81,9 @@ describe('InstalacionesService - Permisos', () => {
     registrarEliminacion: jest.fn().mockResolvedValue(undefined),
   };
   const mockEstadosInstalacionService = {
-    findByCodigo: jest.fn().mockResolvedValue({ estadoInstalacionId: 1, estadoCodigo: 'en_proceso' }),
+    findByCodigo: jest
+      .fn()
+      .mockResolvedValue({ estadoInstalacionId: 1, estadoCodigo: 'en_proceso' }),
   };
   const mockInventarioTecnicoService = {};
   const mockNumerosMedidorService = {
@@ -179,14 +181,16 @@ describe('InstalacionesService - Permisos', () => {
 
     beforeEach(() => {
       // Mock del query raw que usa findOne
-      mockRepository.query.mockResolvedValue([{
-        instalacionId: 1,
-        identificadorUnico: 'INST-001',
-        instalacionCodigo: 'INST-001',
-        tipoInstalacionId: 1,
-        clienteId: 1,
-        estado: 'asignada',
-      }]);
+      mockRepository.query.mockResolvedValue([
+        {
+          instalacionId: 1,
+          identificadorUnico: 'INST-001',
+          instalacionCodigo: 'INST-001',
+          tipoInstalacionId: 1,
+          clienteId: 1,
+          estado: 'asignada',
+        },
+      ]);
       mockRepository.save.mockResolvedValue(mockInstalacion);
     });
 
@@ -197,7 +201,7 @@ describe('InstalacionesService - Permisos', () => {
       jest.spyOn(service, 'findOne').mockResolvedValue(mockInstalacion as any);
 
       await expect(
-        service.update(1, { instalacionCodigo: 'INST-002' }, 1, user)
+        service.update(1, { instalacionCodigo: 'INST-002' }, 1, user),
       ).resolves.toBeDefined();
     });
 
@@ -207,17 +211,20 @@ describe('InstalacionesService - Permisos', () => {
       jest.spyOn(service, 'findOne').mockResolvedValue(mockInstalacion as any);
 
       await expect(
-        service.update(1, { instalacionCodigo: 'INST-002' }, 1, user)
+        service.update(1, { instalacionCodigo: 'INST-002' }, 1, user),
       ).resolves.toBeDefined();
     });
 
     it('should allow bodega-redes to update installation', async () => {
       const user = { usuarioRol: { rolTipo: 'bodega-redes' }, usuarioId: 1 };
       mockUsersService.findOne.mockResolvedValue(user);
-      jest.spyOn(service, 'findOne').mockResolvedValue({ ...mockInstalacion, tipoInstalacion: { tipoInstalacionNombre: 'Redes' } } as any);
+      jest.spyOn(service, 'findOne').mockResolvedValue({
+        ...mockInstalacion,
+        tipoInstalacion: { tipoInstalacionNombre: 'Redes' },
+      } as any);
 
       await expect(
-        service.update(1, { instalacionCodigo: 'INST-002' }, 1, user)
+        service.update(1, { instalacionCodigo: 'INST-002' }, 1, user),
       ).resolves.toBeDefined();
     });
 
@@ -226,12 +233,12 @@ describe('InstalacionesService - Permisos', () => {
       mockUsersService.findOne.mockResolvedValue(user);
       jest.spyOn(service, 'findOne').mockResolvedValue(mockInstalacion as any);
 
-      await expect(
-        service.update(1, { instalacionCodigo: 'INST-002' }, 1, user)
-      ).rejects.toThrow(BadRequestException);
-      await expect(
-        service.update(1, { instalacionCodigo: 'INST-002' }, 1, user)
-      ).rejects.toThrow('No tienes permisos para editar instalaciones');
+      await expect(service.update(1, { instalacionCodigo: 'INST-002' }, 1, user)).rejects.toThrow(
+        BadRequestException,
+      );
+      await expect(service.update(1, { instalacionCodigo: 'INST-002' }, 1, user)).rejects.toThrow(
+        'No tienes permisos para editar instalaciones',
+      );
     });
 
     it('should deny administrador from updating installation', async () => {
@@ -239,12 +246,12 @@ describe('InstalacionesService - Permisos', () => {
       mockUsersService.findOne.mockResolvedValue(user);
       jest.spyOn(service, 'findOne').mockResolvedValue(mockInstalacion as any);
 
-      await expect(
-        service.update(1, { instalacionCodigo: 'INST-002' }, 1, user)
-      ).rejects.toThrow(BadRequestException);
-      await expect(
-        service.update(1, { instalacionCodigo: 'INST-002' }, 1, user)
-      ).rejects.toThrow('No tienes permisos para editar instalaciones');
+      await expect(service.update(1, { instalacionCodigo: 'INST-002' }, 1, user)).rejects.toThrow(
+        BadRequestException,
+      );
+      await expect(service.update(1, { instalacionCodigo: 'INST-002' }, 1, user)).rejects.toThrow(
+        'No tienes permisos para editar instalaciones',
+      );
     });
   });
 
@@ -255,10 +262,12 @@ describe('InstalacionesService - Permisos', () => {
     };
 
     beforeEach(() => {
-      mockRepository.query.mockResolvedValue([{
-        instalacionId: 1,
-        estado: 'asignada',
-      }]);
+      mockRepository.query.mockResolvedValue([
+        {
+          instalacionId: 1,
+          estado: 'asignada',
+        },
+      ]);
       mockRepository.remove.mockResolvedValue(mockInstalacion);
       mockMovimientosService.findByInstalacion.mockResolvedValue([]);
       mockInstalacionesMaterialesService.findByInstalacion.mockResolvedValue([]);
@@ -275,7 +284,11 @@ describe('InstalacionesService - Permisos', () => {
     it('should allow bodega-internas to delete installation', async () => {
       const user = { usuarioRol: { rolTipo: 'bodega-internas' }, usuarioId: 1 };
       mockUsersService.findOne.mockResolvedValue(user);
-      jest.spyOn(service, 'findOne').mockResolvedValue({ ...mockInstalacion, tipoInstalacion: { tipoInstalacionNombre: 'Internas' }, clienteId: 1 } as any);
+      jest.spyOn(service, 'findOne').mockResolvedValue({
+        ...mockInstalacion,
+        tipoInstalacion: { tipoInstalacionNombre: 'Internas' },
+        clienteId: 1,
+      } as any);
 
       await expect(service.remove(1, 1, user)).resolves.toBeUndefined();
     });
@@ -286,7 +299,9 @@ describe('InstalacionesService - Permisos', () => {
       jest.spyOn(service, 'findOne').mockResolvedValue(mockInstalacion as any);
 
       await expect(service.remove(1, 1, user)).rejects.toThrow(BadRequestException);
-      await expect(service.remove(1, 1, user)).rejects.toThrow('No tienes permisos para eliminar instalaciones');
+      await expect(service.remove(1, 1, user)).rejects.toThrow(
+        'No tienes permisos para eliminar instalaciones',
+      );
     });
   });
 
@@ -297,10 +312,12 @@ describe('InstalacionesService - Permisos', () => {
     };
 
     beforeEach(() => {
-      mockRepository.query.mockResolvedValue([{
-        instalacionId: 1,
-        estado: 'asignada',
-      }]);
+      mockRepository.query.mockResolvedValue([
+        {
+          instalacionId: 1,
+          estado: 'asignada',
+        },
+      ]);
       mockRepository.save.mockResolvedValue({ ...mockInstalacion, estado: 'en-proceso' });
     });
 
@@ -309,7 +326,9 @@ describe('InstalacionesService - Permisos', () => {
       mockUsersService.findOne.mockResolvedValue(user);
       jest.spyOn(service, 'findOne').mockResolvedValue(mockInstalacion as any);
 
-      await expect(service.actualizarEstado(1, 'en_proceso' as any, 1, user)).resolves.toBeDefined();
+      await expect(
+        service.actualizarEstado(1, 'en_proceso' as any, 1, user),
+      ).resolves.toBeDefined();
     });
 
     it('should deny almacenista from changing installation status', async () => {
@@ -317,9 +336,12 @@ describe('InstalacionesService - Permisos', () => {
       mockUsersService.findOne.mockResolvedValue(user);
       jest.spyOn(service, 'findOne').mockResolvedValue(mockInstalacion as any);
 
-      await expect(service.actualizarEstado(1, 'en-proceso' as any, 1, user)).rejects.toThrow(BadRequestException);
-      await expect(service.actualizarEstado(1, 'en-proceso' as any, 1, user)).rejects.toThrow('No tienes permisos para cambiar el estado de instalaciones');
+      await expect(service.actualizarEstado(1, 'en-proceso' as any, 1, user)).rejects.toThrow(
+        BadRequestException,
+      );
+      await expect(service.actualizarEstado(1, 'en-proceso' as any, 1, user)).rejects.toThrow(
+        'No tienes permisos para cambiar el estado de instalaciones',
+      );
     });
   });
 });
-

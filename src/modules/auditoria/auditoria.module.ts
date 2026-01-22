@@ -9,4 +9,3 @@ import { AuditoriaService } from './auditoria.service';
   exports: [AuditoriaService],
 })
 export class AuditoriaModule {}
-

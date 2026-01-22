@@ -34,4 +34,3 @@ export class ReaccionMensaje {
   @CreateDateColumn()
   fechaCreacion: Date;
 }
-

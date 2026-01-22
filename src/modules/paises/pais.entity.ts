@@ -31,4 +31,3 @@ export class Pais {
   @UpdateDateColumn()
   fechaActualizacion: Date;
 }
-

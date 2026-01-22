@@ -19,9 +19,9 @@ export class InventariosService {
   }
 
   async findAll(): Promise<Inventario[]> {
-    return this.inventariosRepository.find({ 
+    return this.inventariosRepository.find({
       relations: ['bodega', 'bodega.sede', 'materiales'],
-      where: { inventarioEstado: true }
+      where: { inventarioEstado: true },
     });
   }
 
@@ -53,13 +53,15 @@ export class InventariosService {
 
   async remove(id: number): Promise<void> {
     const inventario = await this.findOne(id);
-    
+
     // Validar que no tenga materiales asociados
     if (inventario.materiales && inventario.materiales.length > 0) {
-      throw new HasMaterialsException(`inventario "${inventario.inventarioNombre}"`, inventario.materiales.length);
+      throw new HasMaterialsException(
+        `inventario "${inventario.inventarioNombre}"`,
+        inventario.materiales.length,
+      );
     }
-    
+
     await this.inventariosRepository.remove(inventario);
   }
 }
-

@@ -26,7 +26,9 @@ export class ClasificacionesService {
   }
 
   async findOne(id: number): Promise<Clasificacion> {
-    const clasificacion = await this.clasificacionesRepository.findOne({ where: { clasificacionId: id } });
+    const clasificacion = await this.clasificacionesRepository.findOne({
+      where: { clasificacionId: id },
+    });
     if (!clasificacion) throw new NotFoundException(`Clasificación con ID ${id} no encontrada`);
     return clasificacion;
   }
@@ -42,4 +44,3 @@ export class ClasificacionesService {
     await this.clasificacionesRepository.remove(clasificacion);
   }
 }
-

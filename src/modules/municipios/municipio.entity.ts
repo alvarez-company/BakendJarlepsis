@@ -37,4 +37,3 @@ export class Municipio {
   @UpdateDateColumn()
   fechaActualizacion: Date;
 }
-

@@ -20,4 +20,3 @@ export class CreateMunicipioDto {
   @IsOptional()
   municipioEstado?: boolean;
 }
-

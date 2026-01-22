@@ -11,4 +11,3 @@ import { TipoProyecto } from './tipo-proyecto.entity';
   exports: [TiposProyectoService],
 })
 export class TiposProyectoModule {}
-

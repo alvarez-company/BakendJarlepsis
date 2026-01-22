@@ -1,4 +1,11 @@
-import { Injectable, NotFoundException, ConflictException, BadRequestException, Inject, forwardRef } from '@nestjs/common';
+import {
+  Injectable,
+  NotFoundException,
+  ConflictException,
+  BadRequestException,
+  Inject,
+  forwardRef,
+} from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository, In } from 'typeorm';
 import { Instalacion, EstadoInstalacion } from './instalacion.entity';
@@ -69,7 +76,7 @@ export class InstalacionesService {
          WHERE identificadorUnico IS NOT NULL 
            AND identificadorUnico LIKE 'INST-%'
          ORDER BY CAST(SUBSTRING(identificadorUnico, 6) AS UNSIGNED) DESC
-         LIMIT 1`
+         LIMIT 1`,
       );
 
       let siguienteNumero = 1;
@@ -90,57 +97,67 @@ export class InstalacionesService {
     }
   }
 
-  async create(createInstalacionDto: CreateInstalacionDto, usuarioId: number, user?: any): Promise<Instalacion> {
+  async create(
+    createInstalacionDto: CreateInstalacionDto,
+    usuarioId: number,
+    user?: any,
+  ): Promise<Instalacion> {
     const { usuariosAsignados, instalacionCodigo, ...instalacionData } = createInstalacionDto;
-    
+
     // Validar tipo de instalación según el rol
     if (user) {
       const userRole = user?.usuarioRol?.rolTipo || user?.role;
-      
+
       if (userRole === 'bodega-internas' || userRole === 'bodega-redes') {
         // Cargar el tipo de instalación para validar
         const tipoInstalacionRaw = await this.instalacionesRepository.query(
           `SELECT tipoInstalacionId, tipoInstalacionNombre 
            FROM tipos_instalacion 
            WHERE tipoInstalacionId = ?`,
-          [createInstalacionDto.tipoInstalacionId]
+          [createInstalacionDto.tipoInstalacionId],
         );
-        
+
         if (!tipoInstalacionRaw || tipoInstalacionRaw.length === 0) {
           throw new BadRequestException('Tipo de instalación no encontrado');
         }
-        
+
         const tipoNombre = tipoInstalacionRaw[0].tipoInstalacionNombre?.toLowerCase() || '';
-        
+
         if (userRole === 'bodega-internas' && !tipoNombre.includes('internas')) {
-          throw new BadRequestException('El rol "Bodega Internas" solo puede crear instalaciones de tipo "Internas"');
+          throw new BadRequestException(
+            'El rol "Bodega Internas" solo puede crear instalaciones de tipo "Internas"',
+          );
         }
-        
+
         if (userRole === 'bodega-redes' && !tipoNombre.includes('redes')) {
-          throw new BadRequestException('El rol "Bodega Redes" solo puede crear instalaciones de tipo "Redes"');
+          throw new BadRequestException(
+            'El rol "Bodega Redes" solo puede crear instalaciones de tipo "Redes"',
+          );
         }
       }
     }
-    
+
     // Usar el código de instalación del cliente como identificador único
     // Si no se proporciona, generar uno automáticamente
-    const identificadorUnico = instalacionCodigo || await this.generarIdentificadorUnico();
-    
+    const identificadorUnico = instalacionCodigo || (await this.generarIdentificadorUnico());
+
     // Verificar que el código de instalación no esté duplicado
     const instalacionExistente = await this.instalacionesRepository
       .createQueryBuilder('instalacion')
       .where('instalacion.identificadorUnico = :codigo', { codigo: identificadorUnico })
       .orWhere('instalacion.instalacionCodigo = :codigo', { codigo: identificadorUnico })
       .getOne();
-    
+
     if (instalacionExistente) {
-      throw new ConflictException(`El código de instalación '${identificadorUnico}' ya está en uso. Por favor, use un código diferente.`);
+      throw new ConflictException(
+        `El código de instalación '${identificadorUnico}' ya está en uso. Por favor, use un código diferente.`,
+      );
     }
-    
+
     // Determinar el estado inicial: pendiente si no hay técnicos asignados
     let estadoInicial = EstadoInstalacion.PENDIENTE;
     let estadoInstalacionId: number | null = null;
-    
+
     if (usuariosAsignados && usuariosAsignados.length > 0) {
       // Si hay técnicos asignados, buscar el estado "asignacion" o usar "en_proceso"
       try {
@@ -153,7 +170,7 @@ export class InstalacionesService {
           const estadoPendiente = await this.estadosInstalacionService.findByCodigo('pendiente');
           estadoInstalacionId = estadoPendiente.estadoInstalacionId;
           estadoInicial = EstadoInstalacion.PENDIENTE;
-        } catch {
+        } catch (_e) {
           // Si no existe ningún estado, dejar null y usar el enum por defecto
         }
       }
@@ -167,7 +184,7 @@ export class InstalacionesService {
         // Si no existe el estado pendiente, usar el enum por defecto
       }
     }
-    
+
     const instalacion = this.instalacionesRepository.create({
       ...instalacionData,
       identificadorUnico,
@@ -176,37 +193,43 @@ export class InstalacionesService {
       estado: estadoInicial,
       estadoInstalacionId: estadoInstalacionId || undefined,
     });
-    
+
     const savedInstalacion = await this.instalacionesRepository.save(instalacion);
-    
+
     // Si el identificadorUnico no se guardó, actualizarlo directamente con SQL
     if (!savedInstalacion.identificadorUnico && savedInstalacion.instalacionId) {
       await this.instalacionesRepository.query(
         'UPDATE instalaciones SET identificadorUnico = ? WHERE instalacionId = ?',
-        [identificadorUnico, savedInstalacion.instalacionId]
+        [identificadorUnico, savedInstalacion.instalacionId],
       );
       // Actualizar el objeto guardado
       savedInstalacion.identificadorUnico = identificadorUnico;
     }
-    
+
     // Crear grupo de chat automáticamente
     try {
       const codigoGrupo = savedInstalacion.identificadorUnico;
       await this.gruposService.crearGrupoInstalacion(savedInstalacion.instalacionId, codigoGrupo);
     } catch (error) {
-      console.error(`[InstalacionesService] Error al crear grupo de chat para instalación ${savedInstalacion.identificadorUnico}:`, error);
+      console.error(
+        `[InstalacionesService] Error al crear grupo de chat para instalación ${savedInstalacion.identificadorUnico}:`,
+        error,
+      );
       // No lanzar error para no interrumpir la creación de la instalación
     }
-    
+
     // Asignar usuarios si se proporcionaron
     if (usuariosAsignados && usuariosAsignados.length > 0) {
-      const usuariosParaAsignar = usuariosAsignados.map(usuarioId => ({
+      const usuariosParaAsignar = usuariosAsignados.map((usuarioId) => ({
         usuarioId,
-        rolEnInstalacion: 'tecnico' // Por defecto técnico, se puede cambiar después
+        rolEnInstalacion: 'tecnico', // Por defecto técnico, se puede cambiar después
       }));
-      await this.instalacionesUsuariosService.asignarUsuarios(savedInstalacion.instalacionId, usuariosParaAsignar);
+      await this.instalacionesUsuariosService.asignarUsuarios(
+        savedInstalacion.instalacionId,
+        usuariosParaAsignar,
+      );
     }
-    
+
     // Recargar con relaciones
     const instalacionCompleta = await this.findOne(savedInstalacion.instalacionId);
     return instalacionCompleta;
@@ -245,30 +268,32 @@ export class InstalacionesService {
           i.fechaActualizacion
         FROM instalaciones i
       `);
-    
-    // Cargar tipoInstalacion, usuariosAsignados y sus relaciones por separado
-    const instalacionIds = instalacionesRaw.map((row: any) => row.instalacionId);
-    
-    // Cargar tipos de instalación
-    const tipoInstalacionIds = [...new Set(instalacionesRaw.map((row: any) => row.tipoInstalacionId).filter(Boolean))];
-    const tiposInstalacionMap = new Map();
-    if (tipoInstalacionIds.length > 0) {
-      const tiposRaw = await this.instalacionesRepository.query(
-        `SELECT tipoInstalacionId, tipoInstalacionNombre, usuarioRegistra, fechaCreacion, fechaActualizacion
+
+      // Cargar tipoInstalacion, usuariosAsignados y sus relaciones por separado
+      const instalacionIds = instalacionesRaw.map((row: any) => row.instalacionId);
+
+      // Cargar tipos de instalación
+      const tipoInstalacionIds = [
+        ...new Set(instalacionesRaw.map((row: any) => row.tipoInstalacionId).filter(Boolean)),
+      ];
+      const tiposInstalacionMap = new Map();
+      if (tipoInstalacionIds.length > 0) {
+        const tiposRaw = await this.instalacionesRepository.query(
+          `SELECT tipoInstalacionId, tipoInstalacionNombre, usuarioRegistra, fechaCreacion, fechaActualizacion
          FROM tipos_instalacion 
          WHERE tipoInstalacionId IN (${tipoInstalacionIds.map(() => '?').join(',')})`,
-        tipoInstalacionIds
-      );
-      tiposRaw.forEach((tipo: any) => {
-        tiposInstalacionMap.set(tipo.tipoInstalacionId, tipo);
-      });
-    }
-    
-    // Cargar usuarios asignados y sus relaciones (solo activos)
-    const usuariosAsignadosMap = new Map<number, any[]>();
-    if (instalacionIds.length > 0) {
-      const usuariosAsignadosRaw = await this.instalacionesRepository.query(
-        `SELECT 
+          tipoInstalacionIds,
+        );
+        tiposRaw.forEach((tipo: any) => {
+          tiposInstalacionMap.set(tipo.tipoInstalacionId, tipo);
+        });
+      }
+
+      // Cargar usuarios asignados y sus relaciones (solo activos)
+      const usuariosAsignadosMap = new Map<number, any[]>();
+      if (instalacionIds.length > 0) {
+        const usuariosAsignadosRaw = await this.instalacionesRepository.query(
+          `SELECT 
           iu.instalacionUsuarioId,
           iu.instalacionId,
           iu.usuarioId,
@@ -290,213 +315,228 @@ export class InstalacionesService {
          LEFT JOIN roles r ON u.usuarioRolId = r.rolId
          WHERE iu.instalacionId IN (${instalacionIds.map(() => '?').join(',')})
          AND iu.activo = 1`,
-        instalacionIds
-      );
-      
-      usuariosAsignadosRaw.forEach((row: any) => {
-        if (!usuariosAsignadosMap.has(row.instalacionId)) {
-          usuariosAsignadosMap.set(row.instalacionId, []);
-        }
-        const usuariosAsignados = usuariosAsignadosMap.get(row.instalacionId)!;
-        usuariosAsignados.push({
-          instalacionUsuarioId: row.instalacionUsuarioId,
-          instalacionId: row.instalacionId,
-          usuarioId: row.usuarioId,
-          rolEnInstalacion: row.rolEnInstalacion,
-          activo: row.activo !== undefined ? Boolean(row.activo) : true,
-          usuario: row.u_usuarioId ? {
-            usuarioId: row.u_usuarioId,
-            usuarioNombre: row.usuarioNombre,
-            usuarioApellido: row.usuarioApellido,
-            usuarioCorreo: row.usuarioCorreo,
-            usuarioTelefono: row.usuarioTelefono,
-            usuarioEstado: row.usuarioEstado,
-            usuarioRol: row.r_rolId ? {
-              rolId: row.r_rolId,
-              rolNombre: row.rolNombre,
-              rolTipo: row.rolTipo,
-              rolDescripcion: row.rolDescripcion,
-            } : null,
-          } : null,
+          instalacionIds,
+        );
+
+        usuariosAsignadosRaw.forEach((row: any) => {
+          if (!usuariosAsignadosMap.has(row.instalacionId)) {
+            usuariosAsignadosMap.set(row.instalacionId, []);
+          }
+          const usuariosAsignados = usuariosAsignadosMap.get(row.instalacionId)!;
+          usuariosAsignados.push({
+            instalacionUsuarioId: row.instalacionUsuarioId,
+            instalacionId: row.instalacionId,
+            usuarioId: row.usuarioId,
+            rolEnInstalacion: row.rolEnInstalacion,
+            activo: row.activo !== undefined ? Boolean(row.activo) : true,
+            usuario: row.u_usuarioId
+              ? {
+                  usuarioId: row.u_usuarioId,
+                  usuarioNombre: row.usuarioNombre,
+                  usuarioApellido: row.usuarioApellido,
+                  usuarioCorreo: row.usuarioCorreo,
+                  usuarioTelefono: row.usuarioTelefono,
+                  usuarioEstado: row.usuarioEstado,
+                  usuarioRol: row.r_rolId
+                    ? {
+                        rolId: row.r_rolId,
+                        rolNombre: row.rolNombre,
+                        rolTipo: row.rolTipo,
+                        rolDescripcion: row.rolDescripcion,
+                      }
+                    : null,
+                }
+              : null,
+          });
         });
-      });
-    }
-    
-    // Cargar clientes por separado para evitar problemas con la relación
-    const clienteIds = [...new Set(instalacionesRaw.map((row: any) => row.clienteId).filter(Boolean))];
-    const clientesMap = new Map();
-    if (clienteIds.length > 0) {
-      try {
-        // Usar SQL raw para seleccionar solo las columnas que existen en la BD
-        const clientesRaw = await this.clientesRepository.query(
-          `SELECT clienteId, nombreUsuario, clienteTelefono, 
+      }
+
+      // Cargar clientes por separado para evitar problemas con la relación
+      const clienteIds = [
+        ...new Set(instalacionesRaw.map((row: any) => row.clienteId).filter(Boolean)),
+      ];
+      const clientesMap = new Map();
+      if (clienteIds.length > 0) {
+        try {
+          // Usar SQL raw para seleccionar solo las columnas que existen en la BD
+          const clientesRaw = await this.clientesRepository.query(
+            `SELECT clienteId, nombreUsuario, clienteTelefono, 
                   clienteDireccion, clienteBarrio, municipioId, cantidadInstalaciones, 
                   clienteEstado, usuarioRegistra, fechaCreacion, fechaActualizacion
            FROM clientes 
            WHERE clienteId IN (${clienteIds.map(() => '?').join(',')})`,
-          clienteIds
-        );
-        clientesRaw.forEach((c: any) => {
-          clientesMap.set(c.clienteId, c);
-        });
-      } catch (error) {
-        console.error('[InstalacionesService.findAll] Error al cargar clientes con SQL raw:', error);
+            clienteIds,
+          );
+          clientesRaw.forEach((c: any) => {
+            clientesMap.set(c.clienteId, c);
+          });
+        } catch (error) {
+          console.error(
+            '[InstalacionesService.findAll] Error al cargar clientes con SQL raw:',
+            error,
+          );
+        }
       }
-    }
-    
-    // Cargar bodegas por separado
-    const bodegaIds = [...new Set(instalacionesRaw.map((row: any) => row.bodegaId).filter(Boolean))];
-    const bodegasMap = new Map();
-    if (bodegaIds.length > 0) {
-      try {
-        const bodegasRaw = await this.instalacionesRepository.query(
-          `SELECT bodegaId, bodegaNombre, bodegaDescripcion, bodegaUbicacion, 
+
+      // Cargar bodegas por separado
+      const bodegaIds = [
+        ...new Set(instalacionesRaw.map((row: any) => row.bodegaId).filter(Boolean)),
+      ];
+      const bodegasMap = new Map();
+      if (bodegaIds.length > 0) {
+        try {
+          const bodegasRaw = await this.instalacionesRepository.query(
+            `SELECT bodegaId, bodegaNombre, bodegaDescripcion, bodegaUbicacion, 
                   bodegaTelefono, bodegaCorreo, sedeId, bodegaEstado
            FROM bodegas 
            WHERE bodegaId IN (${bodegaIds.map(() => '?').join(',')})`,
-          bodegaIds
-        );
-        bodegasRaw.forEach((b: any) => {
-          bodegasMap.set(b.bodegaId, b);
-        });
-      } catch (error) {
-        console.error('[InstalacionesService.findAll] Error al cargar bodegas:', error);
+            bodegaIds,
+          );
+          bodegasRaw.forEach((b: any) => {
+            bodegasMap.set(b.bodegaId, b);
+          });
+        } catch (error) {
+          console.error('[InstalacionesService.findAll] Error al cargar bodegas:', error);
+        }
       }
-    }
-    
-    // Cargar usuarios registradores por separado
-    const usuarioIds = [...new Set(instalacionesRaw.map((row: any) => row.usuarioRegistra).filter(Boolean))];
-    const usuariosMap = new Map();
-    if (usuarioIds.length > 0) {
-      try {
-        const usuariosRaw = await this.instalacionesRepository.query(
-          `SELECT usuarioId, usuarioNombre, usuarioApellido, usuarioCorreo, 
+
+      // Cargar usuarios registradores por separado
+      const usuarioIds = [
+        ...new Set(instalacionesRaw.map((row: any) => row.usuarioRegistra).filter(Boolean)),
+      ];
+      const usuariosMap = new Map();
+      if (usuarioIds.length > 0) {
+        try {
+          const usuariosRaw = await this.instalacionesRepository.query(
+            `SELECT usuarioId, usuarioNombre, usuarioApellido, usuarioCorreo, 
                   usuarioTelefono, usuarioDocumento, usuarioEstado
            FROM usuarios 
            WHERE usuarioId IN (${usuarioIds.map(() => '?').join(',')})`,
-          usuarioIds
-        );
-        usuariosRaw.forEach((u: any) => {
-          usuariosMap.set(u.usuarioId, u);
-        });
-      } catch (error) {
-        console.error('[InstalacionesService.findAll] Error al cargar usuarios:', error);
+            usuarioIds,
+          );
+          usuariosRaw.forEach((u: any) => {
+            usuariosMap.set(u.usuarioId, u);
+          });
+        } catch (error) {
+          console.error('[InstalacionesService.findAll] Error al cargar usuarios:', error);
+        }
       }
-    }
-    
-    // Mapear resultados raw a objetos Instalacion
-    const allInstalaciones = instalacionesRaw.map((row: any) => {
-      const instalacion: any = {
-        instalacionId: row.instalacionId,
-        identificadorUnico: row.identificadorUnico,
-        instalacionCodigo: row.instalacionCodigo,
-        tipoInstalacionId: row.tipoInstalacionId,
-        clienteId: row.clienteId,
-        instalacionMedidorNumero: row.instalacionMedidorNumero,
-        instalacionSelloNumero: row.instalacionSelloNumero,
-        instalacionSelloRegulador: row.instalacionSelloRegulador,
-        instalacionFecha: row.instalacionFecha,
-        fechaAsignacionMetrogas: row.fechaAsignacionMetrogas,
-        fechaAsignacion: row.fechaAsignacion,
-        fechaConstruccion: row.fechaConstruccion,
-        fechaCertificacion: row.fechaCertificacion,
-        fechaAnulacion: row.fechaAnulacion,
-        fechaNovedad: row.fechaNovedad,
-        fechaFinalizacion: row.fechaFinalizacion,
-        materialesInstalados: typeof row.materialesInstalados === 'string' 
-          ? JSON.parse(row.materialesInstalados) 
-          : row.materialesInstalados,
-        instalacionProyectos: typeof row.instalacionProyectos === 'string'
-          ? JSON.parse(row.instalacionProyectos)
-          : row.instalacionProyectos,
-        instalacionObservaciones: row.instalacionObservaciones,
-        observacionesTecnico: row.observacionesTecnico,
-        estado: row.estado,
-        estadoInstalacionId: row.estadoInstalacionId,
-        usuarioRegistra: row.usuarioRegistra,
-        bodegaId: row.bodegaId,
-        fechaCreacion: row.fechaCreacion,
-        fechaActualizacion: row.fechaActualizacion,
-        tipoInstalacion: tiposInstalacionMap.get(row.tipoInstalacionId) || null,
-        usuariosAsignados: usuariosAsignadosMap.get(row.instalacionId) || [],
-        cliente: row.clienteId ? (clientesMap.get(row.clienteId) || null) : null,
-        bodega: row.bodegaId ? (bodegasMap.get(row.bodegaId) || null) : null,
-        usuarioRegistrador: row.usuarioRegistra ? (usuariosMap.get(row.usuarioRegistra) || null) : null,
-      };
-      return instalacion;
-    });
-    
-    // SuperAdmin ve todo
-    if (user?.usuarioRol?.rolTipo === 'superadmin' || user?.role === 'superadmin') {
+
+      // Mapear resultados raw a objetos Instalacion
+      const allInstalaciones = instalacionesRaw.map((row: any) => {
+        const instalacion: any = {
+          instalacionId: row.instalacionId,
+          identificadorUnico: row.identificadorUnico,
+          instalacionCodigo: row.instalacionCodigo,
+          tipoInstalacionId: row.tipoInstalacionId,
+          clienteId: row.clienteId,
+          instalacionMedidorNumero: row.instalacionMedidorNumero,
+          instalacionSelloNumero: row.instalacionSelloNumero,
+          instalacionSelloRegulador: row.instalacionSelloRegulador,
+          instalacionFecha: row.instalacionFecha,
+          fechaAsignacionMetrogas: row.fechaAsignacionMetrogas,
+          fechaAsignacion: row.fechaAsignacion,
+          fechaConstruccion: row.fechaConstruccion,
+          fechaCertificacion: row.fechaCertificacion,
+          fechaAnulacion: row.fechaAnulacion,
+          fechaNovedad: row.fechaNovedad,
+          fechaFinalizacion: row.fechaFinalizacion,
+          materialesInstalados:
+            typeof row.materialesInstalados === 'string'
+              ? JSON.parse(row.materialesInstalados)
+              : row.materialesInstalados,
+          instalacionProyectos:
+            typeof row.instalacionProyectos === 'string'
+              ? JSON.parse(row.instalacionProyectos)
+              : row.instalacionProyectos,
+          instalacionObservaciones: row.instalacionObservaciones,
+          observacionesTecnico: row.observacionesTecnico,
+          estado: row.estado,
+          estadoInstalacionId: row.estadoInstalacionId,
+          usuarioRegistra: row.usuarioRegistra,
+          bodegaId: row.bodegaId,
+          fechaCreacion: row.fechaCreacion,
+          fechaActualizacion: row.fechaActualizacion,
+          tipoInstalacion: tiposInstalacionMap.get(row.tipoInstalacionId) || null,
+          usuariosAsignados: usuariosAsignadosMap.get(row.instalacionId) || [],
+          cliente: row.clienteId ? clientesMap.get(row.clienteId) || null : null,
+          bodega: row.bodegaId ? bodegasMap.get(row.bodegaId) || null : null,
+          usuarioRegistrador: row.usuarioRegistra
+            ? usuariosMap.get(row.usuarioRegistra) || null
+            : null,
+        };
+        return instalacion;
+      });
+
+      // SuperAdmin ve todo
+      if (user?.usuarioRol?.rolTipo === 'superadmin' || user?.role === 'superadmin') {
+        return allInstalaciones;
+      }
+
+      // Admin ve instalaciones registradas por él
+      if (user?.usuarioRol?.rolTipo === 'admin' || user?.role === 'admin') {
+        // Filtrar instalaciones registradas por el admin
+        return allInstalaciones.filter((inst) => inst.usuarioRegistra === user.usuarioId);
+      }
+
+      // Técnico ve solo sus instalaciones asignadas (solo asignaciones activas)
+      if (user?.usuarioRol?.rolTipo === 'tecnico' || user?.role === 'tecnico') {
+        return allInstalaciones.filter((inst) => {
+          // Verificar si el técnico está asignado activamente a esta instalación
+          if (inst.usuariosAsignados && Array.isArray(inst.usuariosAsignados)) {
+            return inst.usuariosAsignados.some((ua: any) => {
+              const usuarioId = ua.usuarioId || ua.usuario?.usuarioId;
+              const activo = ua.activo !== undefined ? ua.activo : true;
+              return usuarioId === user.usuarioId && activo === true;
+            });
+          }
+          // No mostrar instalaciones que el técnico registró pero no tiene asignadas activamente
+          return false;
+        });
+      }
+
+      // Soldador ve solo sus instalaciones asignadas (solo asignaciones activas)
+      if (user?.usuarioRol?.rolTipo === 'soldador' || user?.role === 'soldador') {
+        return allInstalaciones.filter((inst) => {
+          if (inst.usuariosAsignados && Array.isArray(inst.usuariosAsignados)) {
+            return inst.usuariosAsignados.some((ua: any) => {
+              const usuarioId = ua.usuarioId || ua.usuario?.usuarioId;
+              const activo = ua.activo !== undefined ? ua.activo : true;
+              return usuarioId === user.usuarioId && activo === true;
+            });
+          }
+          // No mostrar instalaciones que el soldador registró pero no tiene asignadas activamente
+          return false;
+        });
+      }
+
+      // Almacenista puede ver todas las instalaciones (solo lectura)
+      if (user?.usuarioRol?.rolTipo === 'almacenista' || user?.role === 'almacenista') {
+        return allInstalaciones;
+      }
+
+      // Administrador (Centro Operativo) puede ver todas las instalaciones (solo lectura)
+      if (user?.usuarioRol?.rolTipo === 'administrador' || user?.role === 'administrador') {
+        return allInstalaciones;
+      }
+
+      // Bodega Internas solo ve instalaciones de tipo "internas"
+      if (user?.usuarioRol?.rolTipo === 'bodega-internas' || user?.role === 'bodega-internas') {
+        return allInstalaciones.filter((inst) => {
+          const tipoNombre = inst.tipoInstalacion?.tipoInstalacionNombre?.toLowerCase() || '';
+          return tipoNombre.includes('internas');
+        });
+      }
+
+      // Bodega Redes solo ve instalaciones de tipo "redes"
+      if (user?.usuarioRol?.rolTipo === 'bodega-redes' || user?.role === 'bodega-redes') {
+        return allInstalaciones.filter((inst) => {
+          const tipoNombre = inst.tipoInstalacion?.tipoInstalacionNombre?.toLowerCase() || '';
+          return tipoNombre.includes('redes');
+        });
+      }
+
       return allInstalaciones;
-    }
-    
-    // Admin ve instalaciones registradas por él
-    if (user?.usuarioRol?.rolTipo === 'admin' || user?.role === 'admin') {
-      // Filtrar instalaciones registradas por el admin
-      return allInstalaciones.filter(inst => 
-        inst.usuarioRegistra === user.usuarioId
-      );
-    }
-    
-    // Técnico ve solo sus instalaciones asignadas (solo asignaciones activas)
-    if (user?.usuarioRol?.rolTipo === 'tecnico' || user?.role === 'tecnico') {
-      return allInstalaciones.filter(inst => {
-        // Verificar si el técnico está asignado activamente a esta instalación
-        if (inst.usuariosAsignados && Array.isArray(inst.usuariosAsignados)) {
-          return inst.usuariosAsignados.some((ua: any) => {
-            const usuarioId = ua.usuarioId || ua.usuario?.usuarioId;
-            const activo = ua.activo !== undefined ? ua.activo : true;
-            return usuarioId === user.usuarioId && activo === true;
-          });
-        }
-        // No mostrar instalaciones que el técnico registró pero no tiene asignadas activamente
-        return false;
-      });
-    }
-    
-    // Soldador ve solo sus instalaciones asignadas (solo asignaciones activas)
-    if (user?.usuarioRol?.rolTipo === 'soldador' || user?.role === 'soldador') {
-      return allInstalaciones.filter(inst => {
-        if (inst.usuariosAsignados && Array.isArray(inst.usuariosAsignados)) {
-          return inst.usuariosAsignados.some((ua: any) => {
-            const usuarioId = ua.usuarioId || ua.usuario?.usuarioId;
-            const activo = ua.activo !== undefined ? ua.activo : true;
-            return usuarioId === user.usuarioId && activo === true;
-          });
-        }
-        // No mostrar instalaciones que el soldador registró pero no tiene asignadas activamente
-        return false;
-      });
-    }
-    
-    // Almacenista puede ver todas las instalaciones (solo lectura)
-    if (user?.usuarioRol?.rolTipo === 'almacenista' || user?.role === 'almacenista') {
-      return allInstalaciones;
-    }
-    
-    // Administrador (Centro Operativo) puede ver todas las instalaciones (solo lectura)
-    if (user?.usuarioRol?.rolTipo === 'administrador' || user?.role === 'administrador') {
-      return allInstalaciones;
-    }
-    
-    // Bodega Internas solo ve instalaciones de tipo "internas"
-    if (user?.usuarioRol?.rolTipo === 'bodega-internas' || user?.role === 'bodega-internas') {
-      return allInstalaciones.filter(inst => {
-        const tipoNombre = inst.tipoInstalacion?.tipoInstalacionNombre?.toLowerCase() || '';
-        return tipoNombre.includes('internas');
-      });
-    }
-    
-    // Bodega Redes solo ve instalaciones de tipo "redes"
-    if (user?.usuarioRol?.rolTipo === 'bodega-redes' || user?.role === 'bodega-redes') {
-      return allInstalaciones.filter(inst => {
-        const tipoNombre = inst.tipoInstalacion?.tipoInstalacionNombre?.toLowerCase() || '';
-        return tipoNombre.includes('redes');
-      });
-    }
-    
-    return allInstalaciones;
     } catch (error) {
       console.error('[InstalacionesService.findAll] Error en findAll:', error);
       throw error;
@@ -507,7 +547,7 @@ export class InstalacionesService {
     if (!id || isNaN(id)) {
       throw new NotFoundException(`ID de instalación inválido: ${id}`);
     }
-    
+
     // Usar SQL raw para evitar que TypeORM intente cargar relaciones automáticamente
     const instalacionesRaw = await this.instalacionesRepository.query(
       `SELECT 
@@ -538,15 +578,15 @@ export class InstalacionesService {
         i.fechaActualizacion
       FROM instalaciones i
       WHERE i.instalacionId = ?`,
-      [id]
+      [id],
     );
-    
+
     if (!instalacionesRaw || instalacionesRaw.length === 0) {
       throw new NotFoundException(`Instalación con ID ${id} no encontrada`);
     }
-    
+
     const row = instalacionesRaw[0];
-    
+
     // Cargar tipoInstalacion
     let tipoInstalacion = null;
     if (row.tipoInstalacionId) {
@@ -554,13 +594,13 @@ export class InstalacionesService {
         `SELECT tipoInstalacionId, tipoInstalacionNombre, usuarioRegistra, fechaCreacion, fechaActualizacion
          FROM tipos_instalacion 
          WHERE tipoInstalacionId = ?`,
-        [row.tipoInstalacionId]
+        [row.tipoInstalacionId],
       );
       if (tiposRaw && tiposRaw.length > 0) {
         tipoInstalacion = tiposRaw[0];
       }
     }
-    
+
     // Cargar usuarios asignados y sus relaciones
     const usuariosAsignadosRaw = await this.instalacionesRepository.query(
       `SELECT 
@@ -583,30 +623,34 @@ export class InstalacionesService {
        LEFT JOIN usuarios u ON iu.usuarioId = u.usuarioId
        LEFT JOIN roles r ON u.usuarioRolId = r.rolId
        WHERE iu.instalacionId = ?`,
-      [id]
+      [id],
     );
-    
+
     const usuariosAsignados = usuariosAsignadosRaw.map((uaRow: any) => ({
       instalacionUsuarioId: uaRow.instalacionUsuarioId,
       instalacionId: uaRow.instalacionId,
       usuarioId: uaRow.usuarioId,
       rolEnInstalacion: uaRow.rolEnInstalacion,
-      usuario: uaRow.u_usuarioId ? {
-        usuarioId: uaRow.u_usuarioId,
-        usuarioNombre: uaRow.usuarioNombre,
-        usuarioApellido: uaRow.usuarioApellido,
-        usuarioCorreo: uaRow.usuarioCorreo,
-        usuarioTelefono: uaRow.usuarioTelefono,
-        usuarioEstado: uaRow.usuarioEstado,
-        usuarioRol: uaRow.r_rolId ? {
-          rolId: uaRow.r_rolId,
-          rolNombre: uaRow.rolNombre,
-          rolTipo: uaRow.rolTipo,
-          rolDescripcion: uaRow.rolDescripcion,
-        } : null,
-      } : null,
+      usuario: uaRow.u_usuarioId
+        ? {
+            usuarioId: uaRow.u_usuarioId,
+            usuarioNombre: uaRow.usuarioNombre,
+            usuarioApellido: uaRow.usuarioApellido,
+            usuarioCorreo: uaRow.usuarioCorreo,
+            usuarioTelefono: uaRow.usuarioTelefono,
+            usuarioEstado: uaRow.usuarioEstado,
+            usuarioRol: uaRow.r_rolId
+              ? {
+                  rolId: uaRow.r_rolId,
+                  rolNombre: uaRow.rolNombre,
+                  rolTipo: uaRow.rolTipo,
+                  rolDescripcion: uaRow.rolDescripcion,
+                }
+              : null,
+          }
+        : null,
     }));
-    
+
     // Cargar cliente por separado para evitar problemas con la relación
     let cliente = null;
     if (row.clienteId) {
@@ -617,9 +661,9 @@ export class InstalacionesService {
                   clienteEstado, usuarioRegistra, fechaCreacion, fechaActualizacion
            FROM clientes 
            WHERE clienteId = ?`,
-          [row.clienteId]
+          [row.clienteId],
         );
-        
+
         if (clienteRaw && clienteRaw.length > 0) {
           cliente = clienteRaw[0];
         }
@@ -627,7 +671,7 @@ export class InstalacionesService {
         console.error('Error al cargar cliente:', error);
       }
     }
-    
+
     // Construir objeto Instalacion
     const instalacion: any = {
       instalacionId: row.instalacionId,
@@ -645,12 +689,14 @@ export class InstalacionesService {
       fechaNovedad: row.fechaNovedad,
       fechaAnulacion: row.fechaAnulacion,
       fechaFinalizacion: row.fechaFinalizacion,
-      materialesInstalados: typeof row.materialesInstalados === 'string' 
-        ? JSON.parse(row.materialesInstalados) 
-        : row.materialesInstalados,
-      instalacionProyectos: typeof row.instalacionProyectos === 'string'
-        ? JSON.parse(row.instalacionProyectos)
-        : row.instalacionProyectos,
+      materialesInstalados:
+        typeof row.materialesInstalados === 'string'
+          ? JSON.parse(row.materialesInstalados)
+          : row.materialesInstalados,
+      instalacionProyectos:
+        typeof row.instalacionProyectos === 'string'
+          ? JSON.parse(row.instalacionProyectos)
+          : row.instalacionProyectos,
       instalacionObservaciones: row.instalacionObservaciones,
       observacionesTecnico: row.observacionesTecnico,
       estado: row.estado,
@@ -663,40 +709,49 @@ export class InstalacionesService {
       usuariosAsignados,
       cliente,
     };
-    
+
     return instalacion;
   }
 
-  async update(id: number, updateInstalacionDto: UpdateInstalacionDto, usuarioId?: number, user?: any): Promise<Instalacion> {
+  async update(
+    id: number,
+    updateInstalacionDto: UpdateInstalacionDto,
+    usuarioId?: number,
+    user?: any,
+  ): Promise<Instalacion> {
     const { usuariosAsignados, instalacionCodigo, ...instalacionData } = updateInstalacionDto;
-    
+
     const instalacion = await this.findOne(id);
-    
+
     // Validar permisos
     if (user) {
       const rolTipo = user.usuarioRol?.rolTipo || user.role;
-      
+
       // Almacenista y administrador no pueden editar instalaciones
       if (rolTipo === 'almacenista' || rolTipo === 'administrador') {
         throw new BadRequestException('No tienes permisos para editar instalaciones');
       }
-      
+
       // Bodega Internas solo puede editar instalaciones de tipo "internas"
       if (rolTipo === 'bodega-internas') {
         const tipoNombre = instalacion.tipoInstalacion?.tipoInstalacionNombre?.toLowerCase() || '';
         if (!tipoNombre.includes('internas')) {
-          throw new BadRequestException('El rol "Bodega Internas" solo puede editar instalaciones de tipo "Internas"');
+          throw new BadRequestException(
+            'El rol "Bodega Internas" solo puede editar instalaciones de tipo "Internas"',
+          );
         }
       }
-      
+
       // Bodega Redes solo puede editar instalaciones de tipo "redes"
       if (rolTipo === 'bodega-redes') {
         const tipoNombre = instalacion.tipoInstalacion?.tipoInstalacionNombre?.toLowerCase() || '';
         if (!tipoNombre.includes('redes')) {
-          throw new BadRequestException('El rol "Bodega Redes" solo puede editar instalaciones de tipo "Redes"');
+          throw new BadRequestException(
+            'El rol "Bodega Redes" solo puede editar instalaciones de tipo "Redes"',
+          );
         }
       }
-      
+
       // Técnico solo puede editar instalaciones asignadas a él
       if (rolTipo === 'tecnico' || rolTipo === 'soldador') {
         const tieneAsignacion = instalacion.usuariosAsignados?.some((ua: any) => {
@@ -705,13 +760,15 @@ export class InstalacionesService {
           return usuarioId === user.usuarioId && activo === true;
         });
         if (!tieneAsignacion) {
-          throw new BadRequestException('No tienes permisos para editar esta instalación. Solo puedes editar instalaciones asignadas a ti.');
+          throw new BadRequestException(
+            'No tienes permisos para editar esta instalación. Solo puedes editar instalaciones asignadas a ti.',
+          );
         }
       }
     }
-    
+
     const estadoAnterior = instalacion.estado;
-    
+
     // Si se está actualizando el código de instalación, verificar que no esté duplicado
     if (instalacionCodigo && instalacionCodigo !== instalacion.identificadorUnico) {
       const instalacionExistente = await this.instalacionesRepository
@@ -719,34 +776,43 @@ export class InstalacionesService {
         .where('instalacion.instalacionId != :id', { id })
         .andWhere(
           '(instalacion.identificadorUnico = :codigo OR instalacion.instalacionCodigo = :codigo)',
-          { codigo: instalacionCodigo }
+          { codigo: instalacionCodigo },
         )
         .getOne();
-      
+
       if (instalacionExistente) {
-        throw new ConflictException(`El código de instalación '${instalacionCodigo}' ya está en uso por otra instalación. Por favor, use un código diferente.`);
+        throw new ConflictException(
+          `El código de instalación '${instalacionCodigo}' ya está en uso por otra instalación. Por favor, use un código diferente.`,
+        );
       }
-      
+
       // Actualizar ambos campos con el nuevo código
       instalacion.identificadorUnico = instalacionCodigo;
       instalacion.instalacionCodigo = instalacionCodigo;
     }
-    
+
     Object.assign(instalacion, instalacionData);
     const savedInstalacion = await this.instalacionesRepository.save(instalacion);
-    
+
     // Verificar si los materiales cambiaron (para actualizar salidas)
-    const materialesCambiaron = instalacionData.materialesInstalados || instalacionData.instalacionProyectos;
-    
+    const materialesCambiaron =
+      instalacionData.materialesInstalados || instalacionData.instalacionProyectos;
+
     // Si los materiales cambiaron y la instalación está completada, actualizar las salidas
-    if (materialesCambiaron && (estadoAnterior === EstadoInstalacion.COMPLETADA || estadoAnterior === EstadoInstalacion.FINALIZADA) && usuarioId) {
+    if (
+      materialesCambiaron &&
+      (estadoAnterior === EstadoInstalacion.COMPLETADA ||
+        estadoAnterior === EstadoInstalacion.FINALIZADA) &&
+      usuarioId
+    ) {
       // Buscar y eliminar salidas existentes asociadas a esta instalación
       const salidasExistentes = await this.movimientosService.findByInstalacion(id);
       const salidasCompletadas = salidasExistentes.filter(
-        m => m.movimientoTipo === TipoMovimiento.SALIDA && 
-        (m.movimientoEstado === EstadoMovimiento.COMPLETADA || m.movimientoEstado === true)
+        (m) =>
+          m.movimientoTipo === TipoMovimiento.SALIDA &&
+          (m.movimientoEstado === EstadoMovimiento.COMPLETADA || m.movimientoEstado === true),
       );
-      
+
       // Eliminar las salidas existentes (esto revertirá los stocks automáticamente)
       for (const salida of salidasCompletadas) {
         try {
@@ -755,20 +821,20 @@ export class InstalacionesService {
           console.error(`Error al eliminar salida ${salida.movimientoId}:`, error);
         }
       }
-      
+
       // Crear nuevas salidas con los materiales actualizados
       await this.crearSalidasAutomaticas(id, usuarioId, true, instalacion.bodegaId);
     }
-    
+
     // Actualizar usuarios asignados si se proporcionaron
     if (usuariosAsignados !== undefined && Array.isArray(usuariosAsignados)) {
       // Desasignar todos los usuarios actuales
       await this.instalacionesUsuariosService.desasignarUsuarios(id);
-      
+
       // Determinar el nuevo estado según si hay técnicos asignados
       let nuevoEstado = instalacion.estado;
       let nuevoEstadoInstalacionId: number | null = null;
-      
+
       if (usuariosAsignados.length > 0) {
         // Si hay técnicos asignados, buscar el estado "asignacion" o usar "en_proceso"
         try {
@@ -784,11 +850,11 @@ export class InstalacionesService {
             // Si no existe ningún estado, mantener el estado actual
           }
         }
-        
+
         // Asignar los nuevos usuarios
-        const usuariosParaAsignar = usuariosAsignados.map(usuarioId => ({
+        const usuariosParaAsignar = usuariosAsignados.map((usuarioId) => ({
           usuarioId,
-          rolEnInstalacion: 'tecnico' // Por defecto técnico
+          rolEnInstalacion: 'tecnico', // Por defecto técnico
         }));
         await this.instalacionesUsuariosService.asignarUsuarios(id, usuariosParaAsignar);
       } else {
@@ -801,7 +867,7 @@ export class InstalacionesService {
           // Si no existe el estado pendiente, mantener el estado actual
         }
       }
-      
+
       // Actualizar el estado de la instalación si cambió
       if (nuevoEstado !== instalacion.estado) {
         await this.instalacionesRepository.update(id, {
@@ -810,40 +876,44 @@ export class InstalacionesService {
         });
       }
     }
-    
+
     // Recargar con relaciones
     return this.findOne(id);
   }
 
   async remove(id: number, usuarioId: number, user?: any): Promise<void> {
     const instalacion = await this.findOne(id);
-    
+
     // Validar permisos
     if (user) {
       const rolTipo = user.usuarioRol?.rolTipo || user.role;
-      
+
       // Almacenista y administrador no pueden eliminar instalaciones
       if (rolTipo === 'almacenista' || rolTipo === 'administrador') {
         throw new BadRequestException('No tienes permisos para eliminar instalaciones');
       }
-      
+
       // Bodega Internas solo puede eliminar instalaciones de tipo "internas"
       if (rolTipo === 'bodega-internas') {
         const tipoNombre = instalacion.tipoInstalacion?.tipoInstalacionNombre?.toLowerCase() || '';
         if (!tipoNombre.includes('internas')) {
-          throw new BadRequestException('El rol "Bodega Internas" solo puede eliminar instalaciones de tipo "Internas"');
+          throw new BadRequestException(
+            'El rol "Bodega Internas" solo puede eliminar instalaciones de tipo "Internas"',
+          );
         }
       }
-      
+
       // Bodega Redes solo puede eliminar instalaciones de tipo "redes"
       if (rolTipo === 'bodega-redes') {
         const tipoNombre = instalacion.tipoInstalacion?.tipoInstalacionNombre?.toLowerCase() || '';
         if (!tipoNombre.includes('redes')) {
-          throw new BadRequestException('El rol "Bodega Redes" solo puede eliminar instalaciones de tipo "Redes"');
+          throw new BadRequestException(
+            'El rol "Bodega Redes" solo puede eliminar instalaciones de tipo "Redes"',
+          );
         }
       }
     }
-    
+
     // Guardar datos completos para auditoría
     const datosEliminados = {
       instalacionId: instalacion.instalacionId,
@@ -861,7 +931,10 @@ export class InstalacionesService {
     try {
       await this.instalacionesUsuariosService.desasignarTodos(id);
     } catch (error) {
-      console.error(`[InstalacionesService] Error al eliminar asignaciones de usuarios asociadas para instalación ${id}:`, error);
+      console.error(
+        `[InstalacionesService] Error al eliminar asignaciones de usuarios asociadas para instalación ${id}:`,
+        error,
+      );
       throw error; // Lanzar el error para detener la eliminación si falla
     }
 
@@ -870,7 +943,7 @@ export class InstalacionesService {
       const numerosMedidorInstalacion = await this.numerosMedidorService.findByInstalacion(id);
       if (numerosMedidorInstalacion.length > 0) {
         await this.numerosMedidorService.liberarDeInstalacion(
-          numerosMedidorInstalacion.map(n => n.numeroMedidorId)
+          numerosMedidorInstalacion.map((n) => n.numeroMedidorId),
         );
       }
     } catch (error) {
@@ -882,22 +955,25 @@ export class InstalacionesService {
     try {
       const movimientosAsociados = await this.movimientosService.findByInstalacion(id);
       const salidasAsociadas = movimientosAsociados.filter(
-        m => m.movimientoTipo === TipoMovimiento.SALIDA
+        (m) => m.movimientoTipo === TipoMovimiento.SALIDA,
       );
-      
+
       // Eliminar cada salida (esto revertirá los stocks automáticamente)
       for (const salida of salidasAsociadas) {
         try {
           await this.movimientosService.remove(salida.movimientoId, usuarioId);
         } catch (error) {
-          console.error(`Error al eliminar salida ${salida.movimientoId} asociada a instalación ${id}:`, error);
+          console.error(
+            `Error al eliminar salida ${salida.movimientoId} asociada a instalación ${id}:`,
+            error,
+          );
         }
       }
     } catch (error) {
       console.error('Error al buscar y eliminar salidas asociadas:', error);
       // Continuar con la eliminación aunque falle la eliminación de salidas
     }
-    
+
     // Eliminar todos los materiales de instalación (esto también liberará números de medidor)
     try {
       await this.instalacionesMaterialesService.removeByInstalacion(id);
@@ -921,7 +997,7 @@ export class InstalacionesService {
         datosEliminados,
         usuarioId,
         'Eliminación de instalación',
-        `Instalación ${instalacion.identificadorUnico} eliminada. Salidas asociadas eliminadas y stocks revertidos.`
+        `Instalación ${instalacion.identificadorUnico} eliminada. Salidas asociadas eliminadas y stocks revertidos.`,
       );
     } catch (error) {
       console.error('Error al registrar en auditoría:', error);
@@ -932,7 +1008,12 @@ export class InstalacionesService {
     await this.instalacionesRepository.remove(instalacion);
   }
 
-  async actualizarEstado(instalacionId: number, nuevoEstado: EstadoInstalacion, usuarioId: number, user?: any): Promise<Instalacion> {
+  async actualizarEstado(
+    instalacionId: number,
+    nuevoEstado: EstadoInstalacion,
+    usuarioId: number,
+    user?: any,
+  ): Promise<Instalacion> {
     // Validar que almacenista no pueda cambiar estado de instalaciones
     if (user) {
       const rolTipo = user.usuarioRol?.rolTipo || user.role;
@@ -942,7 +1023,7 @@ export class InstalacionesService {
     }
     const instalacion = await this.findOne(instalacionId);
     const estadoAnterior = instalacion.estado;
-    
+
     // Mapear estados legacy a los nuevos estados
     let estadoNormalizado: EstadoInstalacion = nuevoEstado;
     if (nuevoEstado === EstadoInstalacion.FINALIZADA) {
@@ -957,28 +1038,30 @@ export class InstalacionesService {
         estadoNormalizado = EstadoInstalacion.PENDIENTE;
       }
     }
-    
+
     // Validar que el estado sea uno de los valores válidos del enum
     const estadosValidos = Object.values(EstadoInstalacion);
     if (!estadosValidos.includes(estadoNormalizado)) {
-      throw new Error(`Estado inválido: ${estadoNormalizado}. Valores válidos: ${estadosValidos.join(', ')}`);
+      throw new Error(
+        `Estado inválido: ${estadoNormalizado}. Valores válidos: ${estadosValidos.join(', ')}`,
+      );
     }
-    
+
     instalacion.estado = estadoNormalizado;
-    
+
     // Sincronizar estadoInstalacionId con el estado enum (usar el estado normalizado)
     const estadoInstalacion = await this.estadosInstalacionService.findByCodigo(estadoNormalizado);
     if (estadoInstalacion) {
       instalacion.estadoInstalacionId = estadoInstalacion.estadoInstalacionId;
     }
-    
+
     // Establecer fechas específicas según el estado (usar el estado normalizado)
     const ahora = new Date();
-    
+
     if (estadoNormalizado === EstadoInstalacion.ASIGNACION && !instalacion.fechaAsignacion) {
       instalacion.fechaAsignacion = ahora as any;
     }
-    
+
     if (estadoNormalizado === EstadoInstalacion.CONSTRUCCION) {
       if (!instalacion.fechaConstruccion) {
         instalacion.fechaConstruccion = ahora as any;
@@ -988,26 +1071,26 @@ export class InstalacionesService {
         instalacion.instalacionFecha = ahora as any;
       }
     }
-    
+
     if (estadoNormalizado === EstadoInstalacion.CERTIFICACION && !instalacion.fechaCertificacion) {
       instalacion.fechaCertificacion = ahora as any;
-      
+
       // NO descontar aquí - los materiales ya se descontaron cuando el técnico los registró
       // Esto evita descuentos duplicados que causan que el inventario quede en 0 incorrectamente
     }
-    
+
     if (estadoNormalizado === EstadoInstalacion.NOVEDAD && !instalacion.fechaNovedad) {
       instalacion.fechaNovedad = ahora as any;
     }
-    
+
     if (estadoNormalizado === EstadoInstalacion.ANULADA && !instalacion.fechaAnulacion) {
       instalacion.fechaAnulacion = ahora as any;
     }
-    
+
     if (estadoNormalizado === EstadoInstalacion.COMPLETADA && !instalacion.fechaFinalizacion) {
       instalacion.fechaFinalizacion = ahora as any;
     }
-    
+
     const instalacionActualizada = await this.instalacionesRepository.save(instalacion);
 
     // Obtener información del cliente y usuarios asignados usando findOne que ya maneja SQL raw
@@ -1016,11 +1099,14 @@ export class InstalacionesService {
     // Actualizar estado del cliente según el estado de la instalación
     if (instalacionCompleta.clienteId) {
       let nuevoEstadoCliente: EstadoCliente;
-      
+
       // Determinar el estado del cliente según el estado de la instalación (usar estadoNormalizado)
       if (estadoNormalizado === EstadoInstalacion.ASIGNACION) {
         nuevoEstadoCliente = EstadoCliente.INSTALACION_ASIGNADA;
-      } else if (estadoNormalizado === EstadoInstalacion.CONSTRUCCION || estadoNormalizado === EstadoInstalacion.CERTIFICACION) {
+      } else if (
+        estadoNormalizado === EstadoInstalacion.CONSTRUCCION ||
+        estadoNormalizado === EstadoInstalacion.CERTIFICACION
+      ) {
         nuevoEstadoCliente = EstadoCliente.REALIZANDO_INSTALACION;
       } else if (
         estadoNormalizado === EstadoInstalacion.COMPLETADA ||
@@ -1029,32 +1115,36 @@ export class InstalacionesService {
         // Verificar si hay otras instalaciones activas
         const instalacionesClienteRaw = await this.instalacionesRepository.query(
           `SELECT instalacionId, estado FROM instalaciones WHERE clienteId = ?`,
-          [instalacionCompleta.clienteId]
+          [instalacionCompleta.clienteId],
         );
-        
+
         const tieneOtrasInstalacionesActivas = instalacionesClienteRaw.some(
-          (inst: any) => inst.instalacionId !== instalacionId && 
-                  (inst.estado === EstadoInstalacion.PENDIENTE || 
-                   inst.estado === EstadoInstalacion.ASIGNACION ||
-                   inst.estado === EstadoInstalacion.CONSTRUCCION ||
-                   inst.estado === EstadoInstalacion.CERTIFICACION)
+          (inst: any) =>
+            inst.instalacionId !== instalacionId &&
+            (inst.estado === EstadoInstalacion.PENDIENTE ||
+              inst.estado === EstadoInstalacion.ASIGNACION ||
+              inst.estado === EstadoInstalacion.CONSTRUCCION ||
+              inst.estado === EstadoInstalacion.CERTIFICACION),
         );
-        
+
         // Si no tiene otras instalaciones activas, cambiar el estado del cliente a ACTIVO
-        nuevoEstadoCliente = tieneOtrasInstalacionesActivas ? EstadoCliente.REALIZANDO_INSTALACION : EstadoCliente.ACTIVO;
+        nuevoEstadoCliente = tieneOtrasInstalacionesActivas
+          ? EstadoCliente.REALIZANDO_INSTALACION
+          : EstadoCliente.ACTIVO;
       } else {
         // Para otros estados (PENDIENTE, NOVEDAD), mantener el estado actual o usar ACTIVO
         nuevoEstadoCliente = EstadoCliente.ACTIVO;
       }
-      
+
       await this.clientesService.update(instalacionCompleta.clienteId, {
         clienteEstado: nuevoEstadoCliente,
       });
     }
 
     // Obtener todos los usuarios asignados a esta instalación
-    const usuariosAsignados = await this.instalacionesUsuariosService.findByInstalacion(instalacionId);
-    const usuariosIds = usuariosAsignados.map(u => u.usuarioId);
+    const usuariosAsignados =
+      await this.instalacionesUsuariosService.findByInstalacion(instalacionId);
+    const usuariosIds = usuariosAsignados.map((u) => u.usuarioId);
 
     // Obtener información del usuario que está cambiando el estado
     const usuarioQueCambia = await this.usersService.findOne(usuarioId);
@@ -1066,10 +1156,11 @@ export class InstalacionesService {
       try {
         const todosUsuarios = await this.usersService.findAll({ page: 1, limit: 1000 });
         supervisoresIds = todosUsuarios.data
-          .filter((u: any) => 
-            u.usuarioRol?.rolTipo === 'superadmin' || 
-            u.usuarioRol?.rolTipo === 'admin' ||
-            u.usuarioRol?.rolTipo === 'supervisor'
+          .filter(
+            (u: any) =>
+              u.usuarioRol?.rolTipo === 'superadmin' ||
+              u.usuarioRol?.rolTipo === 'admin' ||
+              u.usuarioRol?.rolTipo === 'supervisor',
           )
           .map((u: any) => u.usuarioId)
           .filter((id: number) => id !== usuarioId); // Excluir al técnico que hizo el cambio
@@ -1079,16 +1170,19 @@ export class InstalacionesService {
     }
 
     // Marcar números de medidor como instalados cuando la instalación se completa o certifica
-    const estadosFinales = [
-      EstadoInstalacion.COMPLETADA,
-      EstadoInstalacion.CERTIFICACION
-    ];
-    
-    if (estadosFinales.includes(estadoNormalizado) && !estadosFinales.includes(estadoAnterior as any)) {
+    const estadosFinales = [EstadoInstalacion.COMPLETADA, EstadoInstalacion.CERTIFICACION];
+
+    if (
+      estadosFinales.includes(estadoNormalizado) &&
+      !estadosFinales.includes(estadoAnterior as any)
+    ) {
       try {
         await this.numerosMedidorService.marcarComoInstalados(instalacionId);
       } catch (error) {
-        console.error(`Error al marcar números de medidor como instalados para instalación ${instalacionId}:`, error);
+        console.error(
+          `Error al marcar números de medidor como instalados para instalación ${instalacionId}:`,
+          error,
+        );
         // No lanzar error para no interrumpir el proceso de actualización de estado
       }
     }
@@ -1096,447 +1190,466 @@ export class InstalacionesService {
     // Enviar notificaciones según el estado (usar estadoNormalizado)
     // Usar switch para mejor inferencia de tipos de TypeScript
     switch (estadoNormalizado) {
-    case EstadoInstalacion.COMPLETADA: {
-      // Si cambia a COMPLETADA, crear salidas automáticas si no existen (y completarlas inmediatamente)
-      if (estadoAnterior !== EstadoInstalacion.COMPLETADA && estadoAnterior !== EstadoInstalacion.FINALIZADA) {
-        // Verificar si ya existen salidas para esta instalación
-        const salidasExistentes = await this.movimientosService.findByInstalacion(instalacionId);
-        const tieneSalidas = salidasExistentes.some(
-          m => m.movimientoTipo === TipoMovimiento.SALIDA
-        );
-        
-        // Si no hay salidas, crearlas automáticamente y completarlas inmediatamente
-        if (!tieneSalidas) {
-          await this.crearSalidasAutomaticas(instalacionId, usuarioId, true, instalacion.bodegaId);
-        } else {
-          // Si ya existen salidas pendientes, completarlas
-          const salidasPendientes = salidasExistentes.filter(
-            m => m.movimientoTipo === TipoMovimiento.SALIDA && m.movimientoEstado === EstadoMovimiento.PENDIENTE
+      case EstadoInstalacion.COMPLETADA: {
+        // Si cambia a COMPLETADA, crear salidas automáticas si no existen (y completarlas inmediatamente)
+        if (
+          estadoAnterior !== EstadoInstalacion.COMPLETADA &&
+          estadoAnterior !== EstadoInstalacion.FINALIZADA
+        ) {
+          // Verificar si ya existen salidas para esta instalación
+          const salidasExistentes = await this.movimientosService.findByInstalacion(instalacionId);
+          const tieneSalidas = salidasExistentes.some(
+            (m) => m.movimientoTipo === TipoMovimiento.SALIDA,
           );
-          for (const salida of salidasPendientes) {
-            await this.movimientosService.actualizarEstado(salida.movimientoId, EstadoMovimiento.COMPLETADA);
+
+          // Si no hay salidas, crearlas automáticamente y completarlas inmediatamente
+          if (!tieneSalidas) {
+            await this.crearSalidasAutomaticas(
+              instalacionId,
+              usuarioId,
+              true,
+              instalacion.bodegaId,
+            );
+          } else {
+            // Si ya existen salidas pendientes, completarlas
+            const salidasPendientes = salidasExistentes.filter(
+              (m) =>
+                m.movimientoTipo === TipoMovimiento.SALIDA &&
+                m.movimientoEstado === EstadoMovimiento.PENDIENTE,
+            );
+            for (const salida of salidasPendientes) {
+              await this.movimientosService.actualizarEstado(
+                salida.movimientoId,
+                EstadoMovimiento.COMPLETADA,
+              );
+            }
+            // Actualizar materiales después de completar las salidas
+            await this.actualizarMaterialesInstalacion(instalacionId);
           }
-          // Actualizar materiales después de completar las salidas
+        }
+
+        // Actualizar materiales cuando la instalación se completa
+        // Solo actualizar si el estado anterior no era COMPLETADA para evitar duplicados
+        if (
+          estadoAnterior !== EstadoInstalacion.COMPLETADA &&
+          estadoAnterior !== EstadoInstalacion.FINALIZADA
+        ) {
           await this.actualizarMaterialesInstalacion(instalacionId);
         }
-      }
-      
-      // Actualizar materiales cuando la instalación se completa
-      // Solo actualizar si el estado anterior no era COMPLETADA para evitar duplicados
-      if (estadoAnterior !== EstadoInstalacion.COMPLETADA && estadoAnterior !== EstadoInstalacion.FINALIZADA) {
-        await this.actualizarMaterialesInstalacion(instalacionId);
-      }
 
-      // El estado del cliente ya se actualizó arriba según el estado de la instalación
+        // El estado del cliente ya se actualizó arriba según el estado de la instalación
 
-      // Notificar al usuario que completó la instalación
-      const clienteNombreCompleto = instalacionCompleta.cliente
-        ? instalacionCompleta.cliente.nombreUsuario || 'Cliente sin nombre'
-        : 'Cliente';
-      
-      await this.notificacionesService.crearNotificacionInstalacionCompletada(
-        usuarioId,
-        instalacionId,
-        instalacionCompleta.identificadorUnico || `INST-${instalacionId}`,
-        clienteNombreCompleto,
-      );
+        // Notificar al usuario que completó la instalación
+        const clienteNombreCompleto = instalacionCompleta.cliente
+          ? instalacionCompleta.cliente.nombreUsuario || 'Cliente sin nombre'
+          : 'Cliente';
 
-      // Emitir evento por WebSocket
-      this.chatGateway.emitirEventoInstalacion(
-        usuariosIds,
-        'instalacion_completada',
-        {
+        await this.notificacionesService.crearNotificacionInstalacionCompletada(
+          usuarioId,
+          instalacionId,
+          instalacionCompleta.identificadorUnico || `INST-${instalacionId}`,
+          clienteNombreCompleto,
+        );
+
+        // Emitir evento por WebSocket
+        this.chatGateway.emitirEventoInstalacion(usuariosIds, 'instalacion_completada', {
           instalacionId,
           instalacionCodigo: instalacionCompleta.identificadorUnico || `INST-${instalacionId}`,
           clienteNombre: clienteNombreCompleto,
           usuarioId,
-        },
-      );
+        });
 
-      // Enviar mensaje automático al chat de la instalación
-      try {
-        const grupo = await this.gruposService.obtenerGrupoPorEntidad(
-          TipoGrupo.INSTALACION,
-          instalacionId
-        );
-        if (grupo && grupo.grupoActivo) {
-          await this.gruposService.crearMensajeSistema(
-            grupo.grupoId,
-            `✅ La instalación ha sido completada. El chat de esta instalación se cerrará automáticamente.`
-          );
-          // Cerrar el chat
-          await this.gruposService.cerrarChat(
+        // Enviar mensaje automático al chat de la instalación
+        try {
+          const grupo = await this.gruposService.obtenerGrupoPorEntidad(
             TipoGrupo.INSTALACION,
             instalacionId,
-            'Chat cerrado: La instalación ha sido completada.'
           );
-        }
-      } catch (error) {
-        console.error(`[InstalacionesService] Error al enviar mensaje/cerrar chat para instalación ${instalacionId}:`, error);
-      }
-      break;
-    }
-    case EstadoInstalacion.PENDIENTE: {
-      // Notificar cuando cambia a pendiente (EN_PROCESO sin técnicos se mapea a PENDIENTE)
-      const clienteNombreCompleto = instalacionCompleta.cliente
-        ? instalacionCompleta.cliente.nombreUsuario || 'Cliente sin nombre'
-        : 'Cliente';
-      
-      this.chatGateway.emitirEventoInstalacion(
-        usuariosIds.filter(id => id !== usuarioId),
-        'instalacion_pendiente',
-        {
-          instalacionId,
-          instalacionCodigo: instalacionCompleta.identificadorUnico || `INST-${instalacionId}`,
-          clienteNombre: clienteNombreCompleto,
-        },
-      );
-
-      // Enviar mensaje automático al chat de la instalación
-      try {
-        const grupo = await this.gruposService.obtenerGrupoPorEntidad(
-          TipoGrupo.INSTALACION,
-          instalacionId
-        );
-        if (grupo && grupo.grupoActivo) {
-          await this.gruposService.crearMensajeSistema(
-            grupo.grupoId,
-            `⏳ La instalación está pendiente de asignación.`
-          );
-        }
-      } catch (error) {
-        console.error(`[InstalacionesService] Error al enviar mensaje para instalación ${instalacionId}:`, error);
-      }
-      break;
-    }
-    case EstadoInstalacion.ASIGNACION: {
-      // Notificar a los usuarios asignados cuando cambia a asignación
-      const clienteNombreCompleto = instalacionCompleta.cliente
-        ? instalacionCompleta.cliente.nombreUsuario || 'Cliente sin nombre'
-        : 'Cliente';
-      
-      // Crear notificaciones para todos los usuarios asignados
-      for (const usuarioId of usuariosIds) {
-        await this.notificacionesService.crearNotificacionInstalacionAsignacion(
-          usuarioId,
-          instalacionId,
-          instalacionCompleta.identificadorUnico || `INST-${instalacionId}`,
-          clienteNombreCompleto,
-        );
-      }
-      
-      this.chatGateway.emitirEventoInstalacion(
-        usuariosIds,
-        'instalacion_asignacion',
-        {
-          instalacionId,
-          instalacionCodigo: instalacionCompleta.identificadorUnico || `INST-${instalacionId}`,
-          clienteNombre: clienteNombreCompleto,
-        },
-      );
-
-      // Enviar mensaje automático al chat de la instalación
-      try {
-        const grupo = await this.gruposService.obtenerGrupoPorEntidad(
-          TipoGrupo.INSTALACION,
-          instalacionId
-        );
-        if (grupo && grupo.grupoActivo) {
-          await this.gruposService.crearMensajeSistema(
-            grupo.grupoId,
-            `📋 La instalación ha sido asignada. El trabajo puede comenzar.`
-          );
-        }
-      } catch (error) {
-        console.error(`[InstalacionesService] Error al enviar mensaje para instalación ${instalacionId}:`, error);
-      }
-      break;
-    }
-    case EstadoInstalacion.CONSTRUCCION: {
-      // Notificar a los usuarios asignados cuando cambia a construcción
-      const clienteNombreCompleto = instalacionCompleta.cliente
-        ? instalacionCompleta.cliente.nombreUsuario || 'Cliente sin nombre'
-        : 'Cliente';
-      
-      const tecnicoNombre = usuarioQueCambia 
-        ? `${usuarioQueCambia.usuarioNombre || ''} ${usuarioQueCambia.usuarioApellido || ''}`.trim()
-        : 'Técnico';
-      
-      // Crear notificaciones para todos los usuarios asignados
-      for (const usuarioIdAsignado of usuariosIds) {
-        await this.notificacionesService.crearNotificacionInstalacionConstruccion(
-          usuarioIdAsignado,
-          instalacionId,
-          instalacionCompleta.identificadorUnico || `INST-${instalacionId}`,
-          clienteNombreCompleto,
-        );
-      }
-      
-      // Si un técnico cambió el estado, notificar a supervisores/admins
-      if (esTecnico && supervisoresIds.length > 0) {
-        for (const supervisorId of supervisoresIds) {
-          await this.notificacionesService.crearNotificacion(
-            supervisorId,
-            'instalacion_construccion' as any,
-            'Instalación en Construcción',
-            `El técnico ${tecnicoNombre} cambió la instalación ${instalacionCompleta.identificadorUnico || `INST-${instalacionId}`} del cliente ${clienteNombreCompleto} a estado de construcción.`,
-            {
+          if (grupo && grupo.grupoActivo) {
+            await this.gruposService.crearMensajeSistema(
+              grupo.grupoId,
+              `✅ La instalación ha sido completada. El chat de esta instalación se cerrará automáticamente.`,
+            );
+            // Cerrar el chat
+            await this.gruposService.cerrarChat(
+              TipoGrupo.INSTALACION,
               instalacionId,
-              instalacionCodigo: instalacionCompleta.identificadorUnico || `INST-${instalacionId}`,
-              clienteNombre: clienteNombreCompleto,
-              tecnicoNombre,
-              tecnicoId: usuarioId,
-            },
+              'Chat cerrado: La instalación ha sido completada.',
+            );
+          }
+        } catch (error) {
+          console.error(
+            `[InstalacionesService] Error al enviar mensaje/cerrar chat para instalación ${instalacionId}:`,
+            error,
           );
         }
+        break;
       }
-      
-      this.chatGateway.emitirEventoInstalacion(
-        usuariosIds,
-        'instalacion_construccion',
-        {
+      case EstadoInstalacion.PENDIENTE: {
+        // Notificar cuando cambia a pendiente (EN_PROCESO sin técnicos se mapea a PENDIENTE)
+        const clienteNombreCompleto = instalacionCompleta.cliente
+          ? instalacionCompleta.cliente.nombreUsuario || 'Cliente sin nombre'
+          : 'Cliente';
+
+        this.chatGateway.emitirEventoInstalacion(
+          usuariosIds.filter((id) => id !== usuarioId),
+          'instalacion_pendiente',
+          {
+            instalacionId,
+            instalacionCodigo: instalacionCompleta.identificadorUnico || `INST-${instalacionId}`,
+            clienteNombre: clienteNombreCompleto,
+          },
+        );
+
+        // Enviar mensaje automático al chat de la instalación
+        try {
+          const grupo = await this.gruposService.obtenerGrupoPorEntidad(
+            TipoGrupo.INSTALACION,
+            instalacionId,
+          );
+          if (grupo && grupo.grupoActivo) {
+            await this.gruposService.crearMensajeSistema(
+              grupo.grupoId,
+              `⏳ La instalación está pendiente de asignación.`,
+            );
+          }
+        } catch (error) {
+          console.error(
+            `[InstalacionesService] Error al enviar mensaje para instalación ${instalacionId}:`,
+            error,
+          );
+        }
+        break;
+      }
+      case EstadoInstalacion.ASIGNACION: {
+        // Notificar a los usuarios asignados cuando cambia a asignación
+        const clienteNombreCompleto = instalacionCompleta.cliente
+          ? instalacionCompleta.cliente.nombreUsuario || 'Cliente sin nombre'
+          : 'Cliente';
+
+        // Crear notificaciones para todos los usuarios asignados
+        for (const usuarioId of usuariosIds) {
+          await this.notificacionesService.crearNotificacionInstalacionAsignacion(
+            usuarioId,
+            instalacionId,
+            instalacionCompleta.identificadorUnico || `INST-${instalacionId}`,
+            clienteNombreCompleto,
+          );
+        }
+
+        this.chatGateway.emitirEventoInstalacion(usuariosIds, 'instalacion_asignacion', {
           instalacionId,
           instalacionCodigo: instalacionCompleta.identificadorUnico || `INST-${instalacionId}`,
           clienteNombre: clienteNombreCompleto,
-        },
-      );
+        });
 
-      // Enviar mensaje automático al chat de la instalación
-      try {
-        const grupo = await this.gruposService.obtenerGrupoPorEntidad(
-          TipoGrupo.INSTALACION,
-          instalacionId
-        );
-        if (grupo && grupo.grupoActivo) {
-          await this.gruposService.crearMensajeSistema(
-            grupo.grupoId,
-            `🔨 La instalación está en construcción.`
+        // Enviar mensaje automático al chat de la instalación
+        try {
+          const grupo = await this.gruposService.obtenerGrupoPorEntidad(
+            TipoGrupo.INSTALACION,
+            instalacionId,
+          );
+          if (grupo && grupo.grupoActivo) {
+            await this.gruposService.crearMensajeSistema(
+              grupo.grupoId,
+              `📋 La instalación ha sido asignada. El trabajo puede comenzar.`,
+            );
+          }
+        } catch (error) {
+          console.error(
+            `[InstalacionesService] Error al enviar mensaje para instalación ${instalacionId}:`,
+            error,
           );
         }
-      } catch (error) {
-        console.error(`[InstalacionesService] Error al enviar mensaje para instalación ${instalacionId}:`, error);
+        break;
       }
-      break;
-    }
-    case EstadoInstalacion.CERTIFICACION: {
-      // Notificar a los usuarios asignados cuando cambia a certificación
-      const clienteNombreCompleto = instalacionCompleta.cliente
-        ? instalacionCompleta.cliente.nombreUsuario || 'Cliente sin nombre'
-        : 'Cliente';
-      
-      const tecnicoNombre = usuarioQueCambia 
-        ? `${usuarioQueCambia.usuarioNombre || ''} ${usuarioQueCambia.usuarioApellido || ''}`.trim()
-        : 'Técnico';
-      
-      // Crear notificaciones para todos los usuarios asignados
-      for (const usuarioIdAsignado of usuariosIds) {
-        await this.notificacionesService.crearNotificacionInstalacionCertificacion(
-          usuarioIdAsignado,
-          instalacionId,
-          instalacionCompleta.identificadorUnico || `INST-${instalacionId}`,
-          clienteNombreCompleto,
-        );
-      }
-      
-      // Si un técnico cambió el estado, notificar a supervisores/admins
-      if (esTecnico && supervisoresIds.length > 0) {
-        for (const supervisorId of supervisoresIds) {
-          await this.notificacionesService.crearNotificacion(
-            supervisorId,
-            'instalacion_certificacion' as any,
-            'Instalación en Certificación',
-            `El técnico ${tecnicoNombre} cambió la instalación ${instalacionCompleta.identificadorUnico || `INST-${instalacionId}`} del cliente ${clienteNombreCompleto} a estado de certificación.`,
-            {
-              instalacionId,
-              instalacionCodigo: instalacionCompleta.identificadorUnico || `INST-${instalacionId}`,
-              clienteNombre: clienteNombreCompleto,
-              tecnicoNombre,
-              tecnicoId: usuarioId,
-            },
+      case EstadoInstalacion.CONSTRUCCION: {
+        // Notificar a los usuarios asignados cuando cambia a construcción
+        const clienteNombreCompleto = instalacionCompleta.cliente
+          ? instalacionCompleta.cliente.nombreUsuario || 'Cliente sin nombre'
+          : 'Cliente';
+
+        const tecnicoNombre = usuarioQueCambia
+          ? `${usuarioQueCambia.usuarioNombre || ''} ${usuarioQueCambia.usuarioApellido || ''}`.trim()
+          : 'Técnico';
+
+        // Crear notificaciones para todos los usuarios asignados
+        for (const usuarioIdAsignado of usuariosIds) {
+          await this.notificacionesService.crearNotificacionInstalacionConstruccion(
+            usuarioIdAsignado,
+            instalacionId,
+            instalacionCompleta.identificadorUnico || `INST-${instalacionId}`,
+            clienteNombreCompleto,
           );
         }
-      }
-      
-      this.chatGateway.emitirEventoInstalacion(
-        usuariosIds,
-        'instalacion_certificacion',
-        {
+
+        // Si un técnico cambió el estado, notificar a supervisores/admins
+        if (esTecnico && supervisoresIds.length > 0) {
+          for (const supervisorId of supervisoresIds) {
+            await this.notificacionesService.crearNotificacion(
+              supervisorId,
+              'instalacion_construccion' as any,
+              'Instalación en Construcción',
+              `El técnico ${tecnicoNombre} cambió la instalación ${instalacionCompleta.identificadorUnico || `INST-${instalacionId}`} del cliente ${clienteNombreCompleto} a estado de construcción.`,
+              {
+                instalacionId,
+                instalacionCodigo:
+                  instalacionCompleta.identificadorUnico || `INST-${instalacionId}`,
+                clienteNombre: clienteNombreCompleto,
+                tecnicoNombre,
+                tecnicoId: usuarioId,
+              },
+            );
+          }
+        }
+
+        this.chatGateway.emitirEventoInstalacion(usuariosIds, 'instalacion_construccion', {
           instalacionId,
           instalacionCodigo: instalacionCompleta.identificadorUnico || `INST-${instalacionId}`,
           clienteNombre: clienteNombreCompleto,
-        },
-      );
+        });
 
-      // Enviar mensaje automático al chat de la instalación
-      try {
-        const grupo = await this.gruposService.obtenerGrupoPorEntidad(
-          TipoGrupo.INSTALACION,
-          instalacionId
-        );
-        if (grupo && grupo.grupoActivo) {
-          await this.gruposService.crearMensajeSistema(
-            grupo.grupoId,
-            `📝 La instalación está en proceso de certificación.`
+        // Enviar mensaje automático al chat de la instalación
+        try {
+          const grupo = await this.gruposService.obtenerGrupoPorEntidad(
+            TipoGrupo.INSTALACION,
+            instalacionId,
+          );
+          if (grupo && grupo.grupoActivo) {
+            await this.gruposService.crearMensajeSistema(
+              grupo.grupoId,
+              `🔨 La instalación está en construcción.`,
+            );
+          }
+        } catch (error) {
+          console.error(
+            `[InstalacionesService] Error al enviar mensaje para instalación ${instalacionId}:`,
+            error,
           );
         }
-      } catch (error) {
-        console.error(`[InstalacionesService] Error al enviar mensaje para instalación ${instalacionId}:`, error);
+        break;
       }
-      break;
-    }
-    case EstadoInstalacion.NOVEDAD: {
-      // Notificar a los usuarios asignados cuando hay una novedad técnica
-      const clienteNombreCompleto = instalacionCompleta.cliente
-        ? instalacionCompleta.cliente.nombreUsuario || 'Cliente sin nombre'
-        : 'Cliente';
-      
-      const tecnicoNombre = usuarioQueCambia 
-        ? `${usuarioQueCambia.usuarioNombre || ''} ${usuarioQueCambia.usuarioApellido || ''}`.trim()
-        : 'Técnico';
-      
-      // Obtener motivo de novedad de las observaciones si está disponible
-      const motivoNovedad = instalacionCompleta.instalacionObservaciones || undefined;
-      
-      // Crear notificaciones para todos los usuarios asignados
-      for (const usuarioIdAsignado of usuariosIds) {
-        await this.notificacionesService.crearNotificacionInstalacionNovedad(
-          usuarioIdAsignado,
+      case EstadoInstalacion.CERTIFICACION: {
+        // Notificar a los usuarios asignados cuando cambia a certificación
+        const clienteNombreCompleto = instalacionCompleta.cliente
+          ? instalacionCompleta.cliente.nombreUsuario || 'Cliente sin nombre'
+          : 'Cliente';
+
+        const tecnicoNombre = usuarioQueCambia
+          ? `${usuarioQueCambia.usuarioNombre || ''} ${usuarioQueCambia.usuarioApellido || ''}`.trim()
+          : 'Técnico';
+
+        // Crear notificaciones para todos los usuarios asignados
+        for (const usuarioIdAsignado of usuariosIds) {
+          await this.notificacionesService.crearNotificacionInstalacionCertificacion(
+            usuarioIdAsignado,
+            instalacionId,
+            instalacionCompleta.identificadorUnico || `INST-${instalacionId}`,
+            clienteNombreCompleto,
+          );
+        }
+
+        // Si un técnico cambió el estado, notificar a supervisores/admins
+        if (esTecnico && supervisoresIds.length > 0) {
+          for (const supervisorId of supervisoresIds) {
+            await this.notificacionesService.crearNotificacion(
+              supervisorId,
+              'instalacion_certificacion' as any,
+              'Instalación en Certificación',
+              `El técnico ${tecnicoNombre} cambió la instalación ${instalacionCompleta.identificadorUnico || `INST-${instalacionId}`} del cliente ${clienteNombreCompleto} a estado de certificación.`,
+              {
+                instalacionId,
+                instalacionCodigo:
+                  instalacionCompleta.identificadorUnico || `INST-${instalacionId}`,
+                clienteNombre: clienteNombreCompleto,
+                tecnicoNombre,
+                tecnicoId: usuarioId,
+              },
+            );
+          }
+        }
+
+        this.chatGateway.emitirEventoInstalacion(usuariosIds, 'instalacion_certificacion', {
           instalacionId,
-          instalacionCompleta.identificadorUnico || `INST-${instalacionId}`,
-          clienteNombreCompleto,
-          motivoNovedad,
-        );
-      }
-      
-      // Si un técnico cambió el estado, notificar a supervisores/admins
-      if (esTecnico && supervisoresIds.length > 0) {
-        for (const supervisorId of supervisoresIds) {
-          await this.notificacionesService.crearNotificacion(
-            supervisorId,
-            'instalacion_novedad' as any,
-            'Novedad Técnica en Instalación',
-            `El técnico ${tecnicoNombre} reportó una novedad técnica en la instalación ${instalacionCompleta.identificadorUnico || `INST-${instalacionId}`} del cliente ${clienteNombreCompleto}.${motivoNovedad ? ` Motivo: ${motivoNovedad}` : ''}`,
-            {
-              instalacionId,
-              instalacionCodigo: instalacionCompleta.identificadorUnico || `INST-${instalacionId}`,
-              clienteNombre: clienteNombreCompleto,
-              tecnicoNombre,
-              tecnicoId: usuarioId,
-              motivo: motivoNovedad,
-            },
+          instalacionCodigo: instalacionCompleta.identificadorUnico || `INST-${instalacionId}`,
+          clienteNombre: clienteNombreCompleto,
+        });
+
+        // Enviar mensaje automático al chat de la instalación
+        try {
+          const grupo = await this.gruposService.obtenerGrupoPorEntidad(
+            TipoGrupo.INSTALACION,
+            instalacionId,
+          );
+          if (grupo && grupo.grupoActivo) {
+            await this.gruposService.crearMensajeSistema(
+              grupo.grupoId,
+              `📝 La instalación está en proceso de certificación.`,
+            );
+          }
+        } catch (error) {
+          console.error(
+            `[InstalacionesService] Error al enviar mensaje para instalación ${instalacionId}:`,
+            error,
           );
         }
+        break;
       }
-      
-      this.chatGateway.emitirEventoInstalacion(
-        usuariosIds,
-        'instalacion_novedad',
-        {
+      case EstadoInstalacion.NOVEDAD: {
+        // Notificar a los usuarios asignados cuando hay una novedad técnica
+        const clienteNombreCompleto = instalacionCompleta.cliente
+          ? instalacionCompleta.cliente.nombreUsuario || 'Cliente sin nombre'
+          : 'Cliente';
+
+        const tecnicoNombre = usuarioQueCambia
+          ? `${usuarioQueCambia.usuarioNombre || ''} ${usuarioQueCambia.usuarioApellido || ''}`.trim()
+          : 'Técnico';
+
+        // Obtener motivo de novedad de las observaciones si está disponible
+        const motivoNovedad = instalacionCompleta.instalacionObservaciones || undefined;
+
+        // Crear notificaciones para todos los usuarios asignados
+        for (const usuarioIdAsignado of usuariosIds) {
+          await this.notificacionesService.crearNotificacionInstalacionNovedad(
+            usuarioIdAsignado,
+            instalacionId,
+            instalacionCompleta.identificadorUnico || `INST-${instalacionId}`,
+            clienteNombreCompleto,
+            motivoNovedad,
+          );
+        }
+
+        // Si un técnico cambió el estado, notificar a supervisores/admins
+        if (esTecnico && supervisoresIds.length > 0) {
+          for (const supervisorId of supervisoresIds) {
+            await this.notificacionesService.crearNotificacion(
+              supervisorId,
+              'instalacion_novedad' as any,
+              'Novedad Técnica en Instalación',
+              `El técnico ${tecnicoNombre} reportó una novedad técnica en la instalación ${instalacionCompleta.identificadorUnico || `INST-${instalacionId}`} del cliente ${clienteNombreCompleto}.${motivoNovedad ? ` Motivo: ${motivoNovedad}` : ''}`,
+              {
+                instalacionId,
+                instalacionCodigo:
+                  instalacionCompleta.identificadorUnico || `INST-${instalacionId}`,
+                clienteNombre: clienteNombreCompleto,
+                tecnicoNombre,
+                tecnicoId: usuarioId,
+                motivo: motivoNovedad,
+              },
+            );
+          }
+        }
+
+        this.chatGateway.emitirEventoInstalacion(usuariosIds, 'instalacion_novedad', {
           instalacionId,
           instalacionCodigo: instalacionCompleta.identificadorUnico || `INST-${instalacionId}`,
           clienteNombre: clienteNombreCompleto,
           motivo: motivoNovedad,
-        },
-      );
+        });
 
-      // Enviar mensaje automático al chat de la instalación
-      try {
-        const grupo = await this.gruposService.obtenerGrupoPorEntidad(
-          TipoGrupo.INSTALACION,
-          instalacionId
-        );
-        if (grupo && grupo.grupoActivo) {
-          await this.gruposService.crearMensajeSistema(
-            grupo.grupoId,
-            `⚠️ Se ha reportado una novedad técnica en la instalación.${motivoNovedad ? ` Motivo: ${motivoNovedad}` : ''}`
+        // Enviar mensaje automático al chat de la instalación
+        try {
+          const grupo = await this.gruposService.obtenerGrupoPorEntidad(
+            TipoGrupo.INSTALACION,
+            instalacionId,
+          );
+          if (grupo && grupo.grupoActivo) {
+            await this.gruposService.crearMensajeSistema(
+              grupo.grupoId,
+              `⚠️ Se ha reportado una novedad técnica en la instalación.${motivoNovedad ? ` Motivo: ${motivoNovedad}` : ''}`,
+            );
+          }
+        } catch (error) {
+          console.error(
+            `[InstalacionesService] Error al enviar mensaje para instalación ${instalacionId}:`,
+            error,
           );
         }
-      } catch (error) {
-        console.error(`[InstalacionesService] Error al enviar mensaje para instalación ${instalacionId}:`, error);
+        break;
       }
-      break;
-    }
-    case EstadoInstalacion.ANULADA: {
-      // Notificar a los usuarios asignados cuando se anula la instalación
-      const clienteNombreCompleto = instalacionCompleta.cliente
-        ? instalacionCompleta.cliente.nombreUsuario || 'Cliente sin nombre'
-        : 'Cliente';
-      
-      // Obtener motivo de anulación de las observaciones si está disponible
-      const motivoAnulacion = instalacionCompleta.instalacionObservaciones || undefined;
-      
-      // Crear notificaciones para todos los usuarios asignados
-      for (const usuarioId of usuariosIds) {
-        await this.notificacionesService.crearNotificacionInstalacionAnulada(
-          usuarioId,
-          instalacionId,
-          instalacionCompleta.identificadorUnico || `INST-${instalacionId}`,
-          clienteNombreCompleto,
-          motivoAnulacion,
-        );
-      }
-      
-      this.chatGateway.emitirEventoInstalacion(
-        usuariosIds,
-        'instalacion_anulada',
-        {
+      case EstadoInstalacion.ANULADA: {
+        // Notificar a los usuarios asignados cuando se anula la instalación
+        const clienteNombreCompleto = instalacionCompleta.cliente
+          ? instalacionCompleta.cliente.nombreUsuario || 'Cliente sin nombre'
+          : 'Cliente';
+
+        // Obtener motivo de anulación de las observaciones si está disponible
+        const motivoAnulacion = instalacionCompleta.instalacionObservaciones || undefined;
+
+        // Crear notificaciones para todos los usuarios asignados
+        for (const usuarioId of usuariosIds) {
+          await this.notificacionesService.crearNotificacionInstalacionAnulada(
+            usuarioId,
+            instalacionId,
+            instalacionCompleta.identificadorUnico || `INST-${instalacionId}`,
+            clienteNombreCompleto,
+            motivoAnulacion,
+          );
+        }
+
+        this.chatGateway.emitirEventoInstalacion(usuariosIds, 'instalacion_anulada', {
           instalacionId,
           instalacionCodigo: instalacionCompleta.identificadorUnico || `INST-${instalacionId}`,
           clienteNombre: clienteNombreCompleto,
           motivo: motivoAnulacion,
-        },
-      );
+        });
 
-      // Enviar mensaje automático al chat de la instalación y cerrarlo
-      try {
-        const grupo = await this.gruposService.obtenerGrupoPorEntidad(
-          TipoGrupo.INSTALACION,
-          instalacionId
-        );
-        if (grupo && grupo.grupoActivo) {
-          await this.gruposService.crearMensajeSistema(
-            grupo.grupoId,
-            `❌ La instalación ha sido anulada. El chat de esta instalación se cerrará automáticamente.${motivoAnulacion ? ` Motivo: ${motivoAnulacion}` : ''}`
-          );
-          // Cerrar el chat
-          await this.gruposService.cerrarChat(
+        // Enviar mensaje automático al chat de la instalación y cerrarlo
+        try {
+          const grupo = await this.gruposService.obtenerGrupoPorEntidad(
             TipoGrupo.INSTALACION,
             instalacionId,
-            'Chat cerrado: La instalación ha sido anulada.'
+          );
+          if (grupo && grupo.grupoActivo) {
+            await this.gruposService.crearMensajeSistema(
+              grupo.grupoId,
+              `❌ La instalación ha sido anulada. El chat de esta instalación se cerrará automáticamente.${motivoAnulacion ? ` Motivo: ${motivoAnulacion}` : ''}`,
+            );
+            // Cerrar el chat
+            await this.gruposService.cerrarChat(
+              TipoGrupo.INSTALACION,
+              instalacionId,
+              'Chat cerrado: La instalación ha sido anulada.',
+            );
+          }
+        } catch (error) {
+          console.error(
+            `[InstalacionesService] Error al enviar mensaje/cerrar chat para instalación ${instalacionId}:`,
+            error,
           );
         }
-      } catch (error) {
-        console.error(`[InstalacionesService] Error al enviar mensaje/cerrar chat para instalación ${instalacionId}:`, error);
+        break;
       }
-      break;
-    }
-    default:
-      // Para otros estados, enviar mensaje automático al chat si existe
-      try {
-        const grupo = await this.gruposService.obtenerGrupoPorEntidad(
-          TipoGrupo.INSTALACION,
-          instalacionId
-        );
-        if (grupo && grupo.grupoActivo) {
-          const estadoLabels: Record<string, string> = {
-            'pendiente': 'Pendiente',
-            'asignacion': 'Asignación',
-            'construccion': 'Construcción',
-            'certificacion': 'Certificación',
-            'novedad': 'Novedad',
-            'anulada': 'Anulada',
-            'completada': 'Completada'
-          };
-          const estadoTexto = estadoLabels[estadoNormalizado] || estadoNormalizado;
-          await this.gruposService.crearMensajeSistema(
-            grupo.grupoId,
-            `📋 El estado de la instalación ha cambiado a: ${estadoTexto}`
+      default:
+        // Para otros estados, enviar mensaje automático al chat si existe
+        try {
+          const grupo = await this.gruposService.obtenerGrupoPorEntidad(
+            TipoGrupo.INSTALACION,
+            instalacionId,
+          );
+          if (grupo && grupo.grupoActivo) {
+            const estadoLabels: Record<string, string> = {
+              pendiente: 'Pendiente',
+              asignacion: 'Asignación',
+              construccion: 'Construcción',
+              certificacion: 'Certificación',
+              novedad: 'Novedad',
+              anulada: 'Anulada',
+              completada: 'Completada',
+            };
+            const estadoTexto = estadoLabels[estadoNormalizado] || estadoNormalizado;
+            await this.gruposService.crearMensajeSistema(
+              grupo.grupoId,
+              `📋 El estado de la instalación ha cambiado a: ${estadoTexto}`,
+            );
+          }
+        } catch (error) {
+          console.error(
+            `[InstalacionesService] Error al enviar mensaje para instalación ${instalacionId}:`,
+            error,
           );
         }
-      } catch (error) {
-        console.error(`[InstalacionesService] Error al enviar mensaje para instalación ${instalacionId}:`, error);
-      }
-      break;
+        break;
     }
 
     return instalacionActualizada;
@@ -1549,19 +1662,21 @@ export class InstalacionesService {
    * @param bodegaId ID de la bodega de origen (opcional)
    */
   async crearSalidasAutomaticas(
-    instalacionId: number, 
-    usuarioId: number, 
+    instalacionId: number,
+    usuarioId: number,
     completarInmediatamente: boolean = false,
-    bodegaId?: number
+    bodegaId?: number,
   ): Promise<void> {
     const instalacion = await this.findOne(instalacionId);
-    
+
     // Verificar si ya existen salidas pendientes para esta instalación
     const salidasExistentes = await this.movimientosService.findByInstalacion(instalacionId);
     const tieneSalidasPendientes = salidasExistentes.some(
-      m => m.movimientoTipo === TipoMovimiento.SALIDA && m.movimientoEstado === EstadoMovimiento.PENDIENTE
+      (m) =>
+        m.movimientoTipo === TipoMovimiento.SALIDA &&
+        m.movimientoEstado === EstadoMovimiento.PENDIENTE,
     );
-    
+
     if (tieneSalidasPendientes) {
       // Ya existen salidas pendientes, no crear duplicados
       return;
@@ -1572,9 +1687,10 @@ export class InstalacionesService {
     // Intentar obtener materiales de instalacionProyectos
     if (instalacion.instalacionProyectos) {
       try {
-        const proyectos = typeof instalacion.instalacionProyectos === 'string' 
-          ? JSON.parse(instalacion.instalacionProyectos) 
-          : instalacion.instalacionProyectos;
+        const proyectos =
+          typeof instalacion.instalacionProyectos === 'string'
+            ? JSON.parse(instalacion.instalacionProyectos)
+            : instalacion.instalacionProyectos;
 
         if (Array.isArray(proyectos)) {
           for (const proyecto of proyectos) {
@@ -1610,9 +1726,10 @@ export class InstalacionesService {
     // Si no se encontraron materiales en proyectos, intentar materialesInstalados
     if (materiales.length === 0 && instalacion.materialesInstalados) {
       try {
-        const materialesInst = typeof instalacion.materialesInstalados === 'string'
-          ? JSON.parse(instalacion.materialesInstalados)
-          : instalacion.materialesInstalados;
+        const materialesInst =
+          typeof instalacion.materialesInstalados === 'string'
+            ? JSON.parse(instalacion.materialesInstalados)
+            : instalacion.materialesInstalados;
 
         if (Array.isArray(materialesInst)) {
           for (const mat of materialesInst) {
@@ -1633,16 +1750,16 @@ export class InstalacionesService {
     // Si hay materiales, crear las salidas en estado PENDIENTE
     if (materiales.length > 0) {
       const movimientoCodigo = `SALIDA-AUTO-${instalacionId}-${Date.now()}`;
-      
+
       // Usar bodegaId de la instalación si está disponible, o el parámetro pasado
       const bodegaIdFinal = instalacion.bodegaId || bodegaId;
-      
+
       // Obtener inventarioId desde bodegaId si está disponible
       let inventarioId: number | undefined = undefined;
       if (bodegaIdFinal) {
         try {
           const inventarios = await this.inventariosService.findAll();
-          const inventario = inventarios.find(inv => inv.bodegaId === bodegaIdFinal);
+          const inventario = inventarios.find((inv) => inv.bodegaId === bodegaIdFinal);
           if (inventario) {
             inventarioId = inventario.inventarioId;
           }
@@ -1650,10 +1767,10 @@ export class InstalacionesService {
           console.error('Error al obtener inventario desde bodega:', error);
         }
       }
-      
+
       await this.movimientosService.create({
         movimientoTipo: TipoMovimiento.SALIDA,
-        materiales: materiales.map(m => ({
+        materiales: materiales.map((m) => ({
           materialId: m.materialId,
           movimientoCantidad: m.cantidad,
           movimientoPrecioUnitario: m.precio,
@@ -1668,14 +1785,17 @@ export class InstalacionesService {
       // Actualizar los movimientos creados según el estado deseado
       const salidasCreadas = await this.movimientosService.findByInstalacion(instalacionId);
       const salidasNuevas = salidasCreadas.filter(
-        m => m.movimientoCodigo === movimientoCodigo && m.movimientoTipo === TipoMovimiento.SALIDA
+        (m) =>
+          m.movimientoCodigo === movimientoCodigo && m.movimientoTipo === TipoMovimiento.SALIDA,
       );
 
-      const estadoFinal = completarInmediatamente ? EstadoMovimiento.COMPLETADA : EstadoMovimiento.PENDIENTE;
+      const estadoFinal = completarInmediatamente
+        ? EstadoMovimiento.COMPLETADA
+        : EstadoMovimiento.PENDIENTE;
       for (const salida of salidasNuevas) {
         await this.movimientosService.actualizarEstado(salida.movimientoId, estadoFinal);
       }
-      
+
       // Si se completan inmediatamente, también actualizar materiales
       if (completarInmediatamente) {
         await this.actualizarMaterialesInstalacion(instalacionId);
@@ -1686,15 +1806,15 @@ export class InstalacionesService {
   private async actualizarCantidadInstalacionesCliente(clienteId: number): Promise<void> {
     // Contar solo las instalaciones completadas del cliente
     const cantidadFinalizadas = await this.instalacionesRepository.count({
-      where: { 
+      where: {
         clienteId,
-        estado: EstadoInstalacion.COMPLETADA
-      }
+        estado: EstadoInstalacion.COMPLETADA,
+      },
     });
-    
+
     // Actualizar el campo cantidadInstalaciones del cliente usando el servicio
     await this.clientesService.update(clienteId, {
-      cantidadInstalaciones: cantidadFinalizadas
+      cantidadInstalaciones: cantidadFinalizadas,
     } as any);
   }
 
@@ -1709,9 +1829,10 @@ export class InstalacionesService {
     // Procesar materialesInstalados para obtener los realmente utilizados
     if (instalacion.materialesInstalados) {
       try {
-        const materialesInst = typeof instalacion.materialesInstalados === 'string'
-          ? JSON.parse(instalacion.materialesInstalados)
-          : instalacion.materialesInstalados;
+        const materialesInst =
+          typeof instalacion.materialesInstalados === 'string'
+            ? JSON.parse(instalacion.materialesInstalados)
+            : instalacion.materialesInstalados;
 
         if (Array.isArray(materialesInst)) {
           for (const mat of materialesInst) {
@@ -1729,13 +1850,22 @@ export class InstalacionesService {
 
     // Actualizar salidas pendientes a completadas y ajustar inventario
     for (const movimiento of movimientos) {
-      if (movimiento.movimientoTipo === TipoMovimiento.SALIDA && movimiento.movimientoEstado === EstadoMovimiento.PENDIENTE) {
+      if (
+        movimiento.movimientoTipo === TipoMovimiento.SALIDA &&
+        movimiento.movimientoEstado === EstadoMovimiento.PENDIENTE
+      ) {
         // Actualizar estado a completada
-        await this.movimientosService.actualizarEstado(movimiento.movimientoId, EstadoMovimiento.COMPLETADA);
+        await this.movimientosService.actualizarEstado(
+          movimiento.movimientoId,
+          EstadoMovimiento.COMPLETADA,
+        );
 
         // Si hay materiales utilizados registrados, ajustar la cantidad si es diferente
         const cantidadUtilizada = materialesUtilizados.get(movimiento.materialId);
-        if (cantidadUtilizada !== undefined && cantidadUtilizada !== movimiento.movimientoCantidad) {
+        if (
+          cantidadUtilizada !== undefined &&
+          cantidadUtilizada !== movimiento.movimientoCantidad
+        ) {
           // La cantidad realmente utilizada es diferente a la planificada
           // Se ajustará automáticamente cuando se procese el movimiento con ajustarStockMovimiento
           // Solo necesitamos actualizar la cantidad del movimiento si es necesario
@@ -1743,16 +1873,21 @@ export class InstalacionesService {
 
         // Obtener el material para ajustar inventario
         const material = await this.materialesService.findOne(movimiento.materialId);
-        const cantidadFinal = cantidadUtilizada !== undefined ? cantidadUtilizada : movimiento.movimientoCantidad;
-        
+        const cantidadFinal =
+          cantidadUtilizada !== undefined ? cantidadUtilizada : movimiento.movimientoCantidad;
+
         // Obtener inventario/bodega del movimiento
         if (movimiento.inventarioId) {
           const inventario = await this.inventariosService.findOne(movimiento.inventarioId);
           const bodegaId = inventario.bodegaId || inventario.bodega?.bodegaId;
-          
+
           if (bodegaId) {
             // Ajustar stock según la cantidad realmente utilizada
-            await this.materialesService.ajustarStock(movimiento.materialId, -cantidadFinal, bodegaId);
+            await this.materialesService.ajustarStock(
+              movimiento.materialId,
+              -cantidadFinal,
+              bodegaId,
+            );
           }
         }
 
@@ -1775,59 +1910,69 @@ export class InstalacionesService {
     try {
       // Obtener la instalación con usuarios asignados
       const instalacion = await this.findOne(instalacionId);
-      
-      if (!instalacion || !instalacion.usuariosAsignados || !Array.isArray(instalacion.usuariosAsignados)) {
+
+      if (
+        !instalacion ||
+        !instalacion.usuariosAsignados ||
+        !Array.isArray(instalacion.usuariosAsignados)
+      ) {
         return;
       }
-      
+
       // Buscar el técnico asignado
       const tecnicoAsignado = instalacion.usuariosAsignados.find((u: any) => {
         const usuario = u.usuario || u;
-        return usuario && (usuario.usuarioRol?.rolTipo === 'tecnico' || usuario.rolTipo === 'tecnico');
+        return (
+          usuario && (usuario.usuarioRol?.rolTipo === 'tecnico' || usuario.rolTipo === 'tecnico')
+        );
       });
-      
+
       if (!tecnicoAsignado) {
         return;
       }
-      
+
       const usuario = tecnicoAsignado.usuario || tecnicoAsignado;
       const tecnicoId = usuario.usuarioId;
-      
+
       // Obtener todos los materiales utilizados en esta instalación
-      const materialesUtilizados = await this.instalacionesMaterialesService.findByInstalacion(instalacionId);
-      
+      const materialesUtilizados =
+        await this.instalacionesMaterialesService.findByInstalacion(instalacionId);
+
       if (!materialesUtilizados || materialesUtilizados.length === 0) {
         return;
       }
-      
+
       // Obtener el inventario del técnico
       const inventarioTecnico = await this.inventarioTecnicoService.findByUsuario(tecnicoId);
-      
+
       // Descontar cada material utilizado
       for (const materialUtilizado of materialesUtilizados) {
         const materialId = materialUtilizado.materialId;
         const cantidadUtilizada = Math.round(Number(materialUtilizado.cantidad || 0));
-        
+
         if (cantidadUtilizada <= 0) {
           continue;
         }
-        
+
         // Buscar el material en el inventario del técnico
         const inventarioItem = inventarioTecnico.find(
-          (inv) => inv.materialId === materialId && inv.usuarioId === tecnicoId
+          (inv) => inv.materialId === materialId && inv.usuarioId === tecnicoId,
         );
-        
+
         if (inventarioItem) {
           const cantidadActual = Number(inventarioItem.cantidad || 0);
           const nuevaCantidad = Math.max(0, cantidadActual - cantidadUtilizada);
-          
+
           await this.inventarioTecnicoService.update(inventarioItem.inventarioTecnicoId, {
             cantidad: nuevaCantidad,
           });
         }
       }
     } catch (error) {
-      console.error(`[InstalacionesService] Error al descontar materiales del técnico para instalación ${instalacionId}:`, error);
+      console.error(
+        `[InstalacionesService] Error al descontar materiales del técnico para instalación ${instalacionId}:`,
+        error,
+      );
       // No lanzar error para no interrumpir el cambio de estado
     }
   }

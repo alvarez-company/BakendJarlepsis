@@ -82,4 +82,3 @@ export class AuditoriaInventario {
   @CreateDateColumn()
   fechaCreacion: Date;
 }
-

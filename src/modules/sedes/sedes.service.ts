@@ -1,4 +1,10 @@
-import { Injectable, NotFoundException, BadRequestException, Inject, forwardRef } from '@nestjs/common';
+import {
+  Injectable,
+  NotFoundException,
+  BadRequestException,
+  Inject,
+  forwardRef,
+} from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { Sede } from './sede.entity';
@@ -25,25 +31,31 @@ export class SedesService {
   async create(createSedeDto: CreateSedeDto): Promise<Sede> {
     const sede = this.sedesRepository.create(createSedeDto);
     const savedSede = await this.sedesRepository.save(sede);
-    
+
     // Crear grupo de chat automáticamente
     try {
       await this.gruposService.crearGrupoSede(savedSede.sedeId, savedSede.sedeNombre);
     } catch (error) {
-      console.error(`[SedesService] ❌ Error al crear grupo de chat para sede ${savedSede.sedeNombre}:`, error);
+      console.error(
+        `[SedesService] ❌ Error al crear grupo de chat para sede ${savedSede.sedeNombre}:`,
+        error,
+      );
       console.error(`[SedesService] Stack trace:`, error.stack);
       // No lanzar error para no interrumpir la creación de la sede
     }
-    
+
     // Crear usuario admin automáticamente
     try {
       await this.crearUsuarioAdminSede(savedSede);
     } catch (error) {
-      console.error(`[SedesService] ❌ Error al crear usuario admin para sede ${savedSede.sedeNombre}:`, error);
+      console.error(
+        `[SedesService] ❌ Error al crear usuario admin para sede ${savedSede.sedeNombre}:`,
+        error,
+      );
       console.error(`[SedesService] Stack trace:`, error.stack);
       // No lanzar error para no interrumpir la creación de la sede
     }
-    
+
     return savedSede;
   }
 
@@ -55,7 +67,7 @@ export class SedesService {
         .normalize('NFD')
         .replace(/[\u0300-\u036f]/g, '')
         .replace(/[^a-z0-9]/g, '');
-      
+
       // Generar email único
       let email = `admin.${nombreNormalizado}@jarlepsis.local`;
       let contador = 1;
@@ -63,84 +75,93 @@ export class SedesService {
         email = `admin.${nombreNormalizado}${contador}@jarlepsis.local`;
         contador++;
       }
-      
+
       // Generar documento único
       let documento = `ADM-${sede.sedeId}-${Date.now()}`;
       while (await this.usersService.findByDocument(documento)) {
         documento = `ADM-${sede.sedeId}-${Date.now()}-${contador}`;
         contador++;
       }
-      
+
       // Obtener el rol admin
       const rolAdmin = await this.rolesService.findByTipo('admin');
       if (!rolAdmin) {
         throw new Error('Rol admin no encontrado');
       }
-      
+
       // Crear contraseña: admin + nombre de la sede (sin espacios, en minúsculas)
       // Formato: adminnombresede
       const password = `admin${nombreNormalizado}`;
-      
+
       // Crear el usuario
-      const nuevoUsuario = await this.usersService.create({
-        usuarioRolId: rolAdmin.rolId,
-        usuarioSede: sede.sedeId,
-        usuarioNombre: 'Administrador',
-        usuarioApellido: sede.sedeNombre,
-        usuarioCorreo: email,
-        usuarioDocumento: documento,
-        usuarioContrasena: password,
-      }, undefined);
-      
+      const nuevoUsuario = await this.usersService.create(
+        {
+          usuarioRolId: rolAdmin.rolId,
+          usuarioSede: sede.sedeId,
+          usuarioNombre: 'Administrador',
+          usuarioApellido: sede.sedeNombre,
+          usuarioCorreo: email,
+          usuarioDocumento: documento,
+          usuarioContrasena: password,
+        },
+        undefined,
+      );
+
       // Asegurar que el usuario esté activo
       if (!nuevoUsuario.usuarioEstado) {
         await this.usersService.updateEstado(nuevoUsuario.usuarioId, true);
       }
-      
     } catch (error) {
-      console.error(`[SedesService] Error al crear usuario admin para sede ${sede.sedeNombre}:`, error);
+      console.error(
+        `[SedesService] Error al crear usuario admin para sede ${sede.sedeNombre}:`,
+        error,
+      );
       throw error;
     }
   }
 
   async findAll(user?: any): Promise<Sede[]> {
     const allSedes = await this.sedesRepository.find({ relations: ['bodegas'] });
-    
+
     // SuperAdmin ve todo
     if (user?.usuarioRol?.rolTipo === 'superadmin' || user?.role === 'superadmin') {
       return allSedes;
     }
-    
+
     // Admin ve solo sedes de su centro operativo (sede asignada)
     if (user?.usuarioRol?.rolTipo === 'admin' || user?.role === 'admin') {
       if (user.usuarioSede) {
-        return allSedes.filter(sede => sede.sedeId === user.usuarioSede);
+        return allSedes.filter((sede) => sede.sedeId === user.usuarioSede);
       }
       return [];
     }
-    
+
     // Administrador (Centro Operativo) - solo lectura, ve todas las sedes
     if (user?.usuarioRol?.rolTipo === 'administrador' || user?.role === 'administrador') {
       return allSedes;
     }
-    
+
     // Almacenista ve solo su sede asignada
     if (user?.usuarioRol?.rolTipo === 'almacenista' || user?.role === 'almacenista') {
       if (user.usuarioSede) {
-        return allSedes.filter(sede => sede.sedeId === user.usuarioSede);
+        return allSedes.filter((sede) => sede.sedeId === user.usuarioSede);
       }
       return [];
     }
-    
+
     // Técnico y Soldador ven solo su sede asignada
-    if ((user?.usuarioRol?.rolTipo === 'tecnico' || user?.role === 'tecnico') ||
-        (user?.usuarioRol?.rolTipo === 'soldador' || user?.role === 'soldador')) {
+    if (
+      user?.usuarioRol?.rolTipo === 'tecnico' ||
+      user?.role === 'tecnico' ||
+      user?.usuarioRol?.rolTipo === 'soldador' ||
+      user?.role === 'soldador'
+    ) {
       if (user.usuarioSede) {
-        return allSedes.filter(sede => sede.sedeId === user.usuarioSede);
+        return allSedes.filter((sede) => sede.sedeId === user.usuarioSede);
       }
       return [];
     }
-    
+
     return allSedes;
   }
 
@@ -157,22 +178,22 @@ export class SedesService {
 
   async update(id: number, updateSedeDto: UpdateSedeDto, user?: any): Promise<Sede> {
     const sede = await this.findOne(id);
-    
+
     // Validar permisos
     if (user) {
       const rolTipo = user.usuarioRol?.rolTipo || user.role;
-      
+
       // Solo superadmin y admin pueden editar sedes
       if (rolTipo !== 'superadmin' && rolTipo !== 'admin') {
         throw new BadRequestException('No tienes permisos para editar sedes');
       }
-      
+
       // Admin solo puede editar su propia sede
       if (rolTipo === 'admin' && sede.sedeId !== user.usuarioSede) {
         throw new BadRequestException('No tienes permisos para editar otras sedes');
       }
     }
-    
+
     const estadoAnterior = sede.sedeEstado;
     Object.assign(sede, updateSedeDto);
     const sedeActualizada = await this.sedesRepository.save(sede);
@@ -183,7 +204,7 @@ export class SedesService {
         await this.gruposService.cerrarChat(
           TipoGrupo.SEDE,
           id,
-          `Chat cerrado: La sede "${sedeActualizada.sedeNombre}" ha sido desactivada.`
+          `Chat cerrado: La sede "${sedeActualizada.sedeNombre}" ha sido desactivada.`,
         );
       } catch (error) {
         console.error(`[SedesService] Error al cerrar chat de sede ${id}:`, error);
@@ -195,7 +216,7 @@ export class SedesService {
 
   async remove(id: number, user?: any): Promise<void> {
     const sede = await this.findOne(id);
-    
+
     // Validar permisos - solo superadmin puede eliminar
     if (user) {
       const rolTipo = user.usuarioRol?.rolTipo || user.role;
@@ -203,25 +224,24 @@ export class SedesService {
         throw new BadRequestException('No tienes permisos para eliminar sedes');
       }
     }
-    
+
     const relations: { [key: string]: number } = {};
-    
+
     // Contar bodegas asociadas
     if (sede.bodegas && sede.bodegas.length > 0) {
       relations['bodegas'] = sede.bodegas.length;
     }
-    
+
     // Contar usuarios asignados
     if (sede.usuarios && sede.usuarios.length > 0) {
       relations['usuarios'] = sede.usuarios.length;
     }
-    
+
     // Si tiene relaciones, no se puede eliminar
     if (Object.keys(relations).length > 0) {
       throw new HasRelatedEntitiesException(`sede "${sede.sedeNombre}"`, relations);
     }
-    
+
     await this.sedesRepository.remove(sede);
   }
 }
-
