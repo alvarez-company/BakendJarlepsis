@@ -86,10 +86,19 @@ export class BodegasService {
         contador++;
       }
 
-      // Obtener el rol bodega
-      const rolBodega = await this.rolesService.findByTipo('bodega');
+      // Obtener el rol según el tipo de bodega
+      const tipoBodega = bodega.bodegaTipo; // 'internas' | 'redes' | null
+      let rolTipo = 'bodega-internas'; // Por defecto
+      
+      if (tipoBodega === 'redes') {
+        rolTipo = 'bodega-redes';
+      } else if (tipoBodega === 'internas') {
+        rolTipo = 'bodega-internas';
+      }
+      
+      const rolBodega = await this.rolesService.findByTipo(rolTipo);
       if (!rolBodega) {
-        throw new Error('Rol bodega no encontrado');
+        throw new Error(`Rol ${rolTipo} no encontrado`);
       }
 
       // Crear contraseña: admin + nombre de la bodega (sin espacios, en minúsculas)
@@ -140,11 +149,6 @@ export class BodegasService {
     // Administrador (Centro Operativo) - solo lectura, ve todas las bodegas
     if (user?.usuarioRol?.rolTipo === 'administrador' || user?.role === 'administrador') {
       return allBodegas;
-    }
-
-    // Usuario Bodega ve solo su bodega
-    if (user?.usuarioRol?.rolTipo === 'bodega' || user?.role === 'bodega') {
-      return allBodegas.filter((bodega) => bodega.bodegaId === user.usuarioBodega);
     }
 
     // Bodega Internas - solo ve bodegas de tipo internas (y su propia bodega si está asignada)

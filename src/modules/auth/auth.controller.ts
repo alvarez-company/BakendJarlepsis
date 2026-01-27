@@ -19,4 +19,14 @@ export class AuthController {
   login(@Request() req, @Body() loginDto: LoginDto) {
     return this.authService.login(loginDto);
   }
+
+  @Public()
+  @UseGuards(LocalAuthGuard)
+  @Post('login-miniapp')
+  @ApiOperation({ summary: 'Login user (Miniapp: solo técnicos y soldadores)' })
+  @ApiResponse({ status: 200, description: 'Successfully logged in (miniapp)' })
+  @ApiResponse({ status: 401, description: 'Unauthorized' })
+  loginMiniapp(@Request() req, @Body() loginDto: LoginDto) {
+    return this.authService.loginMiniapp(loginDto);
+  }
 }

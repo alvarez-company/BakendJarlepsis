@@ -45,7 +45,43 @@ export class UsersService {
     private rolesService: RolesService,
   ) {}
 
-  async create(createUserDto: CreateUserDto, creadorId?: number): Promise<User> {
+  async create(
+    createUserDto: CreateUserDto,
+    creadorId?: number,
+    creadorRolTipo?: string,
+  ): Promise<User> {
+    // ============================================
+    // Validación de permisos por rol del creador
+    // ============================================
+    // Reglas:
+    // - superadmin: puede crear cualquier rol
+    // - admin/administrador: SOLO pueden crear usuarios con roles:
+    //   tecnico, soldador, almacenista, bodega-internas, bodega-redes
+    if (creadorId) {
+      const rolCreador = (creadorRolTipo || '').toLowerCase();
+
+      if (rolCreador && rolCreador !== 'superadmin') {
+        const rolesPermitidosParaAdministradores = [
+          'tecnico',
+          'soldador',
+          'almacenista',
+          'bodega-internas',
+          'bodega-redes',
+        ];
+
+        if (rolCreador === 'admin' || rolCreador === 'administrador') {
+          const rolObjetivoEntity = await this.rolesService.findOne(createUserDto.usuarioRolId);
+          const rolObjetivo = (rolObjetivoEntity?.rolTipo || '').toLowerCase();
+
+          if (!rolesPermitidosParaAdministradores.includes(rolObjetivo)) {
+            throw new BadRequestException(
+              'No tienes permiso para crear usuarios con ese rol. Solo puedes crear: Técnico, Soldador, Almacenista, Bodega Internas y Bodega Redes.',
+            );
+          }
+        }
+      }
+    }
+
     // Validar que el correo no exista
     const existingEmail = await this.findByEmail(createUserDto.usuarioCorreo);
     if (existingEmail) {
@@ -59,6 +95,36 @@ export class UsersService {
     }
 
     const hashedPassword = await bcrypt.hash(createUserDto.usuarioContrasena, 10);
+
+    // Validar campos requeridos según el rol objetivo
+    try {
+      const rolObjetivoEntity = await this.rolesService.findOne(createUserDto.usuarioRolId);
+      const rolObjetivo = (rolObjetivoEntity?.rolTipo || '').toLowerCase();
+
+      const rolesRequierenCentroOperativo = [
+        'admin',
+        'administrador',
+        'almacenista',
+        'tecnico',
+        'soldador',
+      ];
+      const rolesRequierenBodega = ['bodega-internas', 'bodega-redes'];
+
+      if (rolObjetivo === 'superadmin') {
+        // ok (no requiere sede/bodega)
+      } else if (rolesRequierenCentroOperativo.includes(rolObjetivo)) {
+        if (!createUserDto.usuarioSede) {
+          throw new BadRequestException('Este rol requiere Centro Operativo (usuarioSede).');
+        }
+      } else if (rolesRequierenBodega.includes(rolObjetivo)) {
+        if (!createUserDto.usuarioBodega) {
+          throw new BadRequestException('Este rol requiere Bodega (usuarioBodega).');
+        }
+      }
+    } catch (e) {
+      // Si falla la obtención del rol o validación, dejar pasar el error tal cual
+      throw e;
+    }
 
     // Convertir valores 0 a null para campos opcionales
     const userData: DeepPartial<User> = {

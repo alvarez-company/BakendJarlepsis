@@ -37,6 +37,11 @@ export class CreateUserDto {
   @IsString()
   usuarioDocumento: string;
 
+  @ApiProperty({ required: false, nullable: true, example: 1 })
+  @IsNumber()
+  @IsOptional()
+  tipoDocumentoId?: number | null;
+
   @ApiProperty({ required: false })
   @IsString()
   @IsOptional()

@@ -2,20 +2,17 @@
 -- Ejecutar después de crear las tablas
 
 -- ==========================================
--- 1. ROLES - COMPLETOS
+-- 1. ROLES - PRINCIPALES
 -- ==========================================
 INSERT INTO roles (rolNombre, rolTipo, rolDescripcion, rolEstado, fechaCreacion, fechaActualizacion) VALUES
 ('Super Administrador', 'superadmin', 'Administrador con todos los permisos incluyendo cambio de roles', 1, NOW(), NOW()),
 ('Administrador', 'admin', 'Administrador de oficina con permisos completos excepto cambio de roles', 1, NOW(), NOW()),
+('Administrador - Centro Operativo', 'administrador', 'Usuario con acceso de solo lectura a la información del centro operativo. No puede editar ni eliminar datos.', 1, NOW(), NOW()),
 ('Técnico', 'tecnico', 'Usuario técnico con acceso a aplicación móvil y instalaciones asignadas', 1, NOW(), NOW()),
-('Empleado', 'empleado', 'Empleado común para apoyo en instalaciones', 1, NOW(), NOW()),
-('Encargado de Bodega', 'bodega', 'Usuario encargado de gestionar bodega específica', 1, NOW(), NOW()),
-('Inventario', 'inventario', 'Usuario para gestión de inventario', 1, NOW(), NOW()),
-('Traslados', 'traslados', 'Usuario para gestionar traslados entre bodegas', 1, NOW(), NOW()),
-('Entradas', 'entradas', 'Usuario para registrar entradas de materiales', 1, NOW(), NOW()),
-('Salidas', 'salidas', 'Usuario para registrar salidas de materiales', 1, NOW(), NOW()),
-('Devoluciones', 'devoluciones', 'Usuario para registrar devoluciones de materiales', 1, NOW(), NOW()),
-('Instalaciones', 'instalaciones', 'Usuario para gestionar instalaciones', 1, NOW(), NOW());
+('Soldador', 'soldador', 'Rol para personal de campo especializado en soldadura. Acceso principalmente a la aplicación móvil.', 1, NOW(), NOW()),
+('Almacenista', 'almacenista', 'Puede gestionar entradas, salidas, asignaciones, devoluciones y traslados. Puede ver instalaciones y aprobar material.', 1, NOW(), NOW()),
+('Bodega Internas', 'bodega-internas', 'Puede gestionar instalaciones, proyectos, usuarios y tipos de instalaciones. No puede asignar material. La información no se cruza con Bodega Redes.', 1, NOW(), NOW()),
+('Bodega Redes', 'bodega-redes', 'Puede gestionar instalaciones, proyectos, usuarios y tipos de instalaciones. No puede asignar material. La información no se cruza con Bodega Internas.', 1, NOW(), NOW());
 
 -- ==========================================
 -- 2. CREAR SUPERADMIN
@@ -82,19 +79,17 @@ INSERT INTO categorias (categoriaNombre, categoriaDescripcion, categoriaCodigo, 
 -- ==========================================
 -- NOTAS IMPORTANTES
 -- ==========================================
--- 1. Cambiar el email del SuperAdmin en la línea 17
+-- 1. Cambiar el email del SuperAdmin en la línea correspondiente
 -- 2. Generar hash de contraseña con bcrypt (ver instrucciones arriba)
--- 3. Reemplazar el hash en la línea 18
--- 4. Los IDs de roles (1-10) corresponden a:
---    1: SuperAdmin
---    2: Admin
---    3: Técnico
---    4: Bodega
---    5: Inventario
---    6: Traslados
---    7: Entradas
---    8: Salidas
---    9: Devoluciones
---    10: Instalaciones
+-- 3. Reemplazar el hash en la línea correspondiente
+-- 4. Los IDs de roles (1-8) corresponden a:
+--    1: Super Administrador (superadmin)
+--    2: Administrador (admin)
+--    3: Administrador - Centro Operativo (administrador)
+--    4: Técnico (tecnico)
+--    5: Soldador (soldador)
+--    6: Almacenista (almacenista)
+--    7: Bodega Internas (bodega-internas)
+--    8: Bodega Redes (bodega-redes)
 -- 5. Ejecutar este script después de crear las tablas con las migraciones
 -- 6. Usar este SuperAdmin para crear los demás usuarios desde la API

@@ -110,6 +110,49 @@ async function addMissingColumns() {
       console.log('✅ Columna unidadMedidaId ya existe\n');
     }
 
+    // 2.1 Verificar y agregar materialEsMedidor si falta (clave para flujo de medidores)
+    console.log('📝 Verificando columna materialEsMedidor en materiales...');
+    const [materialEsMedidorColumns] = await connection.query(`
+      SELECT COLUMN_NAME 
+      FROM INFORMATION_SCHEMA.COLUMNS 
+      WHERE TABLE_SCHEMA = DATABASE()
+        AND TABLE_NAME = 'materiales'
+        AND COLUMN_NAME = 'materialEsMedidor'
+    `);
+
+    if (materialEsMedidorColumns.length === 0) {
+      console.log('📝 Agregando columna materialEsMedidor a materiales...');
+      await connection.query(`
+        ALTER TABLE \`materiales\`
+        ADD COLUMN \`materialEsMedidor\` TINYINT(1) NOT NULL DEFAULT 0 AFTER \`materialEstado\`
+      `);
+      console.log('✅ Columna materialEsMedidor agregada\n');
+    } else {
+      console.log('✅ Columna materialEsMedidor ya existe\n');
+    }
+
+    // Si existe numeros_medidor, marcar materiales que tengan números como medidor
+    try {
+      const [nmTable] = await connection.query(`
+        SELECT TABLE_NAME
+        FROM INFORMATION_SCHEMA.TABLES
+        WHERE TABLE_SCHEMA = DATABASE()
+          AND TABLE_NAME = 'numeros_medidor'
+      `);
+      if (nmTable.length > 0) {
+        console.log('📝 Marcando materiales con números de medidor como materialEsMedidor=1...');
+        await connection.query(`
+          UPDATE \`materiales\` m
+          INNER JOIN \`numeros_medidor\` nm ON m.\`materialId\` = nm.\`materialId\`
+          SET m.\`materialEsMedidor\` = 1
+          WHERE m.\`materialEsMedidor\` = 0
+        `);
+        console.log('✅ Materiales medidor actualizados\n');
+      }
+    } catch (error) {
+      console.warn('⚠️  No se pudo actualizar materialEsMedidor por numeros_medidor:', error.message);
+    }
+
     // 3. Verificar y agregar identificadorUnico si falta
     console.log('📝 Verificando columna identificadorUnico en instalaciones...');
     const [instalacionesColumns] = await connection.query(`
@@ -219,7 +262,142 @@ async function addMissingColumns() {
       console.log('✅ Columna usuarioRegistra ya existe en items_proyecto\n');
     }
 
-    // 7. Verificar y crear tabla clasificaciones si falta
+    // 7. Verificar y migrar bodegas de oficinaId a sedeId
+    console.log('📝 Verificando migración de oficinaId a sedeId en bodegas...');
+    
+    // PRIMERO: Eliminar la constraint específica que está causando el error
+    console.log('📝 Intentando eliminar constraint FK_7aa38510f9d318ddd2dff2f0de2...');
+    try {
+      await connection.query(`
+        ALTER TABLE \`bodegas\` DROP FOREIGN KEY \`FK_7aa38510f9d318ddd2dff2f0de2\`
+      `);
+      console.log('✅ Constraint FK_7aa38510f9d318ddd2dff2f0de2 eliminada\n');
+    } catch (error) {
+      // Si no existe con ese nombre, buscar todas las constraints de oficinaId
+      try {
+        const [fkConstraints] = await connection.query(`
+          SELECT CONSTRAINT_NAME 
+          FROM INFORMATION_SCHEMA.KEY_COLUMN_USAGE 
+          WHERE TABLE_SCHEMA = DATABASE()
+            AND TABLE_NAME = 'bodegas'
+            AND COLUMN_NAME = 'oficinaId'
+            AND CONSTRAINT_NAME IS NOT NULL
+        `);
+
+        if (fkConstraints && fkConstraints.length > 0) {
+          for (const fk of fkConstraints) {
+            await connection.query(`
+              ALTER TABLE \`bodegas\` DROP FOREIGN KEY \`${fk.CONSTRAINT_NAME}\`
+            `);
+            console.log(`✅ Constraint ${fk.CONSTRAINT_NAME} eliminada\n`);
+          }
+        } else {
+          console.log('✅ No hay constraints de oficinaId para eliminar\n');
+        }
+      } catch (error2) {
+        console.warn('⚠️  No se pudo eliminar constraint de oficinaId:', error2.message);
+      }
+    }
+    
+    const [bodegasColumns] = await connection.query(`
+      SELECT COLUMN_NAME 
+      FROM INFORMATION_SCHEMA.COLUMNS 
+      WHERE TABLE_SCHEMA = DATABASE()
+        AND TABLE_NAME = 'bodegas'
+        AND COLUMN_NAME IN ('oficinaId', 'sedeId')
+    `);
+
+    const hasOficinaId = bodegasColumns.some(col => col.COLUMN_NAME === 'oficinaId');
+    const hasSedeId = bodegasColumns.some(col => col.COLUMN_NAME === 'sedeId');
+
+    if (hasOficinaId && !hasSedeId) {
+      console.log('📝 Agregando columna sedeId a bodegas...');
+      console.log('⚠️  NOTA: Las oficinas ya no existen. Las bodegas deben tener sedeId asignado manualmente.\n');
+      
+      await connection.query(`
+        ALTER TABLE \`bodegas\` 
+        ADD COLUMN \`sedeId\` INT NULL AFTER \`oficinaId\`
+      `);
+      
+      console.log('✅ Columna sedeId agregada (NULL por ahora)');
+      console.log('⚠️  IMPORTANTE: Debes asignar sedeId a todas las bodegas antes de hacerlo NOT NULL\n');
+      
+      // NO intentamos hacer sedeId NOT NULL automáticamente porque las bodegas necesitan sedeId asignado manualmente
+
+      // La constraint ya se eliminó al inicio, pero verificar si quedan más
+      try {
+        const [fkConstraints] = await connection.query(`
+          SELECT CONSTRAINT_NAME 
+          FROM INFORMATION_SCHEMA.KEY_COLUMN_USAGE 
+          WHERE TABLE_SCHEMA = DATABASE()
+            AND TABLE_NAME = 'bodegas'
+            AND COLUMN_NAME = 'oficinaId'
+            AND CONSTRAINT_NAME IS NOT NULL
+        `);
+
+        if (fkConstraints && fkConstraints.length > 0) {
+          for (const fk of fkConstraints) {
+            await connection.query(`
+              ALTER TABLE \`bodegas\` DROP FOREIGN KEY \`${fk.CONSTRAINT_NAME}\`
+            `);
+            console.log(`✅ Foreign key ${fk.CONSTRAINT_NAME} eliminada\n`);
+          }
+        }
+      } catch (error) {
+        console.warn('⚠️  No se pudo eliminar FK de oficinaId:', error.message);
+      }
+
+      // Eliminar columna oficinaId
+      try {
+        await connection.query(`
+          ALTER TABLE \`bodegas\` DROP COLUMN \`oficinaId\`
+        `);
+        console.log('✅ Columna oficinaId eliminada\n');
+      } catch (error) {
+        console.warn('⚠️  No se pudo eliminar columna oficinaId:', error.message);
+      }
+    } else if (!hasSedeId) {
+      // Si no existe oficinaId pero tampoco sedeId, agregar sedeId directamente
+      console.log('📝 Agregando columna sedeId a bodegas...');
+      await connection.query(`
+        ALTER TABLE \`bodegas\` 
+        ADD COLUMN \`sedeId\` INT NOT NULL AFTER \`bodegaEstado\`
+      `);
+      console.log('✅ Columna sedeId agregada\n');
+    } else {
+      console.log('✅ Migración de oficinaId a sedeId ya completada\n');
+    }
+
+    // Asegurar foreign key de sedeId
+    if (hasSedeId || !hasOficinaId) {
+      try {
+        const [fkSedeExists] = await connection.query(`
+          SELECT CONSTRAINT_NAME 
+          FROM INFORMATION_SCHEMA.KEY_COLUMN_USAGE 
+          WHERE TABLE_SCHEMA = DATABASE()
+            AND TABLE_NAME = 'bodegas'
+            AND COLUMN_NAME = 'sedeId'
+            AND CONSTRAINT_NAME IS NOT NULL
+          LIMIT 1
+        `);
+
+        if (!fkSedeExists || fkSedeExists.length === 0) {
+          await connection.query(`
+            ALTER TABLE \`bodegas\` 
+            ADD CONSTRAINT \`fk_bodegas_sede\` 
+            FOREIGN KEY (\`sedeId\`) 
+            REFERENCES \`sedes\` (\`sedeId\`) 
+            ON DELETE RESTRICT 
+            ON UPDATE CASCADE
+          `);
+          console.log('✅ Foreign key de sedeId agregada\n');
+        }
+      } catch (error) {
+        console.warn('⚠️  No se pudo agregar FK de sedeId:', error.message);
+      }
+    }
+
+    // 8. Verificar y crear tabla clasificaciones si falta
     console.log('📝 Verificando tabla clasificaciones...');
     const [clasificacionesTables] = await connection.query(`
       SELECT TABLE_NAME 
@@ -250,7 +428,7 @@ async function addMissingColumns() {
       console.log('✅ Tabla clasificaciones ya existe\n');
     }
 
-    // 8. Verificar y crear tabla asignaciones_tecnicos si falta
+    // 9. Verificar y crear tabla asignaciones_tecnicos si falta
     console.log('📝 Verificando tabla asignaciones_tecnicos...');
     const [asignacionesTecnicosTables] = await connection.query(`
       SELECT TABLE_NAME 
@@ -324,7 +502,7 @@ async function addMissingColumns() {
       console.log('✅ Tabla asignaciones_tecnicos ya existe\n');
     }
 
-    // 9. Verificar y crear tabla inventario_tecnicos si falta
+    // 10. Verificar y crear tabla inventario_tecnicos si falta
     console.log('📝 Verificando tabla inventario_tecnicos...');
     const [inventarioTecnicosTables] = await connection.query(`
       SELECT TABLE_NAME 
@@ -379,7 +557,7 @@ async function addMissingColumns() {
       console.log('✅ Tabla inventario_tecnicos ya existe\n');
     }
 
-    // 10. Verificar y crear tabla instalaciones_materiales si falta
+    // 11. Verificar y crear tabla instalaciones_materiales si falta
     console.log('📝 Verificando tabla instalaciones_materiales...');
     const [instalacionesMaterialesTables] = await connection.query(`
       SELECT TABLE_NAME 
@@ -436,7 +614,7 @@ async function addMissingColumns() {
       console.log('✅ Tabla instalaciones_materiales ya existe\n');
     }
 
-    // 11. Verificar y crear tabla numeros_medidor si falta
+    // 12. Verificar y crear tabla numeros_medidor si falta
     console.log('📝 Verificando tabla numeros_medidor...');
     const [tables] = await connection.query(`
       SELECT TABLE_NAME 
@@ -501,7 +679,179 @@ async function addMissingColumns() {
       console.log('✅ Tabla numeros_medidor ya existe\n');
     }
 
-    console.log('✅ Todas las columnas y tablas críticas han sido verificadas/agregadas\n');
+    // ============================================
+    // 13. TIPOS DE DOCUMENTOS DE IDENTIDAD
+    // ============================================
+    console.log('📝 Verificando tabla tipos_documentos_identidad...');
+    const [tiposDocTable] = await connection.query(`
+      SELECT TABLE_NAME 
+      FROM INFORMATION_SCHEMA.TABLES 
+      WHERE TABLE_SCHEMA = DATABASE()
+        AND TABLE_NAME = 'tipos_documentos_identidad'
+    `);
+
+    if (tiposDocTable.length === 0) {
+      console.log('📝 Creando tabla tipos_documentos_identidad...');
+      await connection.query(`
+        CREATE TABLE \`tipos_documentos_identidad\` (
+          \`tipoDocumentoId\` INT NOT NULL AUTO_INCREMENT,
+          \`tipoDocumentoCodigo\` VARCHAR(10) NOT NULL,
+          \`tipoDocumentoNombre\` VARCHAR(100) NOT NULL,
+          \`tipoDocumentoDescripcion\` TEXT NULL,
+          \`tipoDocumentoEstado\` TINYINT(1) NOT NULL DEFAULT 1,
+          \`fechaCreacion\` DATETIME(6) NOT NULL DEFAULT CURRENT_TIMESTAMP(6),
+          \`fechaActualizacion\` DATETIME(6) NOT NULL DEFAULT CURRENT_TIMESTAMP(6) ON UPDATE CURRENT_TIMESTAMP(6),
+          PRIMARY KEY (\`tipoDocumentoId\`),
+          UNIQUE INDEX \`IDX_tipoDocumentoCodigo\` (\`tipoDocumentoCodigo\`),
+          INDEX \`IDX_tipoDocumentoEstado\` (\`tipoDocumentoEstado\`)
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
+      `);
+      console.log('✅ Tabla tipos_documentos_identidad creada\n');
+    } else {
+      console.log('✅ Tabla tipos_documentos_identidad ya existe\n');
+    }
+
+    // Insertar tipos de documentos
+    console.log('📝 Insertando tipos de documentos de identidad...');
+    const tiposDocumentos = [
+      { codigo: 'CC', nombre: 'Cédula de Ciudadanía', descripcion: 'Documento de identidad para ciudadanos colombianos mayores de edad' },
+      { codigo: 'CE', nombre: 'Cédula de Extranjería', descripcion: 'Documento de identidad para extranjeros residentes en Colombia' },
+      { codigo: 'NUIP', nombre: 'Número Único de Identificación Personal', descripcion: 'Número único de identificación personal' },
+      { codigo: 'SIC', nombre: 'SIC', descripcion: 'Sistema de Identificación de Clientes' },
+      { codigo: 'CI', nombre: 'Certificado Instalador', descripcion: 'Certificado de instalador para técnicos (alfanumérico)' },
+      { codigo: 'CS', nombre: 'Certificado Soldador', descripcion: 'Certificado de soldador para personal especializado en soldadura (alfanumérico)' },
+    ];
+
+    for (const tipo of tiposDocumentos) {
+      try {
+        await connection.query(`
+          INSERT INTO \`tipos_documentos_identidad\` 
+            (\`tipoDocumentoCodigo\`, \`tipoDocumentoNombre\`, \`tipoDocumentoDescripcion\`, \`tipoDocumentoEstado\`)
+          VALUES (?, ?, ?, 1)
+          ON DUPLICATE KEY UPDATE
+            \`tipoDocumentoNombre\` = VALUES(\`tipoDocumentoNombre\`),
+            \`tipoDocumentoDescripcion\` = VALUES(\`tipoDocumentoDescripcion\`),
+            \`tipoDocumentoEstado\` = 1,
+            \`fechaActualizacion\` = NOW()
+        `, [tipo.codigo, tipo.nombre, tipo.descripcion]);
+      } catch (error) {
+        console.warn(`⚠️  Error al insertar tipo ${tipo.codigo}:`, error.message);
+      }
+    }
+    console.log(`✅ ${tiposDocumentos.length} tipos de documentos procesados\n`);
+
+    // ============================================
+    // 14. ROLES DE USUARIO
+    // ============================================
+    console.log('📝 Verificando y actualizando roles...');
+    
+    // Verificar si el enum incluye los nuevos valores
+    const [columnInfo] = await connection.query(`
+      SELECT COLUMN_TYPE 
+      FROM INFORMATION_SCHEMA.COLUMNS 
+      WHERE TABLE_SCHEMA = DATABASE()
+        AND TABLE_NAME = 'roles'
+        AND COLUMN_NAME = 'rolTipo'
+    `);
+
+    if (columnInfo.length > 0) {
+      const enumValues = columnInfo[0].COLUMN_TYPE;
+      const missingValues = [];
+      const requiredValues = ['superadmin', 'admin', 'administrador', 'tecnico', 'soldador', 'almacenista', 'bodega', 'bodega-internas', 'bodega-redes'];
+      
+      for (const val of requiredValues) {
+        if (!enumValues.includes(`'${val}'`)) {
+          missingValues.push(val);
+        }
+      }
+
+      if (missingValues.length > 0) {
+        console.log(`📝 Agregando valores faltantes al enum rolTipo: ${missingValues.join(', ')}`);
+        try {
+          await connection.query(`
+            ALTER TABLE \`roles\` 
+            MODIFY COLUMN \`rolTipo\` ENUM(
+              'superadmin', 'admin', 'administrador', 'tecnico', 'soldador', 
+              'almacenista', 'bodega', 'bodega-internas', 'bodega-redes',
+              'empleado', 'inventario', 'traslados', 'devoluciones', 
+              'salidas', 'entradas', 'instalaciones'
+            ) NOT NULL
+          `);
+          console.log('✅ Enum rolTipo actualizado\n');
+        } catch (error) {
+          console.warn('⚠️  No se pudo actualizar el enum:', error.message);
+        }
+      }
+    }
+
+    // Insertar roles
+    console.log('📝 Insertando roles...');
+    const roles = [
+      { nombre: 'Super Administrador', tipo: 'superadmin', descripcion: 'Administrador con todos los permisos incluyendo cambio de roles' },
+      { nombre: 'Administrador', tipo: 'admin', descripcion: 'Administrador de oficina con permisos completos excepto cambio de roles' },
+      { nombre: 'Administrador - Centro Operativo', tipo: 'administrador', descripcion: 'Usuario con acceso de solo lectura a la información del centro operativo. No puede editar ni eliminar datos.' },
+      { nombre: 'Técnico', tipo: 'tecnico', descripcion: 'Usuario técnico con acceso a aplicación móvil y instalaciones asignadas' },
+      { nombre: 'Soldador', tipo: 'soldador', descripcion: 'Rol para personal de campo especializado en soldadura. Acceso principalmente a la aplicación móvil.' },
+      { nombre: 'Almacenista', tipo: 'almacenista', descripcion: 'Puede gestionar entradas, salidas, asignaciones, devoluciones y traslados. Puede ver instalaciones y aprobar material, pero no puede editar, eliminar ni cambiar estado de instalaciones.' },
+      { nombre: 'Bodega Internas', tipo: 'bodega-internas', descripcion: 'Puede gestionar instalaciones, proyectos, usuarios y tipos de instalaciones. No puede asignar material. La información no se cruza con Bodega Redes.' },
+      { nombre: 'Bodega Redes', tipo: 'bodega-redes', descripcion: 'Puede gestionar instalaciones, proyectos, usuarios y tipos de instalaciones. No puede asignar material. La información no se cruza con Bodega Internas.' },
+    ];
+
+    for (const rol of roles) {
+      try {
+        await connection.query(`
+          INSERT INTO \`roles\` 
+            (\`rolNombre\`, \`rolTipo\`, \`rolDescripcion\`, \`rolEstado\`, \`fechaCreacion\`, \`fechaActualizacion\`)
+          VALUES (?, ?, ?, 1, NOW(), NOW())
+          ON DUPLICATE KEY UPDATE
+            \`rolDescripcion\` = VALUES(\`rolDescripcion\`),
+            \`rolEstado\` = 1,
+            \`fechaActualizacion\` = NOW()
+        `, [rol.nombre, rol.tipo, rol.descripcion]);
+      } catch (error) {
+        console.warn(`⚠️  Error al insertar rol ${rol.nombre}:`, error.message);
+      }
+    }
+    console.log(`✅ ${roles.length} roles procesados\n`);
+
+    // ============================================
+    // 15. AGREGAR tipoDocumentoId A USUARIOS
+    // ============================================
+    console.log('📝 Verificando columna tipoDocumentoId en usuarios...');
+    const [tipoDocIdColumn] = await connection.query(`
+      SELECT COLUMN_NAME 
+      FROM INFORMATION_SCHEMA.COLUMNS 
+      WHERE TABLE_SCHEMA = DATABASE()
+        AND TABLE_NAME = 'usuarios'
+        AND COLUMN_NAME = 'tipoDocumentoId'
+    `);
+
+    if (tipoDocIdColumn.length === 0) {
+      console.log('📝 Agregando columna tipoDocumentoId a usuarios...');
+      await connection.query(`
+        ALTER TABLE \`usuarios\` 
+        ADD COLUMN \`tipoDocumentoId\` INT NULL AFTER \`usuarioDocumento\`
+      `);
+      
+      // Agregar FK a tipos_documentos_identidad
+      try {
+        await connection.query(`
+          ALTER TABLE \`usuarios\` 
+          ADD CONSTRAINT \`FK_usuarios_tipo_documento\` 
+          FOREIGN KEY (\`tipoDocumentoId\`) 
+          REFERENCES \`tipos_documentos_identidad\`(\`tipoDocumentoId\`) 
+          ON DELETE SET NULL
+        `);
+        console.log('✅ Columna tipoDocumentoId y FK agregadas a usuarios\n');
+      } catch (error) {
+        console.warn('⚠️  No se pudo agregar FK a tipos_documentos_identidad:', error.message);
+        console.log('✅ Columna tipoDocumentoId agregada (sin FK)\n');
+      }
+    } else {
+      console.log('✅ Columna tipoDocumentoId ya existe en usuarios\n');
+    }
+
+    console.log('✅ Todas las columnas, tablas y datos iniciales han sido verificados/agregados\n');
 
   } catch (error) {
     console.error('❌ Error ejecutando el script:');

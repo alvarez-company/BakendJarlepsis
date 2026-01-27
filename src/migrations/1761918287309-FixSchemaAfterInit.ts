@@ -84,42 +84,78 @@ export class FixSchemaAfterInit1761918287309 implements MigrationInterface {
     
     if (!sedeIdColumn) {
       if (oficinaIdColumn) {
-        // Si existe oficinaId, agregar sedeId y migrar datos
+        // Si existe oficinaId, agregar sedeId (las oficinas ya no existen, no migramos datos)
         await queryRunner.query(`
           ALTER TABLE \`bodegas\` 
           ADD COLUMN \`sedeId\` INT NULL AFTER \`oficinaId\`;
         `);
         
-        // Intentar migrar datos desde oficinas si existe la tabla y hay datos
+        // NO migramos datos desde oficinas porque esa tabla ya no existe
+        // Las bodegas deben tener sedeId asignado manualmente
+        // NO hacemos sedeId NOT NULL automáticamente porque las bodegas necesitan sedeId asignado manualmente
+        
+        // Eliminar foreign key constraint de oficinaId si existe
         try {
-          const hasData = await queryRunner.query(`
-            SELECT COUNT(*) as count FROM \`bodegas\`;
+          const fkConstraints = await queryRunner.query(`
+            SELECT CONSTRAINT_NAME 
+            FROM INFORMATION_SCHEMA.KEY_COLUMN_USAGE 
+            WHERE TABLE_SCHEMA = DATABASE()
+              AND TABLE_NAME = 'bodegas'
+              AND COLUMN_NAME = 'oficinaId'
+              AND CONSTRAINT_NAME IS NOT NULL
+            LIMIT 1;
           `);
           
-          if (hasData && hasData[0] && hasData[0].count > 0) {
-            // Solo migrar si hay datos
+          if (fkConstraints && fkConstraints.length > 0) {
+            const fkName = fkConstraints[0].CONSTRAINT_NAME;
             await queryRunner.query(`
-              UPDATE \`bodegas\` b
-              INNER JOIN \`oficinas\` o ON b.oficinaId = o.oficinaId
-              SET b.sedeId = o.sedeId
-              WHERE b.sedeId IS NULL;
+              ALTER TABLE \`bodegas\` DROP FOREIGN KEY \`${fkName}\`;
             `);
           }
         } catch (error) {
-          // Si no existe la tabla oficinas o hay error, continuar
+          // Si no existe la constraint, continuar
         }
         
-        // Hacer sedeId NOT NULL después de migrar (o si no hay datos)
-        await queryRunner.query(`
-          ALTER TABLE \`bodegas\` 
-          MODIFY COLUMN \`sedeId\` INT NOT NULL;
-        `);
+        // Eliminar columna oficinaId
+        try {
+          await queryRunner.query(`
+            ALTER TABLE \`bodegas\` DROP COLUMN \`oficinaId\`;
+          `);
+        } catch (error) {
+          // Si no existe la columna, continuar
+        }
       } else {
         // Si no existe oficinaId, agregar sedeId directamente como NOT NULL
         await queryRunner.query(`
           ALTER TABLE \`bodegas\` 
           ADD COLUMN \`sedeId\` INT NOT NULL AFTER \`bodegaEstado\`;
         `);
+      }
+      
+      // Asegurar que existe foreign key de sedeId
+      try {
+        const fkSedeExists = await queryRunner.query(`
+          SELECT CONSTRAINT_NAME 
+          FROM INFORMATION_SCHEMA.KEY_COLUMN_USAGE 
+          WHERE TABLE_SCHEMA = DATABASE()
+            AND TABLE_NAME = 'bodegas'
+            AND COLUMN_NAME = 'sedeId'
+            AND CONSTRAINT_NAME IS NOT NULL
+          LIMIT 1;
+        `);
+        
+        if (!fkSedeExists || fkSedeExists.length === 0) {
+          await queryRunner.query(`
+            ALTER TABLE \`bodegas\` 
+            ADD CONSTRAINT \`fk_bodegas_sede\` 
+            FOREIGN KEY (\`sedeId\`) 
+            REFERENCES \`sedes\` (\`sedeId\`) 
+            ON DELETE RESTRICT 
+            ON UPDATE CASCADE;
+          `);
+        }
+      } catch (error) {
+        // Si ya existe o hay error, continuar
       }
     }
 

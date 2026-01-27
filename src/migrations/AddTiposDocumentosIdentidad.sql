@@ -15,18 +15,16 @@ CREATE TABLE IF NOT EXISTS `tipos_documentos_identidad` (
   INDEX `IDX_tipoDocumentoEstado` (`tipoDocumentoEstado`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
--- Insertar tipos de documentos de identidad colombianos
+-- Insertar tipos de documentos de identidad
 INSERT IGNORE INTO `tipos_documentos_identidad` 
   (`tipoDocumentoCodigo`, `tipoDocumentoNombre`, `tipoDocumentoDescripcion`, `tipoDocumentoEstado`) 
 VALUES
   ('CC', 'Cédula de Ciudadanía', 'Documento de identidad para ciudadanos colombianos mayores de edad', 1),
   ('CE', 'Cédula de Extranjería', 'Documento de identidad para extranjeros residentes en Colombia', 1),
-  ('TI', 'Tarjeta de Identidad', 'Documento de identidad para menores de edad entre 7 y 17 años', 1),
-  ('RC', 'Registro Civil', 'Documento de identidad para menores de 7 años', 1),
-  ('PA', 'Pasaporte', 'Documento de identidad para viajes internacionales', 1),
-  ('NIT', 'Número de Identificación Tributaria', 'Número de identificación tributaria para personas jurídicas', 1),
   ('NUIP', 'Número Único de Identificación Personal', 'Número único de identificación personal', 1),
-  ('SIC', 'SIC', 'Sistema de Identificación de Clientes', 1);
+  ('SIC', 'SIC', 'Sistema de Identificación de Clientes', 1),
+  ('CI', 'Certificado Instalador', 'Certificado de instalador para técnicos (alfanumérico)', 1),
+  ('CS', 'Certificado Soldador', 'Certificado de soldador para personal especializado en soldadura (alfanumérico)', 1);
 
 -- Agregar columna tipoDocumentoId a la tabla usuarios
 SET @col_exists_usuarios = (SELECT COUNT(*) 

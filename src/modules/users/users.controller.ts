@@ -31,10 +31,11 @@ export class UsersController {
   constructor(private readonly usersService: UsersService) {}
 
   @Post()
-  @Roles('superadmin', 'admin', 'bodega-internas', 'bodega-redes')
+  @Roles('superadmin', 'admin', 'administrador')
   @ApiOperation({ summary: 'Create a new user' })
   create(@Body() createUserDto: CreateUserDto, @Request() req) {
-    return this.usersService.create(createUserDto, req.user.usuarioId);
+    const rolTipo = req.user.usuarioRol?.rolTipo || req.user.role;
+    return this.usersService.create(createUserDto, req.user.usuarioId, rolTipo);
   }
 
   // Endpoints para el usuario actual (sin restricción de roles) - DEBEN IR ANTES de las rutas genéricas
