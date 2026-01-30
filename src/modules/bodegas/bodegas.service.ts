@@ -28,7 +28,31 @@ export class BodegasService {
     private rolesService: RolesService,
   ) {}
 
-  async create(createBodegaDto: CreateBodegaDto): Promise<Bodega> {
+  async create(createBodegaDto: CreateBodegaDto, user?: any): Promise<Bodega> {
+    const tipo = (createBodegaDto.bodegaTipo || '').toLowerCase();
+    if (tipo !== 'internas' && tipo !== 'redes') {
+      throw new BadRequestException(
+        'Al crear una bodega debe seleccionar el tipo: internas o redes.',
+      );
+    }
+    if (user) {
+      const rolTipo = user.usuarioRol?.rolTipo || user.role;
+      if (rolTipo === 'admin-internas') {
+        if (tipo !== 'internas') {
+          throw new BadRequestException('Solo puedes crear bodegas de tipo internas.');
+        }
+        if (createBodegaDto.sedeId !== user.usuarioSede) {
+          throw new BadRequestException('Solo puedes crear bodegas en tu centro operativo.');
+        }
+      } else if (rolTipo === 'admin-redes') {
+        if (tipo !== 'redes') {
+          throw new BadRequestException('Solo puedes crear bodegas de tipo redes.');
+        }
+        if (createBodegaDto.sedeId !== user.usuarioSede) {
+          throw new BadRequestException('Solo puedes crear bodegas en tu centro operativo.');
+        }
+      }
+    }
     const bodega = this.bodegasRepository.create(createBodegaDto);
     const savedBodega = await this.bodegasRepository.save(bodega);
 
@@ -89,13 +113,13 @@ export class BodegasService {
       // Obtener el rol según el tipo de bodega
       const tipoBodega = bodega.bodegaTipo; // 'internas' | 'redes' | null
       let rolTipo = 'bodega-internas'; // Por defecto
-      
+
       if (tipoBodega === 'redes') {
         rolTipo = 'bodega-redes';
       } else if (tipoBodega === 'internas') {
         rolTipo = 'bodega-internas';
       }
-      
+
       const rolBodega = await this.rolesService.findByTipo(rolTipo);
       if (!rolBodega) {
         throw new Error(`Rol ${rolTipo} no encontrado`);
@@ -146,6 +170,20 @@ export class BodegasService {
       return allBodegas.filter((bodega) => bodega.sedeId === user.usuarioSede);
     }
 
+    // Administrador de Internas - solo bodegas tipo internas de su sede
+    if (user?.usuarioRol?.rolTipo === 'admin-internas' || user?.role === 'admin-internas') {
+      return allBodegas.filter(
+        (bodega) => bodega.sedeId === user.usuarioSede && bodega.bodegaTipo === 'internas',
+      );
+    }
+
+    // Administrador de Redes - solo bodegas tipo redes de su sede
+    if (user?.usuarioRol?.rolTipo === 'admin-redes' || user?.role === 'admin-redes') {
+      return allBodegas.filter(
+        (bodega) => bodega.sedeId === user.usuarioSede && bodega.bodegaTipo === 'redes',
+      );
+    }
+
     // Administrador (Centro Operativo) - solo lectura, ve todas las bodegas
     if (user?.usuarioRol?.rolTipo === 'administrador' || user?.role === 'administrador') {
       return allBodegas;
@@ -183,7 +221,7 @@ export class BodegasService {
     return allBodegas;
   }
 
-  async findOne(id: number): Promise<Bodega> {
+  async findOne(id: number, user?: any): Promise<Bodega> {
     const bodega = await this.bodegasRepository.findOne({
       where: { bodegaId: id },
       relations: ['sede', 'usuarios'],
@@ -191,24 +229,59 @@ export class BodegasService {
     if (!bodega) {
       throw new NotFoundException(`Bodega with ID ${id} not found`);
     }
+    if (user) {
+      const rolTipo = user.usuarioRol?.rolTipo || user.role;
+      if (rolTipo === 'admin-internas') {
+        if (bodega.sedeId !== user.usuarioSede || bodega.bodegaTipo !== 'internas') {
+          throw new NotFoundException(`Bodega with ID ${id} not found`);
+        }
+      } else if (rolTipo === 'admin-redes') {
+        if (bodega.sedeId !== user.usuarioSede || bodega.bodegaTipo !== 'redes') {
+          throw new NotFoundException(`Bodega with ID ${id} not found`);
+        }
+      }
+    }
     return bodega;
   }
 
   async update(id: number, updateBodegaDto: UpdateBodegaDto, user?: any): Promise<Bodega> {
-    const bodega = await this.findOne(id);
+    const bodega = await this.findOne(id, user);
 
     // Validar permisos
     if (user) {
       const rolTipo = user.usuarioRol?.rolTipo || user.role;
 
-      // Solo superadmin y admin pueden editar bodegas
-      if (rolTipo !== 'superadmin' && rolTipo !== 'admin') {
+      // Solo superadmin, admin, admin-internas y admin-redes pueden editar bodegas
+      if (
+        rolTipo !== 'superadmin' &&
+        rolTipo !== 'admin' &&
+        rolTipo !== 'admin-internas' &&
+        rolTipo !== 'admin-redes'
+      ) {
         throw new BadRequestException('No tienes permisos para editar bodegas');
       }
 
       // Admin solo puede editar bodegas de su sede
       if (rolTipo === 'admin' && bodega.sedeId !== user.usuarioSede) {
         throw new BadRequestException('No tienes permisos para editar bodegas de otras sedes');
+      }
+
+      // Administrador de Internas solo puede editar bodegas tipo internas de su sede
+      if (rolTipo === 'admin-internas') {
+        if (bodega.sedeId !== user.usuarioSede || bodega.bodegaTipo !== 'internas') {
+          throw new BadRequestException(
+            'Solo puedes editar bodegas de tipo internas de tu centro operativo',
+          );
+        }
+      }
+
+      // Administrador de Redes solo puede editar bodegas tipo redes de su sede
+      if (rolTipo === 'admin-redes') {
+        if (bodega.sedeId !== user.usuarioSede || bodega.bodegaTipo !== 'redes') {
+          throw new BadRequestException(
+            'Solo puedes editar bodegas de tipo redes de tu centro operativo',
+          );
+        }
       }
     }
 
@@ -233,7 +306,7 @@ export class BodegasService {
   }
 
   async remove(id: number, user?: any): Promise<void> {
-    const bodega = await this.findOne(id);
+    const bodega = await this.findOne(id, user);
 
     // Validar permisos - solo superadmin puede eliminar
     if (user) {

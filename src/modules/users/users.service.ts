@@ -65,17 +65,24 @@ export class UsersService {
           'tecnico',
           'soldador',
           'almacenista',
+          'admin-internas',
+          'admin-redes',
           'bodega-internas',
           'bodega-redes',
         ];
 
-        if (rolCreador === 'admin' || rolCreador === 'administrador') {
+        if (
+          rolCreador === 'admin' ||
+          rolCreador === 'administrador' ||
+          rolCreador === 'admin-internas' ||
+          rolCreador === 'admin-redes'
+        ) {
           const rolObjetivoEntity = await this.rolesService.findOne(createUserDto.usuarioRolId);
           const rolObjetivo = (rolObjetivoEntity?.rolTipo || '').toLowerCase();
 
           if (!rolesPermitidosParaAdministradores.includes(rolObjetivo)) {
             throw new BadRequestException(
-              'No tienes permiso para crear usuarios con ese rol. Solo puedes crear: Técnico, Soldador, Almacenista, Bodega Internas y Bodega Redes.',
+              'No tienes permiso para crear usuarios con ese rol. Solo puedes crear: Técnico, Soldador, Almacenista, Administrador de Internas, Administrador de Redes, Bodega Internas y Bodega Redes.',
             );
           }
         }
@@ -104,6 +111,8 @@ export class UsersService {
       const rolesRequierenCentroOperativo = [
         'admin',
         'administrador',
+        'admin-internas',
+        'admin-redes',
         'almacenista',
         'tecnico',
         'soldador',
@@ -333,6 +342,8 @@ export class UsersService {
       const rolesRequierenCentroOperativo = [
         'admin',
         'administrador',
+        'admin-internas',
+        'admin-redes',
         'almacenista',
         'tecnico',
         'soldador',

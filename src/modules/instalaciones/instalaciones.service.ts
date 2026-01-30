@@ -7,7 +7,7 @@ import {
   forwardRef,
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Repository, In } from 'typeorm';
+import { Repository } from 'typeorm';
 import { Instalacion, EstadoInstalacion } from './instalacion.entity';
 import { CreateInstalacionDto } from './dto/create-instalacion.dto';
 import { UpdateInstalacionDto } from './dto/update-instalacion.dto';
@@ -108,7 +108,12 @@ export class InstalacionesService {
     if (user) {
       const userRole = user?.usuarioRol?.rolTipo || user?.role;
 
-      if (userRole === 'bodega-internas' || userRole === 'bodega-redes') {
+      if (
+        userRole === 'bodega-internas' ||
+        userRole === 'bodega-redes' ||
+        userRole === 'admin-internas' ||
+        userRole === 'admin-redes'
+      ) {
         // Cargar el tipo de instalación para validar
         const tipoInstalacionRaw = await this.instalacionesRepository.query(
           `SELECT tipoInstalacionId, tipoInstalacionNombre 
@@ -123,16 +128,18 @@ export class InstalacionesService {
 
         const tipoNombre = tipoInstalacionRaw[0].tipoInstalacionNombre?.toLowerCase() || '';
 
-        if (userRole === 'bodega-internas' && !tipoNombre.includes('internas')) {
-          throw new BadRequestException(
-            'El rol "Bodega Internas" solo puede crear instalaciones de tipo "Internas"',
-          );
+        if (
+          (userRole === 'bodega-internas' || userRole === 'admin-internas') &&
+          !tipoNombre.includes('internas')
+        ) {
+          throw new BadRequestException('Solo puede crear instalaciones de tipo "Internas".');
         }
 
-        if (userRole === 'bodega-redes' && !tipoNombre.includes('redes')) {
-          throw new BadRequestException(
-            'El rol "Bodega Redes" solo puede crear instalaciones de tipo "Redes"',
-          );
+        if (
+          (userRole === 'bodega-redes' || userRole === 'admin-redes') &&
+          !tipoNombre.includes('redes')
+        ) {
+          throw new BadRequestException('Solo puede crear instalaciones de tipo "Redes".');
         }
       }
     }
@@ -387,7 +394,7 @@ export class InstalacionesService {
         try {
           const bodegasRaw = await this.instalacionesRepository.query(
             `SELECT bodegaId, bodegaNombre, bodegaDescripcion, bodegaUbicacion, 
-                  bodegaTelefono, bodegaCorreo, sedeId, bodegaEstado
+                  bodegaTelefono, bodegaCorreo, sedeId, bodegaEstado, bodegaTipo
            FROM bodegas 
            WHERE bodegaId IN (${bodegaIds.map(() => '?').join(',')})`,
             bodegaIds,
@@ -520,16 +527,26 @@ export class InstalacionesService {
         return allInstalaciones;
       }
 
-      // Bodega Internas solo ve instalaciones de tipo "internas"
-      if (user?.usuarioRol?.rolTipo === 'bodega-internas' || user?.role === 'bodega-internas') {
+      // Bodega Internas y Admin Internas solo ven instalaciones de tipo "internas"
+      if (
+        user?.usuarioRol?.rolTipo === 'bodega-internas' ||
+        user?.role === 'bodega-internas' ||
+        user?.usuarioRol?.rolTipo === 'admin-internas' ||
+        user?.role === 'admin-internas'
+      ) {
         return allInstalaciones.filter((inst) => {
           const tipoNombre = inst.tipoInstalacion?.tipoInstalacionNombre?.toLowerCase() || '';
           return tipoNombre.includes('internas');
         });
       }
 
-      // Bodega Redes solo ve instalaciones de tipo "redes"
-      if (user?.usuarioRol?.rolTipo === 'bodega-redes' || user?.role === 'bodega-redes') {
+      // Bodega Redes y Admin Redes solo ven instalaciones de tipo "redes"
+      if (
+        user?.usuarioRol?.rolTipo === 'bodega-redes' ||
+        user?.role === 'bodega-redes' ||
+        user?.usuarioRol?.rolTipo === 'admin-redes' ||
+        user?.role === 'admin-redes'
+      ) {
         return allInstalaciones.filter((inst) => {
           const tipoNombre = inst.tipoInstalacion?.tipoInstalacionNombre?.toLowerCase() || '';
           return tipoNombre.includes('redes');
@@ -732,8 +749,8 @@ export class InstalacionesService {
         throw new BadRequestException('No tienes permisos para editar instalaciones');
       }
 
-      // Bodega Internas solo puede editar instalaciones de tipo "internas"
-      if (rolTipo === 'bodega-internas') {
+      // Bodega Internas y Admin Internas solo pueden editar instalaciones de tipo "internas"
+      if (rolTipo === 'bodega-internas' || rolTipo === 'admin-internas') {
         const tipoNombre = instalacion.tipoInstalacion?.tipoInstalacionNombre?.toLowerCase() || '';
         if (!tipoNombre.includes('internas')) {
           throw new BadRequestException(
@@ -742,8 +759,8 @@ export class InstalacionesService {
         }
       }
 
-      // Bodega Redes solo puede editar instalaciones de tipo "redes"
-      if (rolTipo === 'bodega-redes') {
+      // Bodega Redes y Admin Redes solo pueden editar instalaciones de tipo "redes"
+      if (rolTipo === 'bodega-redes' || rolTipo === 'admin-redes') {
         const tipoNombre = instalacion.tipoInstalacion?.tipoInstalacionNombre?.toLowerCase() || '';
         if (!tipoNombre.includes('redes')) {
           throw new BadRequestException(
@@ -792,7 +809,7 @@ export class InstalacionesService {
     }
 
     Object.assign(instalacion, instalacionData);
-    const savedInstalacion = await this.instalacionesRepository.save(instalacion);
+    const _savedInstalacion = await this.instalacionesRepository.save(instalacion);
 
     // Verificar si los materiales cambiaron (para actualizar salidas)
     const materialesCambiaron =
@@ -893,8 +910,8 @@ export class InstalacionesService {
         throw new BadRequestException('No tienes permisos para eliminar instalaciones');
       }
 
-      // Bodega Internas solo puede eliminar instalaciones de tipo "internas"
-      if (rolTipo === 'bodega-internas') {
+      // Bodega Internas y Admin Internas solo pueden eliminar instalaciones de tipo "internas"
+      if (rolTipo === 'bodega-internas' || rolTipo === 'admin-internas') {
         const tipoNombre = instalacion.tipoInstalacion?.tipoInstalacionNombre?.toLowerCase() || '';
         if (!tipoNombre.includes('internas')) {
           throw new BadRequestException(
@@ -903,8 +920,8 @@ export class InstalacionesService {
         }
       }
 
-      // Bodega Redes solo puede eliminar instalaciones de tipo "redes"
-      if (rolTipo === 'bodega-redes') {
+      // Bodega Redes y Admin Redes solo pueden eliminar instalaciones de tipo "redes"
+      if (rolTipo === 'bodega-redes' || rolTipo === 'admin-redes') {
         const tipoNombre = instalacion.tipoInstalacion?.tipoInstalacionNombre?.toLowerCase() || '';
         if (!tipoNombre.includes('redes')) {
           throw new BadRequestException(

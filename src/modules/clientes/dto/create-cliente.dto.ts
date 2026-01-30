@@ -1,6 +1,5 @@
 import { ApiProperty } from '@nestjs/swagger';
-import { IsString, IsNumber, IsEmail, IsOptional, IsEnum } from 'class-validator';
-import { EstadoCliente } from '../cliente.entity';
+import { IsString, IsNumber, IsOptional } from 'class-validator';
 
 export class CreateClienteDto {
   @ApiProperty({

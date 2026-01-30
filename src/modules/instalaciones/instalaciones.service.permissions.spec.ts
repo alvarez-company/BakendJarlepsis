@@ -1,6 +1,5 @@
 import { Test, TestingModule } from '@nestjs/testing';
 import { getRepositoryToken } from '@nestjs/typeorm';
-import { Repository } from 'typeorm';
 import { BadRequestException } from '@nestjs/common';
 import { InstalacionesService } from './instalaciones.service';
 import { Instalacion } from './instalacion.entity';
@@ -22,7 +21,7 @@ import { NumerosMedidorService } from '../numeros-medidor/numeros-medidor.servic
 
 describe('InstalacionesService - Permisos', () => {
   let service: InstalacionesService;
-  let usersService: UsersService;
+  let _usersService: UsersService;
 
   const mockRepository = {
     find: jest.fn(),
@@ -162,7 +161,7 @@ describe('InstalacionesService - Permisos', () => {
     }).compile();
 
     service = module.get<InstalacionesService>(InstalacionesService);
-    usersService = module.get<UsersService>(UsersService);
+    _usersService = module.get<UsersService>(UsersService);
   });
 
   afterEach(() => {

@@ -11,7 +11,7 @@ import { GruposService } from '../grupos/grupos.service';
 
 describe('MensajesService', () => {
   let service: MensajesService;
-  let repository: Repository<Mensaje>;
+  let _repository: Repository<Mensaje>;
 
   const mockRepository = {
     create: jest.fn(),
@@ -69,7 +69,7 @@ describe('MensajesService', () => {
     }).compile();
 
     service = module.get<MensajesService>(MensajesService);
-    repository = module.get<Repository<Mensaje>>(getRepositoryToken(Mensaje));
+    _repository = module.get<Repository<Mensaje>>(getRepositoryToken(Mensaje));
   });
 
   afterEach(() => {

@@ -34,7 +34,16 @@ export class InstalacionesController {
   ) {}
 
   @Post()
-  @Roles('superadmin', 'admin', 'tecnico', 'soldador', 'bodega-internas', 'bodega-redes')
+  @Roles(
+    'superadmin',
+    'admin',
+    'admin-internas',
+    'admin-redes',
+    'tecnico',
+    'soldador',
+    'bodega-internas',
+    'bodega-redes',
+  )
   @ApiOperation({ summary: 'Create a new instalacion' })
   create(@Body() createInstalacionDto: CreateInstalacionDto, @Request() req) {
     return this.instalacionesService.create(createInstalacionDto, req.user.usuarioId, req.user);
@@ -45,6 +54,8 @@ export class InstalacionesController {
     'superadmin',
     'admin',
     'administrador',
+    'admin-internas',
+    'admin-redes',
     'almacenista',
     'tecnico',
     'soldador',
@@ -68,6 +79,8 @@ export class InstalacionesController {
     'superadmin',
     'admin',
     'administrador',
+    'admin-internas',
+    'admin-redes',
     'almacenista',
     'tecnico',
     'soldador',
@@ -84,7 +97,16 @@ export class InstalacionesController {
   }
 
   @Patch(':id')
-  @Roles('superadmin', 'admin', 'tecnico', 'soldador', 'bodega-internas', 'bodega-redes')
+  @Roles(
+    'superadmin',
+    'admin',
+    'admin-internas',
+    'admin-redes',
+    'tecnico',
+    'soldador',
+    'bodega-internas',
+    'bodega-redes',
+  )
   @ApiOperation({ summary: 'Update an instalacion' })
   update(
     @Param('id') id: string,
@@ -107,7 +129,16 @@ export class InstalacionesController {
   }
 
   @Post(':id/actualizar-estado')
-  @Roles('superadmin', 'admin', 'tecnico', 'soldador', 'bodega-internas', 'bodega-redes')
+  @Roles(
+    'superadmin',
+    'admin',
+    'admin-internas',
+    'admin-redes',
+    'tecnico',
+    'soldador',
+    'bodega-internas',
+    'bodega-redes',
+  )
   @ApiOperation({ summary: 'Update instalacion status' })
   actualizarEstado(
     @Param('id') id: string,
@@ -127,6 +158,8 @@ export class InstalacionesController {
     'superadmin',
     'admin',
     'administrador',
+    'admin-internas',
+    'admin-redes',
     'almacenista',
     'tecnico',
     'soldador',
@@ -227,7 +260,7 @@ export class InstalacionesController {
             : 'Sin asignar';
 
         // Formatear materiales instalados si existen
-        let materialesStr = '-';
+        let _materialesStr = '-';
         if (i.materialesInstalados) {
           try {
             const materiales =
@@ -235,14 +268,14 @@ export class InstalacionesController {
                 ? JSON.parse(i.materialesInstalados)
                 : i.materialesInstalados;
             if (Array.isArray(materiales) && materiales.length > 0) {
-              materialesStr = materiales
+              _materialesStr = materiales
                 .map(
                   (m: any) => `${m.nombre || m.materialNombre || 'Material'} (${m.cantidad || 0})`,
                 )
                 .join('; ');
             }
           } catch (e) {
-            materialesStr = 'Error al parsear';
+            __materialesStr = 'Error al parsear';
           }
         }
 
@@ -313,6 +346,8 @@ export class InstalacionesController {
     'superadmin',
     'admin',
     'administrador',
+    'admin-internas',
+    'admin-redes',
     'almacenista',
     'tecnico',
     'soldador',
@@ -413,7 +448,7 @@ export class InstalacionesController {
             : 'Sin asignar';
 
         // Formatear materiales instalados si existen
-        let materialesStr = '-';
+        let _materialesStr = '-';
         if (i.materialesInstalados) {
           try {
             const materiales =
@@ -421,14 +456,14 @@ export class InstalacionesController {
                 ? JSON.parse(i.materialesInstalados)
                 : i.materialesInstalados;
             if (Array.isArray(materiales) && materiales.length > 0) {
-              materialesStr = materiales
+              _materialesStr = materiales
                 .map(
                   (m: any) => `${m.nombre || m.materialNombre || 'Material'} (${m.cantidad || 0})`,
                 )
                 .join('; ');
             }
           } catch (e) {
-            materialesStr = 'Error al parsear';
+            __materialesStr = 'Error al parsear';
           }
         }
 

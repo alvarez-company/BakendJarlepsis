@@ -43,6 +43,8 @@ export class MovimientosController {
     'superadmin',
     'admin',
     'administrador',
+    'admin-internas',
+    'admin-redes',
     'almacenista',
     'tecnico',
     'soldador',
@@ -62,7 +64,16 @@ export class MovimientosController {
   }
 
   @Get('codigo/:codigo')
-  @Roles('superadmin', 'admin', 'administrador', 'almacenista', 'tecnico', 'soldador')
+  @Roles(
+    'superadmin',
+    'admin',
+    'administrador',
+    'admin-internas',
+    'admin-redes',
+    'almacenista',
+    'tecnico',
+    'soldador',
+  )
   @ApiOperation({ summary: 'Get movimientos by código' })
   findByCodigo(@Param('codigo') codigo: string) {
     return this.movimientosService.findByCodigo(codigo);
@@ -73,6 +84,8 @@ export class MovimientosController {
     'superadmin',
     'admin',
     'administrador',
+    'admin-internas',
+    'admin-redes',
     'almacenista',
     'tecnico',
     'soldador',
@@ -85,17 +98,35 @@ export class MovimientosController {
   }
 
   @Get('bodega/:bodegaId/historial')
-  @Roles('superadmin', 'admin', 'administrador', 'almacenista', 'bodega-internas', 'bodega-redes')
+  @Roles(
+    'superadmin',
+    'admin',
+    'administrador',
+    'admin-internas',
+    'admin-redes',
+    'almacenista',
+    'bodega-internas',
+    'bodega-redes',
+  )
   @ApiOperation({ summary: 'Get stock history by bodega ID' })
-  findByBodega(@Param('bodegaId') bodegaId: string) {
-    return this.movimientosService.findByBodega(+bodegaId);
+  findByBodega(@Param('bodegaId') bodegaId: string, @Request() req?: any) {
+    return this.movimientosService.findByBodega(+bodegaId, req?.user);
   }
 
   @Get('sede/:sedeId/historial')
-  @Roles('superadmin', 'admin', 'administrador', 'almacenista', 'bodega-internas', 'bodega-redes')
+  @Roles(
+    'superadmin',
+    'admin',
+    'administrador',
+    'admin-internas',
+    'admin-redes',
+    'almacenista',
+    'bodega-internas',
+    'bodega-redes',
+  )
   @ApiOperation({ summary: 'Get stock history by sede ID' })
-  findBySede(@Param('sedeId') sedeId: string) {
-    return this.movimientosService.findBySede(+sedeId);
+  findBySede(@Param('sedeId') sedeId: string, @Request() req?: any) {
+    return this.movimientosService.findBySede(+sedeId, req?.user);
   }
 
   @Get('tecnico/:usuarioId/historial')
@@ -103,6 +134,8 @@ export class MovimientosController {
     'superadmin',
     'admin',
     'administrador',
+    'admin-internas',
+    'admin-redes',
     'almacenista',
     'tecnico',
     'soldador',
@@ -115,7 +148,16 @@ export class MovimientosController {
   }
 
   @Get('export/excel')
-  @Roles('superadmin', 'admin', 'administrador', 'almacenista', 'tecnico', 'soldador')
+  @Roles(
+    'superadmin',
+    'admin',
+    'administrador',
+    'admin-internas',
+    'admin-redes',
+    'almacenista',
+    'tecnico',
+    'soldador',
+  )
   @ApiOperation({ summary: 'Export movements to Excel' })
   @ApiQuery({ name: 'filters', required: false, type: String })
   @ApiQuery({ name: 'dateStart', required: false, type: String })
@@ -216,7 +258,16 @@ export class MovimientosController {
   }
 
   @Get('export/pdf')
-  @Roles('superadmin', 'admin', 'administrador', 'almacenista', 'tecnico', 'soldador')
+  @Roles(
+    'superadmin',
+    'admin',
+    'administrador',
+    'admin-internas',
+    'admin-redes',
+    'almacenista',
+    'tecnico',
+    'soldador',
+  )
   @ApiOperation({ summary: 'Export movements to PDF' })
   @ApiQuery({ name: 'filters', required: false, type: String })
   @ApiQuery({ name: 'dateStart', required: false, type: String })
@@ -314,10 +365,20 @@ export class MovimientosController {
   }
 
   @Get(':id')
-  @Roles('superadmin', 'admin', 'administrador', 'almacenista', 'tecnico')
+  @Roles(
+    'superadmin',
+    'admin',
+    'administrador',
+    'admin-internas',
+    'admin-redes',
+    'almacenista',
+    'tecnico',
+    'bodega-internas',
+    'bodega-redes',
+  )
   @ApiOperation({ summary: 'Get a movimiento by ID' })
-  findOne(@Param('id') id: string) {
-    return this.movimientosService.findOne(+id);
+  findOne(@Param('id') id: string, @Request() req?: any) {
+    return this.movimientosService.findOne(+id, req?.user);
   }
 
   @Patch(':id')

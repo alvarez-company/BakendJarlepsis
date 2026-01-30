@@ -1,6 +1,7 @@
-import { Injectable } from '@nestjs/common';
+import { Injectable, Inject, forwardRef } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
+import { BodegasService } from '../bodegas/bodegas.service';
 import { Material } from '../materiales/material.entity';
 import { Instalacion } from '../instalaciones/instalacion.entity';
 import { MovimientoInventario } from '../movimientos/movimiento-inventario.entity';
@@ -72,9 +73,11 @@ export class StatsService {
     private categoriasRepository: Repository<Categoria>,
     @InjectRepository(InventarioTecnico)
     private inventarioTecnicoRepository: Repository<InventarioTecnico>,
+    @Inject(forwardRef(() => BodegasService))
+    private bodegasService: BodegasService,
   ) {}
 
-  async getDashboardStats(): Promise<DashboardStats> {
+  async getDashboardStats(user?: any): Promise<DashboardStats> {
     try {
       // Obtener todos los datos en paralelo
       const [
@@ -240,12 +243,72 @@ export class StatsService {
         this.municipiosRepository.find(),
       ]);
 
+      // Filtrar por bodegas permitidas cuando el usuario tiene rol admin-internas, admin-redes, bodega-internas, bodega-redes
+      let materialesFiltrados = materiales;
+      let instalacionesFiltradas = instalaciones;
+      let movimientosFiltrados = movimientos;
+      let trasladosFiltrados = traslados;
+      const rolTipo = user?.usuarioRol?.rolTipo || user?.role;
+      const rolesConFiltroBodega = [
+        'admin-internas',
+        'admin-redes',
+        'bodega-internas',
+        'bodega-redes',
+      ];
+      if (user && rolesConFiltroBodega.includes(rolTipo)) {
+        const bodegasPermitidas = await this.bodegasService.findAll(user);
+        const bodegaIds = new Set(bodegasPermitidas.map((b) => b.bodegaId));
+        instalacionesFiltradas = instalaciones.filter(
+          (i: any) => i.bodegaId != null && bodegaIds.has(i.bodegaId),
+        );
+        trasladosFiltrados = traslados.filter(
+          (t: any) => bodegaIds.has(t.bodegaOrigenId) && bodegaIds.has(t.bodegaDestinoId),
+        );
+        const idsArray = Array.from(bodegaIds);
+        const placeholders = idsArray.map(() => '?').join(',');
+        const inventarioIdsEnBodegas =
+          idsArray.length > 0
+            ? await this.materialesRepository.manager
+                .query(
+                  `SELECT inventarioId FROM inventarios WHERE bodegaId IN (${placeholders})`,
+                  idsArray,
+                )
+                .then((rows: { inventarioId: number }[]) => rows.map((r) => r.inventarioId))
+            : [];
+        const inventarioIdSet = new Set(inventarioIdsEnBodegas);
+        movimientosFiltrados = movimientos.filter((m: any) =>
+          m.inventarioId != null ? inventarioIdSet.has(m.inventarioId) : false,
+        );
+        const materialesConInventario = await this.materialesRepository.find({
+          relations: ['inventario', 'materialBodegas'],
+        });
+        const materialIdsPermitidos = new Set(
+          materialesConInventario
+            .filter(
+              (m) =>
+                (m.inventario?.bodegaId != null && bodegaIds.has(m.inventario.bodegaId)) ||
+                (m.materialBodegas?.some(
+                  (mb) => mb.bodegaId != null && bodegaIds.has(mb.bodegaId),
+                ) ??
+                  false),
+            )
+            .map((m) => m.materialId),
+        );
+        materialesFiltrados = materiales.filter((m) => materialIdsPermitidos.has(m.materialId));
+      }
+
+      // Usar listas filtradas para el resto de cálculos
+      const materialesParaStats = materialesFiltrados;
+      const instalacionesParaStats = instalacionesFiltradas;
+      const movimientosParaStats = movimientosFiltrados;
+      const trasladosParaStats = trasladosFiltrados;
+
       // Cargar clientes manualmente para las instalaciones
-      const clienteIds = [
-        ...new Set(instalaciones.map((inst: any) => inst.clienteId).filter(Boolean)),
+      const _clienteIds = [
+        ...new Set(instalacionesParaStats.map((inst: any) => inst.clienteId).filter(Boolean)),
       ];
       const clientesMap = new Map(clientes.map((c) => [c.clienteId, c]));
-      instalaciones.forEach((inst: any) => {
+      instalacionesParaStats.forEach((inst: any) => {
         if (inst.clienteId) {
           const cliente = clientesMap.get(inst.clienteId);
           if (cliente) {
@@ -263,33 +326,35 @@ export class StatsService {
       const ahora = new Date();
       const haceUnMes = new Date(ahora.getFullYear(), ahora.getMonth() - 1, ahora.getDate());
 
-      const movimientosUltimoMes = movimientos.filter((m) => {
+      const movimientosUltimoMes = movimientosParaStats.filter((m) => {
         const fecha = new Date(m.fechaCreacion);
         return fecha >= haceUnMes;
       }).length;
 
-      const instalacionesUltimoMes = instalaciones.filter((i) => {
+      const instalacionesUltimoMes = instalacionesParaStats.filter((i) => {
         const fecha = new Date(i.fechaCreacion);
         return fecha >= haceUnMes;
       }).length;
 
       const movimientosPorTipo = {
-        entrada: movimientos.filter((m) => (m.movimientoTipo || '').toLowerCase() === 'entrada')
-          .length,
-        salida: movimientos.filter((m) => (m.movimientoTipo || '').toLowerCase() === 'salida')
-          .length,
-        devolucion: movimientos.filter(
+        entrada: movimientosParaStats.filter(
+          (m) => (m.movimientoTipo || '').toLowerCase() === 'entrada',
+        ).length,
+        salida: movimientosParaStats.filter(
+          (m) => (m.movimientoTipo || '').toLowerCase() === 'salida',
+        ).length,
+        devolucion: movimientosParaStats.filter(
           (m) => (m.movimientoTipo || '').toLowerCase() === 'devolucion',
         ).length,
       };
 
-      const materialesBajoStock = materiales.filter((m) => {
+      const materialesBajoStock = materialesParaStats.filter((m) => {
         const stock = Number(m.materialStock || 0);
         // Si no hay stock mínimo definido, considerar bajo stock si stock es 0 o menor
         return stock <= 0;
       }).length;
 
-      const instalacionesPendientes = instalaciones.filter((i) => {
+      const instalacionesPendientes = instalacionesParaStats.filter((i) => {
         const estado = (i.estado || '').toLowerCase();
         // Incluir nuevos estados activos y legacy
         return (
@@ -301,7 +366,7 @@ export class StatsService {
         );
       }).length;
 
-      const trasladosPendientes = traslados.filter((t) => {
+      const trasladosPendientes = trasladosParaStats.filter((t) => {
         const estado = (t.trasladoEstado || '').toLowerCase();
         return estado === 'pendiente' || estado === 'en_transito';
       }).length;
@@ -328,7 +393,7 @@ export class StatsService {
         const mesInicio = new Date(fecha.getFullYear(), fecha.getMonth(), 1);
         const mesFin = new Date(fecha.getFullYear(), fecha.getMonth() + 1, 0);
 
-        const movimientosMes = movimientos.filter((m) => {
+        const movimientosMes = movimientosParaStats.filter((m) => {
           const fechaMov = new Date(m.fechaCreacion);
           return fechaMov >= mesInicio && fechaMov <= mesFin;
         });
@@ -348,7 +413,7 @@ export class StatsService {
 
       // Calcular materiales por categoría
       const categoriasMap = new Map<string, number>();
-      materiales.forEach((m) => {
+      materialesParaStats.forEach((m) => {
         const categoria = m.categoria?.categoriaNombre || 'Sin categoría';
         categoriasMap.set(categoria, (categoriasMap.get(categoria) || 0) + 1);
       });
@@ -359,7 +424,7 @@ export class StatsService {
 
       // Calcular instalaciones por estado
       const estadosMap = new Map<string, number>();
-      instalaciones.forEach((i) => {
+      instalacionesParaStats.forEach((i) => {
         // El estado puede venir del campo 'estado' directamente o puede ser null/undefined
         const estado = (i.estado || 'pendiente').toLowerCase().trim();
         if (estado) {
@@ -392,7 +457,7 @@ export class StatsService {
 
       // Calcular instalaciones por municipio
       const municipiosMap = new Map<number, { nombre: string; cantidad: number }>();
-      instalaciones.forEach((inst: any) => {
+      instalacionesParaStats.forEach((inst: any) => {
         if (inst.clienteId) {
           const cliente = clientes.find((c) => c.clienteId === inst.clienteId);
           if (cliente && cliente.municipioId) {
@@ -414,7 +479,7 @@ export class StatsService {
         .map((m) => ({ municipio: m.nombre, cantidad: m.cantidad }));
 
       // Obtener últimas instalaciones (últimas 10)
-      const ultimasInstalaciones = instalaciones.slice(0, 10).map((inst: any) => {
+      const ultimasInstalaciones = instalacionesParaStats.slice(0, 10).map((inst: any) => {
         const cliente = inst.cliente || clientes.find((c: any) => c.clienteId === inst.clienteId);
         return {
           instalacionId: inst.instalacionId,
@@ -436,7 +501,7 @@ export class StatsService {
         const mesInicio = new Date(fecha.getFullYear(), fecha.getMonth(), 1);
         const mesFin = new Date(fecha.getFullYear(), fecha.getMonth() + 1, 0);
 
-        const instalacionesMes = instalaciones.filter((i) => {
+        const instalacionesMes = instalacionesParaStats.filter((i) => {
           const fechaInst = new Date(i.fechaCreacion);
           return fechaInst >= mesInicio && fechaInst <= mesFin;
         });
@@ -448,10 +513,10 @@ export class StatsService {
       }
 
       const result = {
-        totalMateriales: materiales.length,
-        totalInstalaciones: instalaciones.length,
-        totalMovimientos: movimientos.length,
-        totalTraslados: traslados.length,
+        totalMateriales: materialesParaStats.length,
+        totalInstalaciones: instalacionesParaStats.length,
+        totalMovimientos: movimientosParaStats.length,
+        totalTraslados: trasladosParaStats.length,
         totalClientes: clientes.length,
         totalUsuarios: usuarios.length,
         materialesBajoStock,

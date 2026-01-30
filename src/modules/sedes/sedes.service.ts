@@ -136,6 +136,19 @@ export class SedesService {
       return [];
     }
 
+    // Administrador de Internas y de Redes ven solo su sede (como admin)
+    if (
+      user?.usuarioRol?.rolTipo === 'admin-internas' ||
+      user?.role === 'admin-internas' ||
+      user?.usuarioRol?.rolTipo === 'admin-redes' ||
+      user?.role === 'admin-redes'
+    ) {
+      if (user.usuarioSede) {
+        return allSedes.filter((sede) => sede.sedeId === user.usuarioSede);
+      }
+      return [];
+    }
+
     // Administrador (Centro Operativo) - solo lectura, ve todas las sedes
     if (user?.usuarioRol?.rolTipo === 'administrador' || user?.role === 'administrador') {
       return allSedes;
@@ -165,12 +178,20 @@ export class SedesService {
     return allSedes;
   }
 
-  async findOne(id: number): Promise<Sede> {
+  async findOne(id: number, user?: any): Promise<Sede> {
     const sede = await this.sedesRepository.findOne({
       where: { sedeId: id },
       relations: ['bodegas', 'usuarios'],
     });
     if (!sede) {
+      throw new NotFoundException(`Sede with ID ${id} not found`);
+    }
+    const rolTipo = user?.usuarioRol?.rolTipo || user?.role;
+    if (
+      user &&
+      (rolTipo === 'admin-internas' || rolTipo === 'admin-redes') &&
+      sede.sedeId !== user.usuarioSede
+    ) {
       throw new NotFoundException(`Sede with ID ${id} not found`);
     }
     return sede;

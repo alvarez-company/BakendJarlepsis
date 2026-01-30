@@ -31,7 +31,7 @@ export class UsersController {
   constructor(private readonly usersService: UsersService) {}
 
   @Post()
-  @Roles('superadmin', 'admin', 'administrador')
+  @Roles('superadmin', 'admin', 'administrador', 'admin-internas', 'admin-redes')
   @ApiOperation({ summary: 'Create a new user' })
   create(@Body() createUserDto: CreateUserDto, @Request() req) {
     const rolTipo = req.user.usuarioRol?.rolTipo || req.user.role;
@@ -47,7 +47,7 @@ export class UsersController {
     }
     const user = await this.usersService.findOne(req.user.usuarioId);
     // Remover la contraseña de la respuesta
-    const { usuarioContrasena, ...userWithoutPassword } = user;
+    const { usuarioContrasena: _usuarioContrasena, ...userWithoutPassword } = user;
     return userWithoutPassword;
   }
 
@@ -70,7 +70,15 @@ export class UsersController {
   }
 
   @Get()
-  @Roles('superadmin', 'admin', 'administrador', 'bodega-internas', 'bodega-redes')
+  @Roles(
+    'superadmin',
+    'admin',
+    'administrador',
+    'admin-internas',
+    'admin-redes',
+    'bodega-internas',
+    'bodega-redes',
+  )
   @ApiOperation({ summary: 'Get all users with pagination' })
   @ApiQuery({ name: 'page', required: false, type: Number })
   @ApiQuery({ name: 'limit', required: false, type: Number })
@@ -80,7 +88,15 @@ export class UsersController {
   }
 
   @Get(':id')
-  @Roles('superadmin', 'admin', 'administrador', 'bodega-internas', 'bodega-redes')
+  @Roles(
+    'superadmin',
+    'admin',
+    'administrador',
+    'admin-internas',
+    'admin-redes',
+    'bodega-internas',
+    'bodega-redes',
+  )
   @ApiOperation({ summary: 'Get a user by ID' })
   findOne(@Param('id') id: string) {
     return this.usersService.findOne(+id);
@@ -109,7 +125,7 @@ export class UsersController {
   }
 
   @Patch(':id')
-  @Roles('superadmin', 'admin', 'bodega-internas', 'bodega-redes')
+  @Roles('superadmin', 'admin', 'admin-internas', 'admin-redes', 'bodega-internas', 'bodega-redes')
   @ApiOperation({ summary: 'Update a user' })
   update(@Param('id') id: string, @Body() updateUserDto: UpdateUserDto, @Request() req) {
     const rolTipo = req.user.usuarioRol?.rolTipo || req.user.role;

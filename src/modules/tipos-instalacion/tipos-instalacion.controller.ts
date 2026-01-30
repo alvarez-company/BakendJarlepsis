@@ -23,7 +23,7 @@ export class TiposInstalacionController {
   constructor(private readonly service: TiposInstalacionService) {}
 
   @Post()
-  @Roles('superadmin', 'admin', 'bodega-internas', 'bodega-redes')
+  @Roles('superadmin', 'admin', 'admin-internas', 'admin-redes', 'bodega-internas', 'bodega-redes')
   create(@Body() data: any, @Request() req) {
     return this.service.create(data, req.user.usuarioId);
   }
@@ -33,6 +33,8 @@ export class TiposInstalacionController {
     'superadmin',
     'admin',
     'administrador',
+    'admin-internas',
+    'admin-redes',
     'almacenista',
     'tecnico',
     'soldador',
@@ -48,6 +50,8 @@ export class TiposInstalacionController {
     'superadmin',
     'admin',
     'administrador',
+    'admin-internas',
+    'admin-redes',
     'almacenista',
     'tecnico',
     'soldador',
@@ -59,7 +63,7 @@ export class TiposInstalacionController {
   }
 
   @Patch(':id')
-  @Roles('superadmin', 'admin', 'bodega-internas', 'bodega-redes')
+  @Roles('superadmin', 'admin', 'admin-internas', 'admin-redes', 'bodega-internas', 'bodega-redes')
   update(@Param('id') id: string, @Body() data: any) {
     return this.service.update(+id, data);
   }

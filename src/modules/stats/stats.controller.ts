@@ -17,6 +17,8 @@ export class StatsController {
     'superadmin',
     'admin',
     'administrador',
+    'admin-internas',
+    'admin-redes',
     'almacenista',
     'tecnico',
     'soldador',
@@ -26,7 +28,7 @@ export class StatsController {
   @ApiOperation({ summary: 'Get dashboard statistics' })
   async getDashboardStats(@Request() req) {
     return {
-      data: await this.statsService.getDashboardStats(),
+      data: await this.statsService.getDashboardStats(req.user),
     };
   }
 }

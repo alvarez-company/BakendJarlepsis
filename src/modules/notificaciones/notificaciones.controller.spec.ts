@@ -1,5 +1,4 @@
 import { Test, TestingModule } from '@nestjs/testing';
-import { ExecutionContext } from '@nestjs/common';
 import { Reflector } from '@nestjs/core';
 import { NotificacionesController } from './notificaciones.controller';
 import { NotificacionesService } from './notificaciones.service';
@@ -7,10 +6,10 @@ import { RolesGuard } from '../../common/guards/roles.guard';
 import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard';
 
 describe('NotificacionesController - Roles y Permisos', () => {
-  let controller: NotificacionesController;
-  let service: NotificacionesService;
+  let _controller: NotificacionesController;
+  let _service: NotificacionesService;
   let rolesGuard: RolesGuard;
-  let reflector: Reflector;
+  let _reflector: Reflector;
 
   const mockService = {
     obtenerNotificacionesUsuario: jest.fn(),
@@ -59,10 +58,10 @@ describe('NotificacionesController - Roles y Permisos', () => {
       ],
     }).compile();
 
-    controller = module.get<NotificacionesController>(NotificacionesController);
-    service = module.get<NotificacionesService>(NotificacionesService);
+    _controller = module.get<NotificacionesController>(NotificacionesController);
+    _service = module.get<NotificacionesService>(NotificacionesService);
     rolesGuard = module.get<RolesGuard>(RolesGuard);
-    reflector = module.get<Reflector>(Reflector);
+    _reflector = module.get<Reflector>(Reflector);
   });
 
   afterEach(() => {

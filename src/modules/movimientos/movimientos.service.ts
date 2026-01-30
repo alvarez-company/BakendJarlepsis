@@ -24,6 +24,7 @@ import { TipoCambioInventario } from '../auditoria-inventario/auditoria-inventar
 import { InventarioTecnicoService } from '../inventario-tecnico/inventario-tecnico.service';
 import { NumerosMedidorService } from '../numeros-medidor/numeros-medidor.service';
 import { EstadoNumeroMedidor } from '../numeros-medidor/numero-medidor.entity';
+import { BodegasService } from '../bodegas/bodegas.service';
 import { PaginationDto } from '../../common/dto/pagination.dto';
 
 // Función auxiliar para obtener etiqueta del tipo de movimiento
@@ -54,6 +55,8 @@ export class MovimientosService {
     private inventarioTecnicoService: InventarioTecnicoService,
     @Inject(forwardRef(() => NumerosMedidorService))
     private numerosMedidorService: NumerosMedidorService,
+    @Inject(forwardRef(() => BodegasService))
+    private bodegasService: BodegasService,
   ) {}
 
   private async generarIdentificadorUnico(tipoMovimiento: TipoMovimiento): Promise<string> {
@@ -332,7 +335,9 @@ export class MovimientosService {
       }
 
       const movimiento = this.movimientosRepository.create(movimientoData);
-      const movimientoGuardado = (await this.movimientosRepository.save(movimiento)) as unknown as MovimientoInventario;
+      const movimientoGuardado = (await this.movimientosRepository.save(
+        movimiento,
+      )) as unknown as MovimientoInventario;
 
       // Obtener el movimiento guardado para agregarlo a la lista
       // Usar solo los datos necesarios para evitar problemas de serialización
@@ -407,7 +412,7 @@ export class MovimientosService {
 
       // Manejar números de medidor si se proporcionan
       try {
-        const material = await this.materialesService.findOne(materialIdFinal);
+        const _material = await this.materialesService.findOne(materialIdFinal);
 
         // Si se proporcionan números de medidor, procesarlos (el servicio marcará automáticamente el material como medidor)
         if (materialDto.numerosMedidor && materialDto.numerosMedidor.length > 0) {
@@ -635,7 +640,7 @@ export class MovimientosService {
             for (const materialAsignado of asignacion.materiales) {
               try {
                 // Verificar que el material existe
-                const material = await this.materialesService.findOne(materialAsignado.materialId);
+                await this.materialesService.findOne(materialAsignado.materialId);
 
                 // Crear movimiento de salida desde la sede/bodega
                 const salidaData: any = {
@@ -655,7 +660,9 @@ export class MovimientosService {
                 salidaData.identificadorUnico = identificadorUnicoSalida;
 
                 const salida = this.movimientosRepository.create(salidaData);
-                const salidaGuardada = (await this.movimientosRepository.save(salida)) as unknown as MovimientoInventario;
+                const _salidaGuardada = (await this.movimientosRepository.save(
+                  salida,
+                )) as unknown as MovimientoInventario;
 
                 // Ajustar stock (reducir de bodega/sede)
                 await this.ajustarStockMovimiento(
@@ -830,6 +837,30 @@ export class MovimientosService {
             `;
             queryParams.push(user.usuarioSede);
           }
+          // Admin Internas ve movimientos de bodegas tipo internas de su sede
+          else if (rolTipo === 'admin-internas' && user.usuarioSede) {
+            whereConditions = `
+              WHERE EXISTS (
+                SELECT 1 FROM inventarios i
+                INNER JOIN bodegas b ON i.bodegaId = b.bodegaId
+                WHERE i.inventarioId = movimientos_inventario.inventarioId
+                  AND b.sedeId = ? AND b.bodegaTipo = 'internas'
+              )
+            `;
+            queryParams.push(user.usuarioSede);
+          }
+          // Admin Redes ve movimientos de bodegas tipo redes de su sede
+          else if (rolTipo === 'admin-redes' && user.usuarioSede) {
+            whereConditions = `
+              WHERE EXISTS (
+                SELECT 1 FROM inventarios i
+                INNER JOIN bodegas b ON i.bodegaId = b.bodegaId
+                WHERE i.inventarioId = movimientos_inventario.inventarioId
+                  AND b.sedeId = ? AND b.bodegaTipo = 'redes'
+              )
+            `;
+            queryParams.push(user.usuarioSede);
+          }
           // Bodega Internas ve movimientos de bodegas de tipo internas
           else if (rolTipo === 'bodega-internas') {
             whereConditions = `
@@ -935,7 +966,7 @@ export class MovimientosService {
           }),
         );
 
-        const bodegaMap = new Map<number, any>();
+        const _bodegaMap = new Map<number, any>();
 
         const movimientosConRelaciones = await Promise.all(
           rawMovimientos.map(async (movimiento: any) => {
@@ -1074,7 +1105,7 @@ export class MovimientosService {
     }
   }
 
-  async findOne(id: number): Promise<any> {
+  async findOne(id: number, user?: any): Promise<any> {
     // Obtener el movimiento sin relaciones problemáticas (bodega se obtiene a través de inventario)
     // No cargar la relación instalacion para evitar que TypeORM intente cargar cliente automáticamente
     // La instalacion se carga manualmente cuando es necesario
@@ -1085,6 +1116,24 @@ export class MovimientosService {
 
     if (!movimiento) {
       throw new NotFoundException(`Movimiento con ID ${id} no encontrado`);
+    }
+
+    const rolTipo = user?.usuarioRol?.rolTipo || user?.role;
+    const rolesConFiltroBodega = [
+      'admin-internas',
+      'admin-redes',
+      'bodega-internas',
+      'bodega-redes',
+    ];
+    if (user && rolesConFiltroBodega.includes(rolTipo)) {
+      const bodegasPermitidas = await this.bodegasService.findAll(user);
+      const bodegaIdMov =
+        movimiento.inventario?.bodegaId ?? movimiento.inventario?.bodega?.bodegaId;
+      const permitido =
+        bodegaIdMov != null && bodegasPermitidas.some((b) => b.bodegaId === bodegaIdMov);
+      if (!permitido) {
+        throw new NotFoundException(`Movimiento con ID ${id} no encontrado`);
+      }
     }
 
     // Cargar material manualmente
@@ -1510,7 +1559,9 @@ export class MovimientosService {
     nuevoInventarioId = movimiento.inventarioId || inventarioIdOriginal;
 
     // Guardar el movimiento actualizado
-    const movimientoActualizado = (await this.movimientosRepository.save(movimiento)) as unknown as MovimientoInventario;
+    const movimientoActualizado = (await this.movimientosRepository.save(
+      movimiento,
+    )) as unknown as MovimientoInventario;
 
     // Aplicar el nuevo ajuste de stock si el movimiento está completado
     if (movimientoCompletado && nuevoInventarioId) {
@@ -1997,9 +2048,23 @@ export class MovimientosService {
     return movimientosConRelaciones;
   }
 
-  async findByBodega(bodegaId: number): Promise<any[]> {
-    // Obtener todos los inventarios de la bodega
-    const allInventarios = await this.inventariosService.findAll();
+  async findByBodega(bodegaId: number, user?: any): Promise<any[]> {
+    const rolTipo = user?.usuarioRol?.rolTipo || user?.role;
+    const rolesConFiltroBodega = [
+      'admin-internas',
+      'admin-redes',
+      'bodega-internas',
+      'bodega-redes',
+    ];
+    if (user && rolesConFiltroBodega.includes(rolTipo)) {
+      const bodegasPermitidas = await this.bodegasService.findAll(user);
+      const permitido = bodegasPermitidas.some((b) => b.bodegaId === bodegaId);
+      if (!permitido) {
+        return [];
+      }
+    }
+    // Obtener todos los inventarios de la bodega (filtrados por user si aplica)
+    const allInventarios = await this.inventariosService.findAll(user);
     const inventarios = allInventarios.filter(
       (inv) => inv.bodegaId === bodegaId && inv.inventarioEstado,
     );
@@ -2048,7 +2113,22 @@ export class MovimientosService {
     return await this.enrichMovimientos(movimientosOrdenados);
   }
 
-  async findBySede(sedeId: number): Promise<any[]> {
+  async findBySede(sedeId: number, user?: any): Promise<any[]> {
+    const rolTipo = user?.usuarioRol?.rolTipo || user?.role;
+    if (
+      user &&
+      (rolTipo === 'admin-internas' || rolTipo === 'admin-redes') &&
+      user.usuarioSede !== sedeId
+    ) {
+      return [];
+    }
+    if (user && (rolTipo === 'bodega-internas' || rolTipo === 'bodega-redes')) {
+      const bodegasPermitidas = await this.bodegasService.findAll(user);
+      const sedesPermitidas = new Set(bodegasPermitidas.map((b) => b.sedeId).filter(Boolean));
+      if (!sedesPermitidas.has(sedeId)) {
+        return [];
+      }
+    }
     // Obtener todas las bodegas de la sede
     const bodegas = await this.movimientosRepository.query(
       `SELECT b.bodegaId 
@@ -2063,8 +2143,8 @@ export class MovimientosService {
 
     const bodegasIds = bodegas.map((b: any) => b.bodegaId);
 
-    // Obtener todos los inventarios de esas bodegas
-    const allInventarios = await this.inventariosService.findAll();
+    // Obtener todos los inventarios de esas bodegas (filtrados por user si aplica)
+    const allInventarios = await this.inventariosService.findAll(user);
     const inventarios = allInventarios.filter(
       (inv) => bodegasIds.includes(inv.bodegaId) && inv.inventarioEstado,
     );
@@ -2189,7 +2269,7 @@ export class MovimientosService {
     // Calcular stock para cada material
     const movimientosConStock: any[] = [];
 
-    for (const [materialId, movimientos] of movimientosPorMaterial.entries()) {
+    for (const [_materialId, movimientos] of movimientosPorMaterial.entries()) {
       // Ordenar movimientos por fecha (más antiguo primero)
       const movimientosOrdenados = movimientos.sort((a, b) => {
         const fechaA = new Date(a.fechaCreacion).getTime();

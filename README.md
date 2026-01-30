@@ -76,12 +76,14 @@ npm run start:dev
 
 ### ⚠️ Crear Primer Usuario
 
-**IMPORTANTE**: El registro público está deshabilitado. Debes crear el primer SuperAdmin con SQL:
+**IMPORTANTE**: El registro público está deshabilitado. Debes crear el primer SuperAdmin así:
 
-1. Ver el archivo `PRIMER_USUARIO.md` para instrucciones detalladas
-2. Ejecutar `src/migrations/seed_initial_data.sql` para crear roles y primer usuario
-3. Login con el SuperAdmin creado
-4. Crear el resto de usuarios desde la API
+1. Ejecutar migraciones: `npm run migration:run`
+2. Ejecutar el seed completo (roles, datos, superadmin): `npm run seed`  
+   O solo crear/actualizar el superadmin: `npm run seed:superadmin`
+3. Login con el SuperAdmin (por defecto: admin@jarlepsis.com / Admin123)
+4. Crear el resto de usuarios desde la API  
+   Ver `documents/SEED_Y_RESET.md` y opción SQL directa: `src/migrations/full_seed.sql`
 
 ## 📝 Variables de Entorno
 

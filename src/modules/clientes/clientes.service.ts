@@ -1,6 +1,6 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Repository, DeepPartial } from 'typeorm';
+import { Repository } from 'typeorm';
 import { Cliente, EstadoCliente } from './cliente.entity';
 import { CreateClienteDto } from './dto/create-cliente.dto';
 import { UpdateClienteDto } from './dto/update-cliente.dto';
@@ -192,7 +192,7 @@ export class ClientesService {
     id: number,
     updateClienteDto: UpdateClienteDto & { clienteEstado?: EstadoCliente },
   ): Promise<Cliente> {
-    const cliente = await this.findOne(id);
+    await this.findOne(id);
 
     // Actualizar solo los campos permitidos usando QueryBuilder
     const updateValues: any = {};

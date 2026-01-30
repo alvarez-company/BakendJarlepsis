@@ -46,6 +46,8 @@ export class MaterialesController {
     'superadmin',
     'admin',
     'administrador',
+    'admin-internas',
+    'admin-redes',
     'almacenista',
     'tecnico',
     'soldador',
@@ -62,6 +64,8 @@ export class MaterialesController {
     'superadmin',
     'admin',
     'administrador',
+    'admin-internas',
+    'admin-redes',
     'almacenista',
     'tecnico',
     'soldador',
@@ -69,8 +73,8 @@ export class MaterialesController {
     'bodega-redes',
   )
   @ApiOperation({ summary: 'Get a material by ID' })
-  findOne(@Param('id') id: string) {
-    return this.materialesService.findOne(+id);
+  findOne(@Param('id') id: string, @Request() req?: any) {
+    return this.materialesService.findOne(+id, req?.user);
   }
 
   @Patch(':id')
@@ -121,6 +125,8 @@ export class MaterialesController {
     'superadmin',
     'admin',
     'administrador',
+    'admin-internas',
+    'admin-redes',
     'almacenista',
     'tecnico',
     'bodega-internas',
@@ -198,6 +204,8 @@ export class MaterialesController {
     'superadmin',
     'admin',
     'administrador',
+    'admin-internas',
+    'admin-redes',
     'almacenista',
     'tecnico',
     'bodega-internas',

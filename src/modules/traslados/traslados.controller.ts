@@ -44,6 +44,8 @@ export class TrasladosController {
     'superadmin',
     'admin',
     'administrador',
+    'admin-internas',
+    'admin-redes',
     'almacenista',
     'tecnico',
     'soldador',
@@ -51,12 +53,21 @@ export class TrasladosController {
     'bodega-redes',
   )
   @ApiOperation({ summary: 'Get all traslados' })
-  findAll(@Query() paginationDto?: PaginationDto) {
-    return this.trasladosService.findAll(paginationDto);
+  findAll(@Query() paginationDto?: PaginationDto, @Request() req?: any) {
+    return this.trasladosService.findAll(paginationDto, req?.user);
   }
 
   @Get('codigo/:codigo')
-  @Roles('superadmin', 'admin', 'administrador', 'almacenista', 'tecnico', 'soldador')
+  @Roles(
+    'superadmin',
+    'admin',
+    'administrador',
+    'admin-internas',
+    'admin-redes',
+    'almacenista',
+    'tecnico',
+    'soldador',
+  )
   @ApiOperation({ summary: 'Get traslados by código' })
   findByCodigo(@Param('codigo') codigo: string) {
     return this.trasladosService.findByCodigo(codigo);
@@ -67,6 +78,8 @@ export class TrasladosController {
     'superadmin',
     'admin',
     'administrador',
+    'admin-internas',
+    'admin-redes',
     'almacenista',
     'tecnico',
     'soldador',
@@ -74,8 +87,8 @@ export class TrasladosController {
     'bodega-redes',
   )
   @ApiOperation({ summary: 'Get a traslado by ID' })
-  findOne(@Param('id') id: string) {
-    return this.trasladosService.findOne(+id);
+  findOne(@Param('id') id: string, @Request() req?: any) {
+    return this.trasladosService.findOne(+id, req?.user);
   }
 
   @Post(':id/completar')
@@ -107,7 +120,16 @@ export class TrasladosController {
   }
 
   @Get('export/excel')
-  @Roles('superadmin', 'admin', 'administrador', 'almacenista', 'tecnico', 'soldador')
+  @Roles(
+    'superadmin',
+    'admin',
+    'administrador',
+    'admin-internas',
+    'admin-redes',
+    'almacenista',
+    'tecnico',
+    'soldador',
+  )
   @ApiOperation({ summary: 'Export transfers to Excel' })
   @ApiQuery({ name: 'filters', required: false, type: String })
   @ApiQuery({ name: 'dateStart', required: false, type: String })
@@ -195,7 +217,16 @@ export class TrasladosController {
   }
 
   @Get('export/pdf')
-  @Roles('superadmin', 'admin', 'administrador', 'almacenista', 'tecnico', 'soldador')
+  @Roles(
+    'superadmin',
+    'admin',
+    'administrador',
+    'admin-internas',
+    'admin-redes',
+    'almacenista',
+    'tecnico',
+    'soldador',
+  )
   @ApiOperation({ summary: 'Export transfers to PDF' })
   @ApiQuery({ name: 'filters', required: false, type: String })
   @ApiQuery({ name: 'dateStart', required: false, type: String })

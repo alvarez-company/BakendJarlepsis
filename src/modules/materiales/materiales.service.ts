@@ -12,6 +12,7 @@ import { MaterialBodega } from './material-bodega.entity';
 import { CreateMaterialDto } from './dto/create-material.dto';
 import { UpdateMaterialDto } from './dto/update-material.dto';
 import { InventariosService } from '../inventarios/inventarios.service';
+import { BodegasService } from '../bodegas/bodegas.service';
 import { InventarioTecnicoService } from '../inventario-tecnico/inventario-tecnico.service';
 import { NumerosMedidorService } from '../numeros-medidor/numeros-medidor.service';
 import { AuditoriaInventarioService } from '../auditoria-inventario/auditoria-inventario.service';
@@ -25,6 +26,8 @@ export class MaterialesService {
     @InjectRepository(MaterialBodega)
     private materialesBodegasRepository: Repository<MaterialBodega>,
     private inventariosService: InventariosService,
+    @Inject(forwardRef(() => BodegasService))
+    private bodegasService: BodegasService,
     @Inject(forwardRef(() => InventarioTecnicoService))
     private inventarioTecnicoService: InventarioTecnicoService,
     @Inject(forwardRef(() => NumerosMedidorService))
@@ -179,11 +182,35 @@ export class MaterialesService {
         ],
       });
 
+      let listToReturn = allMateriales;
+
+      // Admin-internas, admin-redes, bodega-internas, bodega-redes: solo materiales con presencia en bodegas permitidas
+      const rolTipo = user?.usuarioRol?.rolTipo || user?.role;
+      const rolesConFiltroBodega = [
+        'admin-internas',
+        'admin-redes',
+        'bodega-internas',
+        'bodega-redes',
+      ];
+      if (user && rolesConFiltroBodega.includes(rolTipo)) {
+        const bodegasPermitidas = await this.bodegasService.findAll(user);
+        const bodegaIds = new Set(bodegasPermitidas.map((b) => b.bodegaId));
+        listToReturn = allMateriales.filter((material) => {
+          const inventarioBodegaId = material.inventario?.bodegaId ?? null;
+          const enInventario = inventarioBodegaId != null && bodegaIds.has(inventarioBodegaId);
+          const enMaterialBodegas =
+            material.materialBodegas?.some(
+              (mb) => mb.bodegaId != null && bodegaIds.has(mb.bodegaId),
+            ) ?? false;
+          return enInventario || enMaterialBodegas;
+        });
+      }
+
       // Si hay un usuario, calcular el stock por su centro operativo
       if (user?.usuarioSede) {
         // Calcular stock para cada material de forma asíncrona
         const materialesConStock = await Promise.all(
-          allMateriales.map(async (material) => {
+          listToReturn.map(async (material) => {
             // Calcular stock del material en el centro operativo del usuario
             const stockEnCentroOperativo = await this.calculateStockBySede(
               material,
@@ -203,7 +230,7 @@ export class MaterialesService {
       }
 
       // Si no hay usuario o es superadmin, devolver todos los materiales con su stock total
-      return allMateriales;
+      return listToReturn;
     } catch (error) {
       console.error('Error al obtener materiales:', error);
       throw error;
@@ -245,7 +272,7 @@ export class MaterialesService {
     return stockTotal;
   }
 
-  async findOne(id: number): Promise<Material> {
+  async findOne(id: number, user?: any): Promise<Material> {
     const material = await this.materialesRepository.findOne({
       where: { materialId: id },
       relations: [
@@ -260,6 +287,25 @@ export class MaterialesService {
     });
     if (!material) {
       throw new NotFoundException(`Material con ID ${id} no encontrado`);
+    }
+    const rolTipo = user?.usuarioRol?.rolTipo || user?.role;
+    const rolesConFiltroBodega = [
+      'admin-internas',
+      'admin-redes',
+      'bodega-internas',
+      'bodega-redes',
+    ];
+    if (user && rolesConFiltroBodega.includes(rolTipo)) {
+      const bodegasPermitidas = await this.bodegasService.findAll(user);
+      const bodegaIds = new Set(bodegasPermitidas.map((b) => b.bodegaId));
+      const inventarioBodegaId = material.inventario?.bodegaId ?? null;
+      const enInventario = inventarioBodegaId != null && bodegaIds.has(inventarioBodegaId);
+      const enMaterialBodegas =
+        material.materialBodegas?.some((mb) => mb.bodegaId != null && bodegaIds.has(mb.bodegaId)) ??
+        false;
+      if (!enInventario && !enMaterialBodegas) {
+        throw new NotFoundException(`Material con ID ${id} no encontrado`);
+      }
     }
     return material;
   }
@@ -324,7 +370,7 @@ export class MaterialesService {
     // (Object.assign mantendrá el valor actual de material.inventarioId)
 
     Object.assign(material, updateData);
-    const updated = await this.materialesRepository.save(material);
+    const _updated = await this.materialesRepository.save(material);
 
     if (bodegas) {
       await this.materialesBodegasRepository.delete({ materialId: material.materialId });
@@ -381,7 +427,7 @@ export class MaterialesService {
       throw new Error('Debe especificar la bodega para ajustar el stock.');
     }
 
-    const materialAntes = await this.findOne(id);
+    const _materialAntes = await this.findOne(id);
     const stockBodegaAntes = await this.materialesBodegasRepository.findOne({
       where: { materialId: id, bodegaId },
     });

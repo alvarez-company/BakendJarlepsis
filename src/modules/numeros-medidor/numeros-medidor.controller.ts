@@ -10,11 +10,7 @@ import {
   UseGuards,
 } from '@nestjs/common';
 import { NumerosMedidorService } from './numeros-medidor.service';
-import {
-  CreateNumeroMedidorDto,
-  UpdateNumeroMedidorDto,
-  AsignarNumerosMedidorDto,
-} from './dto/create-numero-medidor.dto';
+import { CreateNumeroMedidorDto, UpdateNumeroMedidorDto } from './dto/create-numero-medidor.dto';
 import { EstadoNumeroMedidor } from './numero-medidor.entity';
 import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard';
 import { PaginationDto } from '../../common/dto/pagination.dto';

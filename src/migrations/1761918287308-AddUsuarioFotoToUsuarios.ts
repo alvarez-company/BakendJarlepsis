@@ -1,8 +1,6 @@
 import { MigrationInterface, QueryRunner } from 'typeorm';
 
-export class AddUsuarioFotoToUsuarios1761918287308
-  implements MigrationInterface
-{
+export class AddUsuarioFotoToUsuarios1761918287308 implements MigrationInterface {
   name = 'AddUsuarioFotoToUsuarios1761918287308';
 
   public async up(queryRunner: QueryRunner): Promise<void> {

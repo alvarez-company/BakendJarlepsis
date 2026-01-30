@@ -49,17 +49,13 @@ Los siguientes roles deben estar disponibles en el backend y base de datos:
 - `soldador` ✅
 
 ⚠️ **Roles Faltantes en Migración**:
-- `superadmin` - Debe estar en `seed_initial_data.sql`
-- `admin` - Debe estar en `seed_initial_data.sql`
-- `tecnico` - Debe estar en `seed_initial_data.sql`
+- `superadmin`, `admin`, `tecnico` - Se insertan con el seed único.
 
-### 3. Seed Inicial
-**Ubicación**: `src/migrations/seed_initial_data.sql`
+### 3. Seed único (roles y datos iniciales)
+**Ubicación**: `scripts/seed-full.js` y `src/migrations/full_seed.sql`
 
-✅ **Roles Insertados**:
-- `superadmin` ✅
-- `admin` ✅
-- `tecnico` ✅
+✅ **Roles insertados** (seed o full_seed.sql):
+- `superadmin`, `admin`, `administrador`, `admin-internas`, `admin-redes`, `tecnico`, `soldador`, `almacenista`, `bodega-internas`, `bodega-redes`
 
 ## Verificación de Consistencia
 

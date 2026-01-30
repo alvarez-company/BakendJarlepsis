@@ -122,6 +122,7 @@ describe('NotificacionesService', () => {
     });
 
     it('should handle WebSocket errors gracefully', async () => {
+      const consoleErrorSpy = jest.spyOn(console, 'error').mockImplementation(() => {});
       mockRepository.create.mockReturnValue(mockNotificacion);
       mockRepository.save.mockResolvedValue(mockNotificacion);
       mockChatGateway.emitirNotificacion.mockImplementation(() => {
@@ -137,6 +138,7 @@ describe('NotificacionesService', () => {
       );
 
       expect(result).toEqual(mockNotificacion);
+      consoleErrorSpy.mockRestore();
     });
   });
 

@@ -32,7 +32,16 @@ export class ClientesController {
   ) {}
 
   @Post()
-  @Roles('superadmin', 'admin', 'tecnico', 'soldador', 'bodega-internas', 'bodega-redes')
+  @Roles(
+    'superadmin',
+    'admin',
+    'admin-internas',
+    'admin-redes',
+    'tecnico',
+    'soldador',
+    'bodega-internas',
+    'bodega-redes',
+  )
   @ApiOperation({ summary: 'Create a new cliente' })
   create(@Body() createClienteDto: CreateClienteDto, @Request() req) {
     return this.clientesService.create(createClienteDto, req.user.usuarioId);
@@ -43,6 +52,8 @@ export class ClientesController {
     'superadmin',
     'admin',
     'administrador',
+    'admin-internas',
+    'admin-redes',
     'almacenista',
     'tecnico',
     'soldador',
@@ -59,6 +70,8 @@ export class ClientesController {
     'superadmin',
     'admin',
     'administrador',
+    'admin-internas',
+    'admin-redes',
     'almacenista',
     'tecnico',
     'soldador',
@@ -71,7 +84,16 @@ export class ClientesController {
   }
 
   @Patch(':id')
-  @Roles('superadmin', 'admin', 'tecnico', 'soldador', 'bodega-internas', 'bodega-redes')
+  @Roles(
+    'superadmin',
+    'admin',
+    'admin-internas',
+    'admin-redes',
+    'tecnico',
+    'soldador',
+    'bodega-internas',
+    'bodega-redes',
+  )
   @ApiOperation({ summary: 'Update a cliente' })
   update(@Param('id') id: string, @Body() updateClienteDto: UpdateClienteDto) {
     return this.clientesService.update(+id, updateClienteDto);
@@ -89,6 +111,8 @@ export class ClientesController {
     'superadmin',
     'admin',
     'administrador',
+    'admin-internas',
+    'admin-redes',
     'almacenista',
     'tecnico',
     'soldador',
@@ -152,6 +176,8 @@ export class ClientesController {
     'superadmin',
     'admin',
     'administrador',
+    'admin-internas',
+    'admin-redes',
     'almacenista',
     'tecnico',
     'soldador',

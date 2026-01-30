@@ -12,6 +12,8 @@ export enum RoleType {
   SUPERADMIN = 'superadmin',
   ADMIN = 'admin',
   ADMINISTRADOR = 'administrador', // Centro Operativo - solo lectura
+  ADMIN_INTERNAS = 'admin-internas', // Administrador solo bodegas internas (misma sede)
+  ADMIN_REDES = 'admin-redes', // Administrador solo bodegas redes (misma sede)
   TECNICO = 'tecnico',
   SOLDADOR = 'soldador',
   ALMACENISTA = 'almacenista',

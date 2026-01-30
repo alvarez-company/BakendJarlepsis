@@ -1,7 +1,8 @@
 import { Test, TestingModule } from '@nestjs/testing';
 import { JwtService } from '@nestjs/jwt';
+import { Logger } from '@nestjs/common';
 import { ChatGateway } from './chat.gateway';
-import { Server, Socket } from 'socket.io';
+import { Server } from 'socket.io';
 
 describe('ChatGateway', () => {
   let gateway: ChatGateway;
@@ -10,6 +11,9 @@ describe('ChatGateway', () => {
   let mockSocket: any;
 
   beforeEach(async () => {
+    jest.spyOn(Logger.prototype, 'error').mockImplementation(() => {});
+    jest.spyOn(Logger.prototype, 'warn').mockImplementation(() => {});
+    jest.spyOn(Logger.prototype, 'log').mockImplementation(() => {});
     const mockJwtService = {
       verifyAsync: jest.fn(),
     };
@@ -49,6 +53,7 @@ describe('ChatGateway', () => {
 
   afterEach(() => {
     jest.clearAllMocks();
+    jest.restoreAllMocks();
     (gateway as any).users.clear();
   });
 

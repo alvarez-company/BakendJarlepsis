@@ -3,7 +3,6 @@ const { execSync } = require('child_process');
 const readline = require('readline');
 const path = require('path');
 const mysql = require('mysql2/promise');
-const bcrypt = require('bcrypt');
 require('dotenv').config({ path: path.resolve(__dirname, '../.env') });
 
 function askQuestion(query) {
@@ -91,129 +90,8 @@ async function resetDatabase() {
       throw error;
     }
 
-    // 4. Reconectar a la base de datos creada
-    connection = await mysql.createConnection({
-      host,
-      port,
-      user,
-      password,
-      database,
-      multipleStatements: true,
-      connectTimeout: 15000,
-    });
-
-    // 5. Crear todos los roles principales
-    console.log('👥 Creando roles principales...');
-    const roles = [
-      {
-        rolNombre: 'Super Administrador',
-        rolTipo: 'superadmin',
-        rolDescripcion: 'Administrador con todos los permisos incluyendo cambio de roles',
-      },
-      {
-        rolNombre: 'Administrador',
-        rolTipo: 'admin',
-        rolDescripcion: 'Administrador de oficina con permisos completos excepto cambio de roles',
-      },
-      {
-        rolNombre: 'Administrador - Centro Operativo',
-        rolTipo: 'administrador',
-        rolDescripcion: 'Usuario con acceso de solo lectura a la información del centro operativo. No puede editar ni eliminar datos.',
-      },
-      {
-        rolNombre: 'Técnico',
-        rolTipo: 'tecnico',
-        rolDescripcion: 'Usuario técnico con acceso a aplicación móvil y instalaciones asignadas',
-      },
-      {
-        rolNombre: 'Soldador',
-        rolTipo: 'soldador',
-        rolDescripcion: 'Rol para personal de campo especializado en soldadura. Acceso principalmente a la aplicación móvil.',
-      },
-      {
-        rolNombre: 'Almacenista',
-        rolTipo: 'almacenista',
-        rolDescripcion: 'Puede gestionar entradas, salidas, asignaciones, devoluciones y traslados. Puede ver instalaciones y aprobar material, pero no puede editar, eliminar ni cambiar estado de instalaciones.',
-      },
-      {
-        rolNombre: 'Bodega Internas',
-        rolTipo: 'bodega-internas',
-        rolDescripcion: 'Puede gestionar instalaciones, proyectos, usuarios y tipos de instalaciones. No puede asignar material. La información no se cruza con Bodega Redes.',
-      },
-      {
-        rolNombre: 'Bodega Redes',
-        rolTipo: 'bodega-redes',
-        rolDescripcion: 'Puede gestionar instalaciones, proyectos, usuarios y tipos de instalaciones. No puede asignar material. La información no se cruza con Bodega Internas.',
-      },
-    ];
-
-    for (const rol of roles) {
-      await connection.execute(
-        `INSERT INTO roles (rolNombre, rolTipo, rolDescripcion, rolEstado, fechaCreacion, fechaActualizacion)
-         VALUES (?, ?, ?, 1, NOW(), NOW())
-         ON DUPLICATE KEY UPDATE
-           rolNombre = VALUES(rolNombre),
-           rolDescripcion = VALUES(rolDescripcion),
-           rolEstado = 1,
-           fechaActualizacion = NOW()`,
-        [rol.rolNombre, rol.rolTipo, rol.rolDescripcion]
-      );
-    }
-    console.log(`✅ ${roles.length} roles creados correctamente\n`);
-
-    // 6. Crear usuario superadmin
-    console.log('👤 Creando usuario superadmin...');
-    const adminEmail = process.env.ADMIN_EMAIL || 'admin@jarlepsis.com';
-    const adminPassword = process.env.ADMIN_PASSWORD || 'Admin123';
-    const adminNombre = process.env.ADMIN_NOMBRE || 'Super';
-    const adminApellido = process.env.ADMIN_APELLIDO || 'Admin';
-    const adminDocumento = process.env.ADMIN_DOCUMENTO || '9999999999';
-
-    const passwordHash = await bcrypt.hash(adminPassword, 10);
-
-    // Obtener el ID del rol superadmin
-    const [superAdminRole] = await connection.execute(
-      'SELECT rolId FROM roles WHERE rolTipo = ? LIMIT 1',
-      ['superadmin']
-    );
-
-    if (superAdminRole.length === 0) {
-      throw new Error('No se pudo encontrar el rol superadmin');
-    }
-
-    const superAdminRolId = superAdminRole[0].rolId;
-
-    // Crear o actualizar el usuario superadmin
-    await connection.execute(
-      `INSERT INTO usuarios (
-        usuarioRolId,
-        usuarioNombre,
-        usuarioApellido,
-        usuarioCorreo,
-        usuarioDocumento,
-        usuarioContrasena,
-        usuarioEstado,
-        fechaCreacion,
-        fechaActualizacion
-      ) VALUES (?, ?, ?, ?, ?, ?, 1, NOW(), NOW())
-      ON DUPLICATE KEY UPDATE 
-        usuarioRolId = VALUES(usuarioRolId),
-        usuarioContrasena = VALUES(usuarioContrasena),
-        usuarioEstado = 1,
-        fechaActualizacion = NOW()`,
-      [superAdminRolId, adminNombre, adminApellido, adminEmail, adminDocumento, passwordHash]
-    );
-
-    console.log('✅ Usuario superadmin creado/actualizado\n');
-    console.log('📝 Credenciales de acceso:');
-    console.log(`   Email: ${adminEmail}`);
-    console.log(`   Password: ${adminPassword}\n`);
-
-    // Cerrar conexión antes de ejecutar seed
-    await connection.end();
-
-    // 7. Ejecutar seed para datos adicionales (Colombia, categorías, etc.)
-    console.log('🌱 Ejecutando seed de datos adicionales...');
+    // 4. Ejecutar seed único (roles, tipos doc, Colombia, categorías, superadmin)
+    console.log('🌱 Ejecutando seed único...');
     try {
       execSync('npm run seed', {
         stdio: 'inherit',
@@ -222,8 +100,8 @@ async function resetDatabase() {
       });
       console.log('✅ Seed ejecutado correctamente\n');
     } catch (error) {
-      console.error('⚠️  Advertencia: Error ejecutando seed adicional:', error.message);
-      console.log('   Continuando sin datos adicionales...\n');
+      console.error('❌ Error ejecutando seed:', error.message);
+      throw error;
     }
 
     console.log('✅ Reseteo de base de datos completado exitosamente! 🎉\n');

@@ -35,7 +35,7 @@ export class FixSchemaAfterInit1761918287309 implements MigrationInterface {
             AND CONSTRAINT_NAME IS NOT NULL
           LIMIT 1;
         `);
-        
+
         if (fkName && fkName.length > 0 && fkName[0].CONSTRAINT_NAME) {
           await queryRunner.query(`
             ALTER TABLE \`usuarios\` 
@@ -45,7 +45,7 @@ export class FixSchemaAfterInit1761918287309 implements MigrationInterface {
       } catch (error) {
         // Ignorar si no existe la FK
       }
-      
+
       await queryRunner.query(`
         ALTER TABLE \`usuarios\` 
         DROP COLUMN \`usuarioOficina\`;
@@ -56,7 +56,7 @@ export class FixSchemaAfterInit1761918287309 implements MigrationInterface {
     // 2. SEDES: Agregar sedeCorreo y sedeFoto si no existen
     // ============================================
     const sedesTable = await queryRunner.getTable('sedes');
-    
+
     const sedeCorreoColumn = sedesTable?.findColumnByName('sedeCorreo');
     if (!sedeCorreoColumn) {
       await queryRunner.query(`
@@ -77,11 +77,11 @@ export class FixSchemaAfterInit1761918287309 implements MigrationInterface {
     // 3. BODEGAS: Agregar todas las columnas faltantes
     // ============================================
     const bodegasTable = await queryRunner.getTable('bodegas');
-    
+
     // Agregar sedeId si no existe (manejar migración de oficinaId a sedeId)
     const sedeIdColumn = bodegasTable?.findColumnByName('sedeId');
     const oficinaIdColumn = bodegasTable?.findColumnByName('oficinaId');
-    
+
     if (!sedeIdColumn) {
       if (oficinaIdColumn) {
         // Si existe oficinaId, agregar sedeId (las oficinas ya no existen, no migramos datos)
@@ -89,11 +89,11 @@ export class FixSchemaAfterInit1761918287309 implements MigrationInterface {
           ALTER TABLE \`bodegas\` 
           ADD COLUMN \`sedeId\` INT NULL AFTER \`oficinaId\`;
         `);
-        
+
         // NO migramos datos desde oficinas porque esa tabla ya no existe
         // Las bodegas deben tener sedeId asignado manualmente
         // NO hacemos sedeId NOT NULL automáticamente porque las bodegas necesitan sedeId asignado manualmente
-        
+
         // Eliminar foreign key constraint de oficinaId si existe
         try {
           const fkConstraints = await queryRunner.query(`
@@ -105,7 +105,7 @@ export class FixSchemaAfterInit1761918287309 implements MigrationInterface {
               AND CONSTRAINT_NAME IS NOT NULL
             LIMIT 1;
           `);
-          
+
           if (fkConstraints && fkConstraints.length > 0) {
             const fkName = fkConstraints[0].CONSTRAINT_NAME;
             await queryRunner.query(`
@@ -115,7 +115,7 @@ export class FixSchemaAfterInit1761918287309 implements MigrationInterface {
         } catch (error) {
           // Si no existe la constraint, continuar
         }
-        
+
         // Eliminar columna oficinaId
         try {
           await queryRunner.query(`
@@ -131,7 +131,7 @@ export class FixSchemaAfterInit1761918287309 implements MigrationInterface {
           ADD COLUMN \`sedeId\` INT NOT NULL AFTER \`bodegaEstado\`;
         `);
       }
-      
+
       // Asegurar que existe foreign key de sedeId
       try {
         const fkSedeExists = await queryRunner.query(`
@@ -143,7 +143,7 @@ export class FixSchemaAfterInit1761918287309 implements MigrationInterface {
             AND CONSTRAINT_NAME IS NOT NULL
           LIMIT 1;
         `);
-        
+
         if (!fkSedeExists || fkSedeExists.length === 0) {
           await queryRunner.query(`
             ALTER TABLE \`bodegas\` 
@@ -206,7 +206,7 @@ export class FixSchemaAfterInit1761918287309 implements MigrationInterface {
           AND CONSTRAINT_NAME IS NOT NULL
           AND REFERENCED_TABLE_NAME = 'sedes';
       `);
-      
+
       if (fkExists && fkExists[0] && fkExists[0].count === 0) {
         await queryRunner.query(`
           ALTER TABLE \`bodegas\` 
@@ -287,7 +287,7 @@ export class FixSchemaAfterInit1761918287309 implements MigrationInterface {
             AND CONSTRAINT_NAME IS NOT NULL
             AND REFERENCED_TABLE_NAME = 'unidades_medida';
         `);
-        
+
         if (fkExists && fkExists[0] && fkExists[0].count === 0) {
           await queryRunner.query(`
             ALTER TABLE \`materiales\` 
@@ -332,7 +332,7 @@ export class FixSchemaAfterInit1761918287309 implements MigrationInterface {
         ALTER TABLE \`instalaciones\` 
         ADD COLUMN \`identificadorUnico\` VARCHAR(50) NULL UNIQUE AFTER \`instalacionCodigo\`;
       `);
-      
+
       // Crear índice único si no existe
       try {
         await queryRunner.query(`
@@ -345,7 +345,9 @@ export class FixSchemaAfterInit1761918287309 implements MigrationInterface {
     }
 
     // Agregar instalacionSelloRegulador si no existe
-    const instalacionSelloReguladorColumn = instalacionesTable?.findColumnByName('instalacionSelloRegulador');
+    const instalacionSelloReguladorColumn = instalacionesTable?.findColumnByName(
+      'instalacionSelloRegulador',
+    );
     if (!instalacionSelloReguladorColumn) {
       await queryRunner.query(`
         ALTER TABLE \`instalaciones\` 
@@ -363,14 +365,15 @@ export class FixSchemaAfterInit1761918287309 implements MigrationInterface {
     }
 
     // Agregar fechaAsignacionMetrogas si no existe
-    const fechaAsignacionMetrogasColumn = instalacionesTable?.findColumnByName('fechaAsignacionMetrogas');
+    const fechaAsignacionMetrogasColumn =
+      instalacionesTable?.findColumnByName('fechaAsignacionMetrogas');
     if (!fechaAsignacionMetrogasColumn) {
       // Primero agregar como NULL para evitar problemas con datos existentes
       await queryRunner.query(`
         ALTER TABLE \`instalaciones\` 
         ADD COLUMN \`fechaAsignacionMetrogas\` DATE NULL AFTER \`instalacionFecha\`;
       `);
-      
+
       // Asignar fecha por defecto a registros existentes si no tienen fecha
       try {
         await queryRunner.query(`
@@ -381,7 +384,7 @@ export class FixSchemaAfterInit1761918287309 implements MigrationInterface {
       } catch (error) {
         // Ignorar si hay error
       }
-      
+
       // Luego hacer NOT NULL si no hay datos o después de asignar valores
       try {
         await queryRunner.query(`
@@ -480,9 +483,20 @@ export class FixSchemaAfterInit1761918287309 implements MigrationInterface {
       if (estadoColumn && estadoColumn.type === 'enum') {
         // Verificar si el enum tiene todos los valores necesarios
         const enumValues = estadoColumn.enum || [];
-        const requiredValues = ['pendiente', 'asignacion', 'construccion', 'certificacion', 'novedad', 'anulada', 'completada', 'en_proceso', 'finalizada', 'cancelada'];
-        const missingValues = requiredValues.filter(v => !enumValues.includes(v));
-        
+        const requiredValues = [
+          'pendiente',
+          'asignacion',
+          'construccion',
+          'certificacion',
+          'novedad',
+          'anulada',
+          'completada',
+          'en_proceso',
+          'finalizada',
+          'cancelada',
+        ];
+        const missingValues = requiredValues.filter((v) => !enumValues.includes(v));
+
         if (missingValues.length > 0) {
           // Actualizar el enum para incluir todos los valores
           await queryRunner.query(`
@@ -508,7 +522,7 @@ export class FixSchemaAfterInit1761918287309 implements MigrationInterface {
         ALTER TABLE \`movimientos_inventario\` 
         ADD COLUMN \`inventarioId\` INT NULL AFTER \`proveedorId\`;
       `);
-      
+
       // Crear índice si no existe
       try {
         await queryRunner.query(`
@@ -527,7 +541,7 @@ export class FixSchemaAfterInit1761918287309 implements MigrationInterface {
         ALTER TABLE \`movimientos_inventario\` 
         ADD COLUMN \`movimientoCodigo\` VARCHAR(100) NULL AFTER \`inventarioId\`;
       `);
-      
+
       // Crear índice si no existe
       try {
         await queryRunner.query(`
@@ -540,13 +554,14 @@ export class FixSchemaAfterInit1761918287309 implements MigrationInterface {
     }
 
     // Agregar identificadorUnico si no existe
-    const identificadorUnicoMovimientoColumn = movimientosTable?.findColumnByName('identificadorUnico');
+    const identificadorUnicoMovimientoColumn =
+      movimientosTable?.findColumnByName('identificadorUnico');
     if (!identificadorUnicoMovimientoColumn) {
       await queryRunner.query(`
         ALTER TABLE \`movimientos_inventario\` 
         ADD COLUMN \`identificadorUnico\` VARCHAR(50) NULL UNIQUE AFTER \`movimientoCodigo\`;
       `);
-      
+
       // Crear índice único si no existe
       try {
         await queryRunner.query(`
@@ -583,7 +598,7 @@ export class FixSchemaAfterInit1761918287309 implements MigrationInterface {
         ALTER TABLE \`movimientos_inventario\` 
         ADD COLUMN \`tecnicoOrigenId\` INT NULL AFTER \`origenTipo\`;
       `);
-      
+
       // Crear índice si no existe
       try {
         await queryRunner.query(`
@@ -625,7 +640,7 @@ export class FixSchemaAfterInit1761918287309 implements MigrationInterface {
         ALTER TABLE \`traslados\` 
         ADD COLUMN \`identificadorUnico\` VARCHAR(50) NULL UNIQUE AFTER \`trasladoCodigo\`;
       `);
-      
+
       // Crear índice único si no existe
       try {
         await queryRunner.query(`
@@ -681,7 +696,7 @@ export class FixSchemaAfterInit1761918287309 implements MigrationInterface {
 
     // Agregar estadoClienteId si no existe
     const estadoClienteIdColumn = clientesTable?.findColumnByName('estadoClienteId');
-    
+
     if (!estadoClienteIdColumn) {
       // Agregar después de clienteEstado (que ahora debería existir)
       await queryRunner.query(`
@@ -693,7 +708,7 @@ export class FixSchemaAfterInit1761918287309 implements MigrationInterface {
     // Verificar si nombreUsuario existe, si no, podría ser clienteNombreCompleto (legacy)
     const nombreUsuarioColumn = clientesTable?.findColumnByName('nombreUsuario');
     const clienteNombreCompletoColumn = clientesTable?.findColumnByName('clienteNombreCompleto');
-    
+
     if (!nombreUsuarioColumn) {
       if (clienteNombreCompletoColumn) {
         // Renombrar clienteNombreCompleto a nombreUsuario
@@ -732,7 +747,7 @@ export class FixSchemaAfterInit1761918287309 implements MigrationInterface {
     // ============================================
     const proyectosTable = await queryRunner.getTable('proyectos');
     const usuarioRegistraProyectoColumn = proyectosTable?.findColumnByName('usuarioRegistra');
-    
+
     if (!usuarioRegistraProyectoColumn) {
       await queryRunner.query(`
         ALTER TABLE \`proyectos\` 
@@ -746,14 +761,14 @@ export class FixSchemaAfterInit1761918287309 implements MigrationInterface {
     const itemsProyectoTable = await queryRunner.getTable('items_proyecto');
     const itemNombreColumn = itemsProyectoTable?.findColumnByName('itemNombre');
     const itemCodigoColumn = itemsProyectoTable?.findColumnByName('itemCodigo');
-    
+
     if (!itemNombreColumn) {
       await queryRunner.query(`
         ALTER TABLE \`items_proyecto\` 
         ADD COLUMN \`itemNombre\` VARCHAR(255) NOT NULL DEFAULT '' AFTER \`proyectoId\`;
       `);
     }
-    
+
     if (!itemCodigoColumn) {
       await queryRunner.query(`
         ALTER TABLE \`items_proyecto\` 
@@ -765,7 +780,7 @@ export class FixSchemaAfterInit1761918287309 implements MigrationInterface {
     // 11. ITEMS_PROYECTO: Agregar usuarioRegistra si no existe
     // ============================================
     const usuarioRegistraItemColumn = itemsProyectoTable?.findColumnByName('usuarioRegistra');
-    
+
     if (!usuarioRegistraItemColumn) {
       await queryRunner.query(`
         ALTER TABLE \`items_proyecto\` 
@@ -1041,9 +1056,9 @@ export class FixSchemaAfterInit1761918287309 implements MigrationInterface {
 
   public async down(queryRunner: QueryRunner): Promise<void> {
     // Revertir cambios en orden inverso
-    
+
     const bodegasTable = await queryRunner.getTable('bodegas');
-    
+
     // Eliminar bodegaTipo
     const bodegaTipoColumn = bodegasTable?.findColumnByName('bodegaTipo');
     if (bodegaTipoColumn) {
@@ -1081,7 +1096,7 @@ export class FixSchemaAfterInit1761918287309 implements MigrationInterface {
     }
 
     const sedesTable = await queryRunner.getTable('sedes');
-    
+
     // Eliminar sedeFoto
     const sedeFotoColumn = sedesTable?.findColumnByName('sedeFoto');
     if (sedeFotoColumn) {
@@ -1101,7 +1116,7 @@ export class FixSchemaAfterInit1761918287309 implements MigrationInterface {
     }
 
     const usuariosTable = await queryRunner.getTable('usuarios');
-    
+
     // Eliminar usuarioFoto
     const usuarioFotoColumn = usuariosTable?.findColumnByName('usuarioFoto');
     if (usuarioFotoColumn) {
@@ -1112,7 +1127,7 @@ export class FixSchemaAfterInit1761918287309 implements MigrationInterface {
     }
 
     const instalacionesTable = await queryRunner.getTable('instalaciones');
-    
+
     // Eliminar bodegaId
     const bodegaIdInstalacionColumn = instalacionesTable?.findColumnByName('bodegaId');
     if (bodegaIdInstalacionColumn) {
@@ -1195,7 +1210,8 @@ export class FixSchemaAfterInit1761918287309 implements MigrationInterface {
     }
 
     // Eliminar fechaAsignacionMetrogas
-    const fechaAsignacionMetrogasColumn = instalacionesTable?.findColumnByName('fechaAsignacionMetrogas');
+    const fechaAsignacionMetrogasColumn =
+      instalacionesTable?.findColumnByName('fechaAsignacionMetrogas');
     if (fechaAsignacionMetrogasColumn) {
       await queryRunner.query(`
         ALTER TABLE \`instalaciones\` 
@@ -1213,7 +1229,9 @@ export class FixSchemaAfterInit1761918287309 implements MigrationInterface {
     }
 
     // Eliminar instalacionSelloRegulador
-    const instalacionSelloReguladorColumn = instalacionesTable?.findColumnByName('instalacionSelloRegulador');
+    const instalacionSelloReguladorColumn = instalacionesTable?.findColumnByName(
+      'instalacionSelloRegulador',
+    );
     if (instalacionSelloReguladorColumn) {
       await queryRunner.query(`
         ALTER TABLE \`instalaciones\` 
@@ -1238,7 +1256,7 @@ export class FixSchemaAfterInit1761918287309 implements MigrationInterface {
     }
 
     const materialesTable = await queryRunner.getTable('materiales');
-    
+
     // Eliminar materialEsMedidor
     const materialEsMedidorColumn = materialesTable?.findColumnByName('materialEsMedidor');
     if (materialEsMedidorColumn) {
@@ -1274,7 +1292,7 @@ export class FixSchemaAfterInit1761918287309 implements MigrationInterface {
     }
 
     const clientesTable = await queryRunner.getTable('clientes');
-    
+
     // Eliminar estadoClienteId
     const estadoClienteIdColumn = clientesTable?.findColumnByName('estadoClienteId');
     if (estadoClienteIdColumn) {
@@ -1294,7 +1312,7 @@ export class FixSchemaAfterInit1761918287309 implements MigrationInterface {
     }
 
     const trasladosTable = await queryRunner.getTable('traslados');
-    
+
     // Eliminar numerosMedidor
     const numerosMedidorTrasladoColumn = trasladosTable?.findColumnByName('numerosMedidor');
     if (numerosMedidorTrasladoColumn) {
@@ -1339,7 +1357,7 @@ export class FixSchemaAfterInit1761918287309 implements MigrationInterface {
     }
 
     const movimientosTable = await queryRunner.getTable('movimientos_inventario');
-    
+
     // Eliminar numerosMedidor
     const numerosMedidorMovimientoColumn = movimientosTable?.findColumnByName('numerosMedidor');
     if (numerosMedidorMovimientoColumn) {
@@ -1384,7 +1402,8 @@ export class FixSchemaAfterInit1761918287309 implements MigrationInterface {
     }
 
     // Eliminar identificadorUnico
-    const identificadorUnicoMovimientoColumn = movimientosTable?.findColumnByName('identificadorUnico');
+    const identificadorUnicoMovimientoColumn =
+      movimientosTable?.findColumnByName('identificadorUnico');
     if (identificadorUnicoMovimientoColumn) {
       try {
         await queryRunner.query(`

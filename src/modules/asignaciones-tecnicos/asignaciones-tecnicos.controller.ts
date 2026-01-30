@@ -34,21 +34,47 @@ export class AsignacionesTecnicosController {
   ) {}
 
   @Post()
-  @Roles('superadmin', 'admin', 'almacenista', 'bodega-internas', 'bodega-redes')
+  @Roles(
+    'superadmin',
+    'admin',
+    'admin-internas',
+    'admin-redes',
+    'almacenista',
+    'bodega-internas',
+    'bodega-redes',
+  )
   @ApiOperation({ summary: 'Crear una nueva asignación' })
   create(@Body() createDto: CreateAsignacionTecnicoDto, @Request() req) {
     return this.service.create(createDto, req.user);
   }
 
   @Get()
-  @Roles('superadmin', 'admin', 'administrador', 'almacenista', 'bodega-internas', 'bodega-redes')
+  @Roles(
+    'superadmin',
+    'admin',
+    'administrador',
+    'admin-internas',
+    'admin-redes',
+    'almacenista',
+    'bodega-internas',
+    'bodega-redes',
+  )
   @ApiOperation({ summary: 'Obtener todas las asignaciones' })
   findAll(@Query() paginationDto?: PaginationDto) {
     return this.service.findAll(paginationDto);
   }
 
   @Get(':id')
-  @Roles('superadmin', 'admin', 'administrador', 'almacenista', 'bodega-internas', 'bodega-redes')
+  @Roles(
+    'superadmin',
+    'admin',
+    'administrador',
+    'admin-internas',
+    'admin-redes',
+    'almacenista',
+    'bodega-internas',
+    'bodega-redes',
+  )
   @ApiOperation({ summary: 'Obtener una asignación por ID' })
   findOne(@Param('id') id: string) {
     return this.service.findOne(+id);
@@ -59,6 +85,8 @@ export class AsignacionesTecnicosController {
     'superadmin',
     'admin',
     'administrador',
+    'admin-internas',
+    'admin-redes',
     'almacenista',
     'bodega-internas',
     'bodega-redes',

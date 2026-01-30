@@ -57,11 +57,11 @@ export class SearchService {
     private sedesService: SedesService,
   ) {}
 
-  async globalSearch(query: string): Promise<SearchResponse> {
+  async globalSearch(query: string, user?: any): Promise<SearchResponse> {
     const searchLower = query.toLowerCase().trim();
     const results: SearchResult[] = [];
 
-    // Búsquedas en paralelo
+    // Búsquedas en paralelo (pasar user para filtrar por bodegas cuando aplique)
     const [
       materiales,
       instalaciones,
@@ -73,15 +73,15 @@ export class SearchService {
       bodegas,
       sedes,
     ] = await Promise.allSettled([
-      this.materialesService.findAll(),
-      this.instalacionesService.findAll(),
-      this.movimientosService.findAll(),
-      this.trasladosService.findAll(),
+      this.materialesService.findAll(user),
+      this.instalacionesService.findAll(user),
+      this.movimientosService.findAll(undefined, user),
+      this.trasladosService.findAll(undefined, user),
       this.usersService.findAll(),
       this.clientesService.findAll(),
       this.proyectosService.findAll(),
-      this.bodegasService.findAll(),
-      this.sedesService.findAll(),
+      this.bodegasService.findAll(user),
+      this.sedesService.findAll(user),
     ]);
 
     // Procesar materiales

@@ -8,11 +8,7 @@ import {
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository, In } from 'typeorm';
 import { NumeroMedidor, EstadoNumeroMedidor } from './numero-medidor.entity';
-import {
-  CreateNumeroMedidorDto,
-  UpdateNumeroMedidorDto,
-  AsignarNumerosMedidorDto,
-} from './dto/create-numero-medidor.dto';
+import { CreateNumeroMedidorDto, UpdateNumeroMedidorDto } from './dto/create-numero-medidor.dto';
 import { MaterialesService } from '../materiales/materiales.service';
 
 @Injectable()

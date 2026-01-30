@@ -25,10 +25,10 @@ export class BodegasController {
   constructor(private readonly bodegasService: BodegasService) {}
 
   @Post()
-  @Roles('superadmin', 'admin')
-  @ApiOperation({ summary: 'Create a new bodega' })
-  create(@Body() createBodegaDto: CreateBodegaDto) {
-    return this.bodegasService.create(createBodegaDto);
+  @Roles('superadmin', 'admin', 'admin-internas', 'admin-redes')
+  @ApiOperation({ summary: 'Create a new bodega (tipo internas o redes obligatorio)' })
+  create(@Body() createBodegaDto: CreateBodegaDto, @Request() req) {
+    return this.bodegasService.create(createBodegaDto, req.user);
   }
 
   @Get()
@@ -36,6 +36,8 @@ export class BodegasController {
     'superadmin',
     'admin',
     'administrador',
+    'admin-internas',
+    'admin-redes',
     'bodega-internas',
     'bodega-redes',
     'almacenista',
@@ -52,6 +54,8 @@ export class BodegasController {
     'superadmin',
     'admin',
     'administrador',
+    'admin-internas',
+    'admin-redes',
     'bodega-internas',
     'bodega-redes',
     'almacenista',
@@ -59,12 +63,12 @@ export class BodegasController {
     'soldador',
   )
   @ApiOperation({ summary: 'Get a bodega by ID' })
-  findOne(@Param('id') id: string) {
-    return this.bodegasService.findOne(+id);
+  findOne(@Param('id') id: string, @Request() req) {
+    return this.bodegasService.findOne(+id, req.user);
   }
 
   @Patch(':id')
-  @Roles('superadmin', 'admin')
+  @Roles('superadmin', 'admin', 'admin-internas', 'admin-redes')
   @ApiOperation({ summary: 'Update a bodega' })
   update(@Param('id') id: string, @Body() updateBodegaDto: UpdateBodegaDto, @Request() req) {
     return this.bodegasService.update(+id, updateBodegaDto, req.user);
