@@ -187,9 +187,9 @@ CREATE TABLE IF NOT EXISTS `numeros_medidor` (
 
 -- 2.1 ROLES (INSERT con ON DUPLICATE KEY por rolNombre/rolTipo según tabla)
 INSERT INTO `roles` (`rolNombre`, `rolTipo`, `rolDescripcion`, `rolEstado`, `fechaCreacion`, `fechaActualizacion`) VALUES
-('Super Administrador', 'superadmin', 'Administrador con todos los permisos incluyendo cambio de roles', 1, NOW(), NOW()),
-('Administrador', 'admin', 'Administrador de oficina con permisos completos excepto cambio de roles', 1, NOW(), NOW()),
-('Administrador - Centro Operativo', 'administrador', 'Usuario con acceso de solo lectura a la información del centro operativo. No puede editar ni eliminar datos.', 1, NOW(), NOW()),
+('Super Administrador', 'superadmin', 'Rol exclusivo del desarrollador del sistema. Un solo usuario en todo el sistema. No se lista en usuarios. Usado para procesos internos de desarrollo e impersonación.', 1, NOW(), NOW()),
+('Gerencia', 'gerencia', 'Máximo nivel para la organización. Mismos permisos que SuperAdmin pero sin impersonación. Gestión completa de usuarios, sedes, bodegas, instalaciones y configuración.', 1, NOW(), NOW()),
+('Administrador', 'admin', 'Administrador del centro operativo con permisos completos: puede gestionar sedes, bodegas, instalaciones, usuarios y datos de su centro. No puede cambiar roles de otros usuarios.', 1, NOW(), NOW()),
 ('Administrador de Internas', 'admin-internas', 'Mismos permisos que administrador pero con acceso solo a bodegas de tipo internas de su centro operativo.', 1, NOW(), NOW()),
 ('Administrador de Redes', 'admin-redes', 'Mismos permisos que administrador pero con acceso solo a bodegas de tipo redes de su centro operativo.', 1, NOW(), NOW()),
 ('Técnico', 'tecnico', 'Usuario técnico con acceso a aplicación móvil y instalaciones asignadas', 1, NOW(), NOW()),

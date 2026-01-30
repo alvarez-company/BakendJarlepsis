@@ -16,7 +16,6 @@ export class NotificacionesController {
   @Roles(
     'superadmin',
     'admin',
-    'administrador',
     'almacenista',
     'tecnico',
     'soldador',
@@ -39,7 +38,6 @@ export class NotificacionesController {
   @Roles(
     'superadmin',
     'admin',
-    'administrador',
     'almacenista',
     'tecnico',
     'soldador',
@@ -55,7 +53,6 @@ export class NotificacionesController {
   @Roles(
     'superadmin',
     'admin',
-    'administrador',
     'almacenista',
     'tecnico',
     'soldador',
@@ -71,7 +68,6 @@ export class NotificacionesController {
   @Roles(
     'superadmin',
     'admin',
-    'administrador',
     'almacenista',
     'tecnico',
     'soldador',
@@ -86,7 +82,6 @@ export class NotificacionesController {
   @Roles(
     'superadmin',
     'admin',
-    'administrador',
     'almacenista',
     'tecnico',
     'soldador',
@@ -101,7 +96,6 @@ export class NotificacionesController {
   @Roles(
     'superadmin',
     'admin',
-    'administrador',
     'almacenista',
     'tecnico',
     'soldador',
@@ -116,7 +110,6 @@ export class NotificacionesController {
   @Roles(
     'superadmin',
     'admin',
-    'administrador',
     'almacenista',
     'tecnico',
     'soldador',

@@ -72,7 +72,6 @@ describe('NotificacionesController - Roles y Permisos', () => {
     const allowedRoles = [
       'superadmin',
       'admin',
-      'administrador',
       'almacenista',
       'tecnico',
       'soldador',
@@ -93,7 +92,6 @@ describe('NotificacionesController - Roles y Permisos', () => {
     const allowedRoles = [
       'superadmin',
       'admin',
-      'administrador',
       'almacenista',
       'tecnico',
       'soldador',
@@ -114,7 +112,6 @@ describe('NotificacionesController - Roles y Permisos', () => {
     const allowedRoles = [
       'superadmin',
       'admin',
-      'administrador',
       'almacenista',
       'tecnico',
       'soldador',

@@ -16,7 +16,6 @@ export class SearchController {
   @Roles(
     'superadmin',
     'admin',
-    'administrador',
     'admin-internas',
     'admin-redes',
     'almacenista',

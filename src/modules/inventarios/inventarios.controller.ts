@@ -42,7 +42,6 @@ export class InventariosController {
   @Roles(
     'superadmin',
     'admin',
-    'administrador',
     'admin-internas',
     'admin-redes',
     'almacenista',
@@ -60,7 +59,6 @@ export class InventariosController {
   @Roles(
     'superadmin',
     'admin',
-    'administrador',
     'admin-internas',
     'admin-redes',
     'almacenista',
@@ -82,7 +80,7 @@ export class InventariosController {
   }
 
   @Delete(':id')
-  @Roles('superadmin')
+  @Roles('superadmin', 'gerencia')
   @ApiOperation({ summary: 'Delete an inventario' })
   remove(@Param('id') id: string) {
     return this.inventariosService.remove(+id);
@@ -92,7 +90,6 @@ export class InventariosController {
   @Roles(
     'superadmin',
     'admin',
-    'administrador',
     'admin-internas',
     'admin-redes',
     'almacenista',
@@ -161,7 +158,6 @@ export class InventariosController {
   @Roles(
     'superadmin',
     'admin',
-    'administrador',
     'admin-internas',
     'admin-redes',
     'almacenista',

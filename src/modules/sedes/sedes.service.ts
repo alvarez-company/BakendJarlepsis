@@ -123,8 +123,13 @@ export class SedesService {
   async findAll(user?: any): Promise<Sede[]> {
     const allSedes = await this.sedesRepository.find({ relations: ['bodegas'] });
 
-    // SuperAdmin ve todo
-    if (user?.usuarioRol?.rolTipo === 'superadmin' || user?.role === 'superadmin') {
+    // SuperAdmin y Gerencia ven todo
+    if (
+      user?.usuarioRol?.rolTipo === 'superadmin' ||
+      user?.role === 'superadmin' ||
+      user?.usuarioRol?.rolTipo === 'gerencia' ||
+      user?.role === 'gerencia'
+    ) {
       return allSedes;
     }
 
@@ -147,11 +152,6 @@ export class SedesService {
         return allSedes.filter((sede) => sede.sedeId === user.usuarioSede);
       }
       return [];
-    }
-
-    // Administrador (Centro Operativo) - solo lectura, ve todas las sedes
-    if (user?.usuarioRol?.rolTipo === 'administrador' || user?.role === 'administrador') {
-      return allSedes;
     }
 
     // Almacenista ve solo su sede asignada
@@ -204,8 +204,8 @@ export class SedesService {
     if (user) {
       const rolTipo = user.usuarioRol?.rolTipo || user.role;
 
-      // Solo superadmin y admin pueden editar sedes
-      if (rolTipo !== 'superadmin' && rolTipo !== 'admin') {
+      // Solo superadmin, gerencia y admin pueden editar sedes
+      if (rolTipo !== 'superadmin' && rolTipo !== 'gerencia' && rolTipo !== 'admin') {
         throw new BadRequestException('No tienes permisos para editar sedes');
       }
 
@@ -238,10 +238,10 @@ export class SedesService {
   async remove(id: number, user?: any): Promise<void> {
     const sede = await this.findOne(id);
 
-    // Validar permisos - solo superadmin puede eliminar
+    // Validar permisos - solo superadmin y gerencia pueden eliminar
     if (user) {
       const rolTipo = user.usuarioRol?.rolTipo || user.role;
-      if (rolTipo !== 'superadmin') {
+      if (rolTipo !== 'superadmin' && rolTipo !== 'gerencia') {
         throw new BadRequestException('No tienes permisos para eliminar sedes');
       }
     }

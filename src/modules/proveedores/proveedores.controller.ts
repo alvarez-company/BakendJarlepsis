@@ -43,7 +43,7 @@ export class ProveedoresController {
   }
 
   @Delete(':id')
-  @Roles('superadmin')
+  @Roles('superadmin', 'gerencia')
   @ApiOperation({ summary: 'Delete a proveedor' })
   remove(@Param('id') id: string) {
     return this.proveedoresService.remove(+id);

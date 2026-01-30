@@ -32,7 +32,6 @@ export class TiposInstalacionController {
   @Roles(
     'superadmin',
     'admin',
-    'administrador',
     'admin-internas',
     'admin-redes',
     'almacenista',
@@ -49,7 +48,6 @@ export class TiposInstalacionController {
   @Roles(
     'superadmin',
     'admin',
-    'administrador',
     'admin-internas',
     'admin-redes',
     'almacenista',

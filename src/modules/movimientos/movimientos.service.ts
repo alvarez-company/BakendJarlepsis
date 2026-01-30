@@ -811,8 +811,8 @@ export class MovimientosService {
       if (user) {
         const rolTipo = user.usuarioRol?.rolTipo || user.role;
 
-        // SuperAdmin ve todo - no agregar condiciones
-        if (rolTipo !== 'superadmin') {
+        // SuperAdmin y Gerencia ven todo - no agregar condiciones
+        if (rolTipo !== 'superadmin' && rolTipo !== 'gerencia') {
           // Admin ve movimientos de su sede
           if (rolTipo === 'admin' && user.usuarioSede) {
             whereConditions = `

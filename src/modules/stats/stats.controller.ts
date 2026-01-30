@@ -16,7 +16,6 @@ export class StatsController {
   @Roles(
     'superadmin',
     'admin',
-    'administrador',
     'admin-internas',
     'admin-redes',
     'almacenista',

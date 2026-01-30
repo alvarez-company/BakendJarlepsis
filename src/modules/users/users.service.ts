@@ -54,14 +54,48 @@ export class UsersService {
     // Validación de permisos por rol del creador
     // ============================================
     // Reglas:
-    // - superadmin: puede crear cualquier rol
-    // - admin/administrador: SOLO pueden crear usuarios con roles:
-    //   tecnico, soldador, almacenista, bodega-internas, bodega-redes
+    // - superadmin y gerencia: pueden crear cualquier rol excepto superadmin (el rol superadmin no se asigna por API)
+    // - admin (centro operativo): SOLO pueden crear usuarios con roles: tecnico, soldador, almacenista, etc.
+    const rolObjetivoEntityForCreate = await this.rolesService.findOne(createUserDto.usuarioRolId).catch(() => null);
+    const rolObjetivoForCreate = (rolObjetivoEntityForCreate?.rolTipo || '').toLowerCase();
+    if (rolObjetivoForCreate === 'superadmin') {
+      throw new BadRequestException(
+        'No se puede crear un usuario con el rol Super Administrador. Ese rol es exclusivo del desarrollador del sistema.',
+      );
+    }
+
+    // Solo Gerencia (y SuperAdmin) pueden crear usuarios con rol Administrador de centro operativo (admin)
+    const rolCreadorForAdminCheck = (creadorRolTipo || '').toLowerCase();
+    if (
+      rolObjetivoForCreate === 'admin' &&
+      rolCreadorForAdminCheck !== 'superadmin' &&
+      rolCreadorForAdminCheck !== 'gerencia'
+    ) {
+      throw new BadRequestException(
+        'Solo el rol Gerencia puede crear usuarios Administrador de centro operativo.',
+      );
+    }
+
     if (creadorId) {
       const rolCreador = (creadorRolTipo || '').toLowerCase();
 
-      if (rolCreador && rolCreador !== 'superadmin') {
-        const rolesPermitidosParaAdministradores = [
+      if (
+        rolCreador === 'admin' ||
+        rolCreador === 'admin-internas' ||
+        rolCreador === 'admin-redes'
+      ) {
+        const creator = await this.findOne(creadorId);
+        if (!creator.usuarioSede) {
+          throw new BadRequestException(
+            'Tu usuario no tiene centro operativo asignado. No puedes crear usuarios.',
+          );
+        }
+
+        const rolObjetivoEntity = await this.rolesService.findOne(createUserDto.usuarioRolId);
+        const rolObjetivo = (rolObjetivoEntity?.rolTipo || '').toLowerCase();
+
+        // Administrador de centro operativo: puede crear cualquier rol excepto admin (solo Gerencia crea admin)
+        const rolesAdminCentro = [
           'tecnico',
           'soldador',
           'almacenista',
@@ -70,20 +104,66 @@ export class UsersService {
           'bodega-internas',
           'bodega-redes',
         ];
+        // Administrador de Internas: solo técnicos, soldador, almacenista, bodega-internas (para su bodega/contexto)
+        const rolesAdminInternas = ['tecnico', 'soldador', 'almacenista', 'bodega-internas'];
+        // Administrador de Redes: solo técnicos, soldador, almacenista, bodega-redes
+        const rolesAdminRedes = ['tecnico', 'soldador', 'almacenista', 'bodega-redes'];
 
-        if (
-          rolCreador === 'admin' ||
-          rolCreador === 'administrador' ||
-          rolCreador === 'admin-internas' ||
-          rolCreador === 'admin-redes'
-        ) {
-          const rolObjetivoEntity = await this.rolesService.findOne(createUserDto.usuarioRolId);
-          const rolObjetivo = (rolObjetivoEntity?.rolTipo || '').toLowerCase();
+        const permitidos =
+          rolCreador === 'admin'
+            ? rolesAdminCentro
+            : rolCreador === 'admin-internas'
+              ? rolesAdminInternas
+              : rolesAdminRedes;
 
-          if (!rolesPermitidosParaAdministradores.includes(rolObjetivo)) {
+        if (!permitidos.includes(rolObjetivo)) {
+          const msg =
+            rolCreador === 'admin'
+              ? 'Solo puedes crear: Técnico, Soldador, Almacenista, Administrador de Internas, Administrador de Redes, Bodega Internas y Bodega Redes.'
+              : rolCreador === 'admin-internas'
+                ? 'Solo puedes crear: Técnico, Soldador, Almacenista y Bodega Internas (para tu centro operativo).'
+                : 'Solo puedes crear: Técnico, Soldador, Almacenista y Bodega Redes (para tu centro operativo).';
+          throw new BadRequestException(`No tienes permiso para crear usuarios con ese rol. ${msg}`);
+        }
+
+        const rolesRequierenSede = [
+          'admin',
+          'admin-internas',
+          'admin-redes',
+          'almacenista',
+          'tecnico',
+          'soldador',
+        ];
+        const rolesRequierenBodega = ['bodega-internas', 'bodega-redes'];
+
+        if (rolesRequierenSede.includes(rolObjetivo)) {
+          if (
+            createUserDto.usuarioSede != null &&
+            createUserDto.usuarioSede !== creator.usuarioSede
+          ) {
             throw new BadRequestException(
-              'No tienes permiso para crear usuarios con ese rol. Solo puedes crear: Técnico, Soldador, Almacenista, Administrador de Internas, Administrador de Redes, Bodega Internas y Bodega Redes.',
+              'Solo puedes crear usuarios para tu centro operativo.',
             );
+          }
+          createUserDto.usuarioSede = creator.usuarioSede;
+        } else if (rolesRequierenBodega.includes(rolObjetivo)) {
+          if (createUserDto.usuarioBodega != null) {
+            const bodega = await this.bodegasService.findOne(createUserDto.usuarioBodega);
+            if (bodega.sedeId !== creator.usuarioSede) {
+              throw new BadRequestException(
+                'Solo puedes crear usuarios para bodegas de tu centro operativo.',
+              );
+            }
+            if (rolCreador === 'admin-internas' && bodega.bodegaTipo !== 'internas') {
+              throw new BadRequestException(
+                'Solo puedes crear usuarios para bodegas de tipo internas de tu centro operativo.',
+              );
+            }
+            if (rolCreador === 'admin-redes' && bodega.bodegaTipo !== 'redes') {
+              throw new BadRequestException(
+                'Solo puedes crear usuarios para bodegas de tipo redes de tu centro operativo.',
+              );
+            }
           }
         }
       }
@@ -110,7 +190,6 @@ export class UsersService {
 
       const rolesRequierenCentroOperativo = [
         'admin',
-        'administrador',
         'admin-internas',
         'admin-redes',
         'almacenista',
@@ -119,8 +198,8 @@ export class UsersService {
       ];
       const rolesRequierenBodega = ['bodega-internas', 'bodega-redes'];
 
-      if (rolObjetivo === 'superadmin') {
-        // ok (no requiere sede/bodega)
+      if (rolObjetivo === 'superadmin' || rolObjetivo === 'gerencia') {
+        // SuperAdmin y Gerencia no requieren sede/bodega
       } else if (rolesRequierenCentroOperativo.includes(rolObjetivo)) {
         if (!createUserDto.usuarioSede) {
           throw new BadRequestException('Este rol requiere Centro Operativo (usuarioSede).');
@@ -214,6 +293,7 @@ export class UsersService {
   async findAll(
     paginationDto?: PaginationDto,
     search?: string,
+    requestingUser?: { usuarioRol?: { rolTipo: string }; role?: string; usuarioSede?: number },
   ): Promise<{ data: User[]; total: number; page: number; limit: number }> {
     const page = paginationDto?.page || 1;
     const limit = paginationDto?.limit || 10;
@@ -225,9 +305,23 @@ export class UsersService {
       .leftJoinAndSelect('user.sede', 'sede')
       .leftJoinAndSelect('user.bodega', 'bodega');
 
+    // El usuario SuperAdmin no se lista nunca (rol exclusivo del desarrollador, un solo usuario en el sistema)
+    queryBuilder.andWhere('rol.rolTipo != :superadmin', { superadmin: 'superadmin' });
+
+    // Administrador solo ve usuarios de su centro operativo
+    const rolTipo = requestingUser?.usuarioRol?.rolTipo || requestingUser?.role;
+    if (
+      (rolTipo === 'admin' || rolTipo === 'admin-internas' || rolTipo === 'admin-redes') &&
+      requestingUser?.usuarioSede
+    ) {
+      queryBuilder.andWhere('user.usuarioSede = :sedeId', {
+        sedeId: requestingUser.usuarioSede,
+      });
+    }
+
     if (search) {
-      queryBuilder.where(
-        'user.usuarioNombre LIKE :search OR user.usuarioApellido LIKE :search OR user.usuarioCorreo LIKE :search OR user.usuarioDocumento LIKE :search',
+      queryBuilder.andWhere(
+        '(user.usuarioNombre LIKE :search OR user.usuarioApellido LIKE :search OR user.usuarioCorreo LIKE :search OR user.usuarioDocumento LIKE :search)',
         { search: `%${search}%` },
       );
     }
@@ -244,7 +338,15 @@ export class UsersService {
     };
   }
 
-  async findOne(id: number): Promise<User> {
+  async findOne(
+    id: number,
+    requestingUser?: {
+      usuarioId?: number;
+      usuarioRol?: { rolTipo: string };
+      role?: string;
+      usuarioSede?: number;
+    },
+  ): Promise<User> {
     const user = await this.usersRepository.findOne({
       where: { usuarioId: id },
       relations: ['usuarioRol', 'sede', 'bodega'],
@@ -252,7 +354,36 @@ export class UsersService {
     if (!user) {
       throw new NotFoundException(`User with ID ${id} not found`);
     }
+    // El usuario SuperAdmin no es visible para otros; solo para él mismo. Sin requestingUser (ej. validación JWT) se permite.
+    const userRolTipo = user.usuarioRol?.rolTipo?.toLowerCase();
+    if (userRolTipo === 'superadmin') {
+      const requesterId = requestingUser?.usuarioId;
+      if (requestingUser != null && requesterId !== id) {
+        throw new NotFoundException(`User with ID ${id} not found`);
+      }
+    }
+    // Administrador solo puede ver usuarios de su centro operativo
+    const rolTipo = requestingUser?.usuarioRol?.rolTipo || requestingUser?.role;
+    if (
+      (rolTipo === 'admin' || rolTipo === 'admin-internas' || rolTipo === 'admin-redes') &&
+      requestingUser?.usuarioSede != null
+    ) {
+      if (user.usuarioSede !== requestingUser.usuarioSede) {
+        throw new NotFoundException(`User with ID ${id} not found`);
+      }
+    }
     return user;
+  }
+
+  /**
+   * Carga un usuario por ID solo para validación JWT. No aplica reglas de visibilidad (SuperAdmin oculto).
+   * Usar solo en JwtStrategy para evitar 404 al validar el token del SuperAdmin.
+   */
+  async findOneForAuth(id: number): Promise<User | null> {
+    return this.usersRepository.findOne({
+      where: { usuarioId: id },
+      relations: ['usuarioRol', 'sede', 'bodega'],
+    });
   }
 
   async findByEmail(email: string): Promise<User | null> {
@@ -277,24 +408,31 @@ export class UsersService {
   ): Promise<User> {
     const user = await this.findOne(id);
 
-    // Si se intenta cambiar la contraseña, solo superadmin puede cambiar contraseñas de otros usuarios
+    // Si se intenta cambiar la contraseña, solo superadmin y gerencia pueden cambiar contraseñas de otros usuarios
     if (updateUserDto.usuarioContrasena) {
-      // Si el usuario que solicita no es superadmin y no está actualizando su propio perfil
-      if (requestingUserId && requestingUserRole !== 'superadmin' && requestingUserId !== id) {
+      const puedeCambiarContrasenaOtros =
+        requestingUserRole === 'superadmin' || requestingUserRole === 'gerencia';
+      if (requestingUserId && !puedeCambiarContrasenaOtros && requestingUserId !== id) {
         throw new BadRequestException(
-          'Solo puedes cambiar tu propia contraseña. Los cambios de contraseña de otros usuarios solo pueden ser realizados por el superadmin.',
+          'Solo puedes cambiar tu propia contraseña. Los cambios de contraseña de otros usuarios solo pueden ser realizados por SuperAdmin o Gerencia.',
         );
       }
       updateUserDto.usuarioContrasena = await bcrypt.hash(updateUserDto.usuarioContrasena, 10);
     }
 
-    // Si se intenta cambiar el rol, solo superadmin puede hacerlo
+    // Si se intenta cambiar el rol, solo superadmin y gerencia pueden hacerlo (y nadie puede asignar el rol superadmin)
     if (
       updateUserDto.usuarioRolId !== undefined &&
       updateUserDto.usuarioRolId !== user.usuarioRolId
     ) {
-      if (requestingUserRole !== 'superadmin') {
-        throw new BadRequestException('Solo el superadmin puede cambiar roles de usuarios');
+      if (requestingUserRole !== 'superadmin' && requestingUserRole !== 'gerencia') {
+        throw new BadRequestException('Solo SuperAdmin o Gerencia pueden cambiar roles de usuarios');
+      }
+      const newRoleForUpdate = await this.rolesService.findOne(updateUserDto.usuarioRolId);
+      if (newRoleForUpdate?.rolTipo?.toLowerCase() === 'superadmin') {
+        throw new BadRequestException(
+          'No se puede asignar el rol Super Administrador. Ese rol es exclusivo del desarrollador del sistema.',
+        );
       }
     }
 
@@ -338,10 +476,9 @@ export class UsersService {
       user.usuarioRolId = updateUserDto.usuarioRolId;
 
       // Limpiar campos según el nuevo rol
-      // Roles que requieren centro operativo: admin, administrador, almacenista, tecnico, soldador
+      // Roles que requieren centro operativo: admin, admin-internas, admin-redes, almacenista, tecnico, soldador
       const rolesRequierenCentroOperativo = [
         'admin',
-        'administrador',
         'admin-internas',
         'admin-redes',
         'almacenista',
@@ -351,8 +488,8 @@ export class UsersService {
       // Roles que requieren bodega: bodega-internas, bodega-redes
       const rolesRequierenBodega = ['bodega-internas', 'bodega-redes'];
 
-      if (rolTipo === 'superadmin') {
-        // SuperAdmin no necesita centro operativo ni bodega
+      if (rolTipo === 'superadmin' || rolTipo === 'gerencia') {
+        // SuperAdmin y Gerencia no necesitan centro operativo ni bodega
         user.usuarioSede = null;
         user.usuarioBodega = null;
       } else if (rolesRequierenBodega.includes(rolTipo)) {
@@ -369,6 +506,17 @@ export class UsersService {
     }
 
     Object.assign(user, updateUserDto);
+
+    // El rol Administrador siempre debe tener centro operativo asignado
+    const rolesRequierenCentroOperativo = ['admin', 'admin-internas', 'admin-redes'];
+    const rolEntity = await this.rolesService.findOne(user.usuarioRolId);
+    const rolTipoStr = (rolEntity?.rolTipo ?? '').toString().toLowerCase();
+    if (rolesRequierenCentroOperativo.includes(rolTipoStr) && !user.usuarioSede) {
+      throw new BadRequestException(
+        'El rol Administrador debe tener un centro operativo (usuarioSede) asignado.',
+      );
+    }
+
     const savedUser = await this.usersRepository.save(user);
 
     // Recargar el usuario con sus relaciones para asegurar que el cambio se refleje
@@ -392,6 +540,13 @@ export class UsersService {
 
     const rolTipo = newRole.rolTipo?.toLowerCase();
 
+    // Nadie puede asignar el rol Super Administrador por API (exclusivo del desarrollador)
+    if (rolTipo === 'superadmin') {
+      throw new BadRequestException(
+        'No se puede asignar el rol Super Administrador. Ese rol es exclusivo del desarrollador del sistema.',
+      );
+    }
+
     // Validar que no se esté cambiando al mismo rol
     if (user.usuarioRolId === newRoleId) {
       throw new BadRequestException('El usuario ya tiene este rol asignado');
@@ -401,26 +556,27 @@ export class UsersService {
     user.usuarioRolId = newRoleId;
 
     // Limpiar campos según el nuevo rol
-    // Roles que requieren centro operativo: admin, administrador, almacenista, tecnico, soldador
-    const rolesRequierenCentroOperativo = [
-      'admin',
-      'administrador',
-      'almacenista',
-      'tecnico',
-      'soldador',
-    ];
-    // Roles que requieren bodega: bodega-internas, bodega-redes
-    const rolesRequierenBodega = ['bodega-internas', 'bodega-redes'];
+      // Roles que requieren centro operativo: admin, admin-internas, admin-redes, almacenista, tecnico, soldador
+      const rolesRequierenCentroOperativo = [
+        'admin',
+        'admin-internas',
+        'admin-redes',
+        'almacenista',
+        'tecnico',
+        'soldador',
+      ];
+      // Roles que requieren bodega: bodega-internas, bodega-redes
+      const rolesRequierenBodega = ['bodega-internas', 'bodega-redes'];
 
-    if (rolTipo === 'superadmin') {
-      // SuperAdmin no necesita centro operativo ni bodega
-      user.usuarioSede = null;
-      user.usuarioBodega = null;
-    } else if (rolesRequierenBodega.includes(rolTipo)) {
-      // Si el nuevo rol requiere bodega, limpiar centro operativo
-      user.usuarioSede = null;
-      // Mantener usuarioBodega si ya está asignado, de lo contrario se debe asignar en el frontend
-    } else if (rolesRequierenCentroOperativo.includes(rolTipo)) {
+      if (rolTipo === 'superadmin' || rolTipo === 'gerencia') {
+        // SuperAdmin y Gerencia no necesitan centro operativo ni bodega
+        user.usuarioSede = null;
+        user.usuarioBodega = null;
+      } else if (rolesRequierenBodega.includes(rolTipo)) {
+        // Si el nuevo rol requiere bodega, limpiar centro operativo
+        user.usuarioSede = null;
+        // Mantener usuarioBodega si ya está asignado, de lo contrario se debe asignar en el frontend
+      } else if (rolesRequierenCentroOperativo.includes(rolTipo)) {
       // Si el nuevo rol requiere centro operativo, limpiar bodega
       user.usuarioBodega = null;
       // Mantener usuarioSede si ya está asignado, de lo contrario se debe asignar en el frontend
@@ -515,6 +671,11 @@ export class UsersService {
 
   async remove(id: number): Promise<void> {
     const user = await this.findOne(id);
+    if (user.usuarioRol?.rolTipo?.toLowerCase() === 'superadmin') {
+      throw new BadRequestException(
+        'No se puede eliminar el usuario Super Administrador. Ese rol es exclusivo del desarrollador del sistema.',
+      );
+    }
     await this.usersRepository.remove(user);
   }
 

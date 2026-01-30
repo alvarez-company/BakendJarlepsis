@@ -43,7 +43,6 @@ export class TrasladosController {
   @Roles(
     'superadmin',
     'admin',
-    'administrador',
     'admin-internas',
     'admin-redes',
     'almacenista',
@@ -61,7 +60,6 @@ export class TrasladosController {
   @Roles(
     'superadmin',
     'admin',
-    'administrador',
     'admin-internas',
     'admin-redes',
     'almacenista',
@@ -77,7 +75,6 @@ export class TrasladosController {
   @Roles(
     'superadmin',
     'admin',
-    'administrador',
     'admin-internas',
     'admin-redes',
     'almacenista',
@@ -123,7 +120,6 @@ export class TrasladosController {
   @Roles(
     'superadmin',
     'admin',
-    'administrador',
     'admin-internas',
     'admin-redes',
     'almacenista',
@@ -220,7 +216,6 @@ export class TrasladosController {
   @Roles(
     'superadmin',
     'admin',
-    'administrador',
     'admin-internas',
     'admin-redes',
     'almacenista',

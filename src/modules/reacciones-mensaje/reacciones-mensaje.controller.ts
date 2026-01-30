@@ -16,7 +16,6 @@ export class ReaccionesMensajeController {
   @Roles(
     'superadmin',
     'admin',
-    'administrador',
     'almacenista',
     'tecnico',
     'soldador',
@@ -35,7 +34,6 @@ export class ReaccionesMensajeController {
   @Roles(
     'superadmin',
     'admin',
-    'administrador',
     'almacenista',
     'tecnico',
     'soldador',

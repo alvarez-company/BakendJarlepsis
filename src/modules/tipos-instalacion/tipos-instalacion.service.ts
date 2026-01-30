@@ -22,6 +22,8 @@ export class TiposInstalacionService {
     if (
       user?.usuarioRol?.rolTipo === 'superadmin' ||
       user?.role === 'superadmin' ||
+      user?.usuarioRol?.rolTipo === 'gerencia' ||
+      user?.role === 'gerencia' ||
       user?.usuarioRol?.rolTipo === 'admin' ||
       user?.role === 'admin' ||
       user?.usuarioRol?.rolTipo === 'admin-internas' ||

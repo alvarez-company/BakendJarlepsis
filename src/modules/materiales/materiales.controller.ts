@@ -45,7 +45,6 @@ export class MaterialesController {
   @Roles(
     'superadmin',
     'admin',
-    'administrador',
     'admin-internas',
     'admin-redes',
     'almacenista',
@@ -63,7 +62,6 @@ export class MaterialesController {
   @Roles(
     'superadmin',
     'admin',
-    'administrador',
     'admin-internas',
     'admin-redes',
     'almacenista',
@@ -114,7 +112,7 @@ export class MaterialesController {
   }
 
   @Delete(':id')
-  @Roles('superadmin')
+  @Roles('superadmin', 'gerencia')
   @ApiOperation({ summary: 'Delete a material' })
   remove(@Param('id') id: string) {
     return this.materialesService.remove(+id);
@@ -124,7 +122,6 @@ export class MaterialesController {
   @Roles(
     'superadmin',
     'admin',
-    'administrador',
     'admin-internas',
     'admin-redes',
     'almacenista',
@@ -203,7 +200,6 @@ export class MaterialesController {
   @Roles(
     'superadmin',
     'admin',
-    'administrador',
     'admin-internas',
     'admin-redes',
     'almacenista',

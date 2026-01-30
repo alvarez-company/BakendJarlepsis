@@ -13,7 +13,7 @@ export class AuditoriaInventarioController {
   constructor(private readonly auditoriaService: AuditoriaInventarioService) {}
 
   @Get('material/:materialId')
-  @Roles('superadmin', 'admin', 'administrador', 'almacenista')
+  @Roles('superadmin', 'admin', 'almacenista')
   @ApiOperation({ summary: 'Obtener histórico de cambios de un material' })
   findByMaterial(@Param('materialId') materialId: string) {
     return this.auditoriaService.findByMaterial(+materialId);
@@ -27,7 +27,7 @@ export class AuditoriaInventarioController {
   }
 
   @Get()
-  @Roles('superadmin', 'admin', 'administrador', 'almacenista')
+  @Roles('superadmin', 'admin', 'almacenista')
   @ApiOperation({ summary: 'Obtener todos los cambios de auditoría con filtros' })
   @ApiQuery({ name: 'materialId', required: false, type: Number })
   @ApiQuery({ name: 'usuarioId', required: false, type: Number })

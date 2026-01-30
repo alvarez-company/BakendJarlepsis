@@ -28,6 +28,8 @@
     "migration:run": "typeorm-ts-node-commonjs migration:run -d src/config/typeorm.config.ts",
     "migration:revert": "typeorm-ts-node-commonjs migration:revert -d src/config/typeorm.config.ts",
     "migration:show": "typeorm-ts-node-commonjs migration:show -d src/config/typeorm.config.ts",
+    "migration:gerencia": "node scripts/run-gerencia-migration.js",
+    "migration:roles-definitivos": "node scripts/run-roles-definitivos.js",
     "seed": "node scripts/seed-full.js",
     "seed:superadmin": "node scripts/seed-superadmin.js",
     "seed:auditoria": "node scripts/seed-auditoria.js",

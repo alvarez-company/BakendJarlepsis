@@ -229,7 +229,7 @@ export class MaterialesService {
         return materialesConStock;
       }
 
-      // Si no hay usuario o es superadmin, devolver todos los materiales con su stock total
+      // Si no hay usuario o es superadmin/gerencia (sin sede), devolver todos los materiales con su stock total
       return listToReturn;
     } catch (error) {
       console.error('Error al obtener materiales:', error);

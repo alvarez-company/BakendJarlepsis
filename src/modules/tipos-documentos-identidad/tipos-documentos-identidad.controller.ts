@@ -15,7 +15,7 @@ export class TiposDocumentosIdentidadController {
   constructor(private readonly tiposDocumentosService: TiposDocumentosIdentidadService) {}
 
   @Post()
-  @Roles('superadmin')
+  @Roles('superadmin', 'gerencia')
   @ApiOperation({ summary: 'Create a new tipo de documento identidad' })
   create(@Body() createDto: CreateTipoDocumentoIdentidadDto) {
     return this.tiposDocumentosService.create(createDto);
@@ -36,14 +36,14 @@ export class TiposDocumentosIdentidadController {
   }
 
   @Patch(':id')
-  @Roles('superadmin')
+  @Roles('superadmin', 'gerencia')
   @ApiOperation({ summary: 'Update a tipo de documento identidad' })
   update(@Param('id') id: string, @Body() updateDto: UpdateTipoDocumentoIdentidadDto) {
     return this.tiposDocumentosService.update(+id, updateDto);
   }
 
   @Delete(':id')
-  @Roles('superadmin')
+  @Roles('superadmin', 'gerencia')
   @ApiOperation({ summary: 'Delete a tipo de documento identidad' })
   remove(@Param('id') id: string) {
     return this.tiposDocumentosService.remove(+id);

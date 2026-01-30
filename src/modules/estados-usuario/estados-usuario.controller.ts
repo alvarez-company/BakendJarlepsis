@@ -16,7 +16,6 @@ export class EstadosUsuarioController {
   @Roles(
     'superadmin',
     'admin',
-    'administrador',
     'almacenista',
     'tecnico',
     'soldador',
@@ -35,7 +34,6 @@ export class EstadosUsuarioController {
   @Roles(
     'superadmin',
     'admin',
-    'administrador',
     'almacenista',
     'tecnico',
     'soldador',
@@ -50,7 +48,6 @@ export class EstadosUsuarioController {
   @Roles(
     'superadmin',
     'admin',
-    'administrador',
     'almacenista',
     'tecnico',
     'soldador',

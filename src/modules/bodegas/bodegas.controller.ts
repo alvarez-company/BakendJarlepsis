@@ -35,7 +35,6 @@ export class BodegasController {
   @Roles(
     'superadmin',
     'admin',
-    'administrador',
     'admin-internas',
     'admin-redes',
     'bodega-internas',
@@ -53,7 +52,6 @@ export class BodegasController {
   @Roles(
     'superadmin',
     'admin',
-    'administrador',
     'admin-internas',
     'admin-redes',
     'bodega-internas',
@@ -75,7 +73,7 @@ export class BodegasController {
   }
 
   @Delete(':id')
-  @Roles('superadmin')
+  @Roles('superadmin', 'gerencia')
   @ApiOperation({ summary: 'Delete a bodega' })
   remove(@Param('id') id: string, @Request() req) {
     return this.bodegasService.remove(+id, req.user);

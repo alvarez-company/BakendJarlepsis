@@ -51,7 +51,6 @@ export class ClientesController {
   @Roles(
     'superadmin',
     'admin',
-    'administrador',
     'admin-internas',
     'admin-redes',
     'almacenista',
@@ -69,7 +68,6 @@ export class ClientesController {
   @Roles(
     'superadmin',
     'admin',
-    'administrador',
     'admin-internas',
     'admin-redes',
     'almacenista',
@@ -100,7 +98,7 @@ export class ClientesController {
   }
 
   @Delete(':id')
-  @Roles('superadmin')
+  @Roles('superadmin', 'gerencia')
   @ApiOperation({ summary: 'Delete a cliente' })
   remove(@Param('id') id: string) {
     return this.clientesService.remove(+id);
@@ -110,7 +108,6 @@ export class ClientesController {
   @Roles(
     'superadmin',
     'admin',
-    'administrador',
     'admin-internas',
     'admin-redes',
     'almacenista',
@@ -175,7 +172,6 @@ export class ClientesController {
   @Roles(
     'superadmin',
     'admin',
-    'administrador',
     'admin-internas',
     'admin-redes',
     'almacenista',

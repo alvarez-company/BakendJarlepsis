@@ -160,8 +160,13 @@ export class BodegasService {
   async findAll(user?: any): Promise<Bodega[]> {
     const allBodegas = await this.bodegasRepository.find({ relations: ['sede'] });
 
-    // SuperAdmin ve todo
-    if (user?.usuarioRol?.rolTipo === 'superadmin' || user?.role === 'superadmin') {
+    // SuperAdmin y Gerencia ven todo
+    if (
+      user?.usuarioRol?.rolTipo === 'superadmin' ||
+      user?.role === 'superadmin' ||
+      user?.usuarioRol?.rolTipo === 'gerencia' ||
+      user?.role === 'gerencia'
+    ) {
       return allBodegas;
     }
 
@@ -182,11 +187,6 @@ export class BodegasService {
       return allBodegas.filter(
         (bodega) => bodega.sedeId === user.usuarioSede && bodega.bodegaTipo === 'redes',
       );
-    }
-
-    // Administrador (Centro Operativo) - solo lectura, ve todas las bodegas
-    if (user?.usuarioRol?.rolTipo === 'administrador' || user?.role === 'administrador') {
-      return allBodegas;
     }
 
     // Bodega Internas - solo ve bodegas de tipo internas (y su propia bodega si está asignada)
@@ -251,9 +251,10 @@ export class BodegasService {
     if (user) {
       const rolTipo = user.usuarioRol?.rolTipo || user.role;
 
-      // Solo superadmin, admin, admin-internas y admin-redes pueden editar bodegas
+      // Solo superadmin, gerencia, admin, admin-internas y admin-redes pueden editar bodegas
       if (
         rolTipo !== 'superadmin' &&
+        rolTipo !== 'gerencia' &&
         rolTipo !== 'admin' &&
         rolTipo !== 'admin-internas' &&
         rolTipo !== 'admin-redes'
@@ -308,10 +309,10 @@ export class BodegasService {
   async remove(id: number, user?: any): Promise<void> {
     const bodega = await this.findOne(id, user);
 
-    // Validar permisos - solo superadmin puede eliminar
+    // Validar permisos - solo superadmin y gerencia pueden eliminar
     if (user) {
       const rolTipo = user.usuarioRol?.rolTipo || user.role;
-      if (rolTipo !== 'superadmin') {
+      if (rolTipo !== 'superadmin' && rolTipo !== 'gerencia') {
         throw new BadRequestException('No tienes permisos para eliminar bodegas');
       }
     }

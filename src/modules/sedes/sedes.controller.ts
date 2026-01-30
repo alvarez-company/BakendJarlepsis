@@ -32,14 +32,14 @@ export class SedesController {
   }
 
   @Get()
-  @Roles('superadmin', 'admin', 'administrador', 'admin-internas', 'admin-redes')
+  @Roles('superadmin', 'admin', 'admin-internas', 'admin-redes')
   @ApiOperation({ summary: 'Get all sedes' })
   findAll(@Request() req) {
     return this.sedesService.findAll(req.user);
   }
 
   @Get(':id')
-  @Roles('superadmin', 'admin', 'administrador', 'admin-internas', 'admin-redes')
+  @Roles('superadmin', 'admin', 'admin-internas', 'admin-redes')
   @ApiOperation({ summary: 'Get a sede by ID' })
   findOne(@Param('id') id: string, @Request() req?: any) {
     return this.sedesService.findOne(+id, req?.user);
@@ -53,7 +53,7 @@ export class SedesController {
   }
 
   @Delete(':id')
-  @Roles('superadmin')
+  @Roles('superadmin', 'gerencia')
   @ApiOperation({ summary: 'Delete a sede' })
   remove(@Param('id') id: string, @Request() req) {
     return this.sedesService.remove(+id, req.user);

@@ -23,7 +23,8 @@ export class JwtStrategy extends PassportStrategy(Strategy) {
       throw new UnauthorizedException('Token inválido: ID de usuario no encontrado');
     }
 
-    const user = await this.usersService.findOne(payload.sub);
+    // Usar findOneForAuth para no aplicar reglas de visibilidad (SuperAdmin no se lista pero sí debe validar el token)
+    const user = await this.usersService.findOneForAuth(payload.sub);
     if (!user || !user.usuarioEstado) {
       throw new UnauthorizedException('Usuario no encontrado o inactivo');
     }

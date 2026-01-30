@@ -25,7 +25,6 @@ export class CategoriasController {
   @Roles(
     'superadmin',
     'admin',
-    'administrador',
     'almacenista',
     'tecnico',
     'soldador',
@@ -41,7 +40,6 @@ export class CategoriasController {
   @Roles(
     'superadmin',
     'admin',
-    'administrador',
     'almacenista',
     'tecnico',
     'soldador',
@@ -61,7 +59,7 @@ export class CategoriasController {
   }
 
   @Delete(':id')
-  @Roles('superadmin')
+  @Roles('superadmin', 'gerencia')
   @ApiOperation({ summary: 'Delete a categoria' })
   remove(@Param('id') id: string) {
     return this.categoriasService.remove(+id);

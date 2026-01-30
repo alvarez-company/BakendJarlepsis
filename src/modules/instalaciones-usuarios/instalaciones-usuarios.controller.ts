@@ -27,7 +27,6 @@ export class InstalacionesUsuariosController {
   @Roles(
     'superadmin',
     'admin',
-    'administrador',
     'admin-internas',
     'admin-redes',
     'almacenista',
@@ -45,7 +44,6 @@ export class InstalacionesUsuariosController {
   @Roles(
     'superadmin',
     'admin',
-    'administrador',
     'admin-internas',
     'admin-redes',
     'almacenista',

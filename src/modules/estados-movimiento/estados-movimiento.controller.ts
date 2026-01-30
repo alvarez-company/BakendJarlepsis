@@ -16,7 +16,6 @@ export class EstadosMovimientoController {
   @Roles(
     'superadmin',
     'admin',
-    'administrador',
     'almacenista',
     'tecnico',
     'soldador',

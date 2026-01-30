@@ -37,7 +37,7 @@ export class TiposProyectoController {
   }
 
   @Delete(':id')
-  @Roles('superadmin')
+  @Roles('superadmin', 'gerencia')
   remove(@Param('id') id: string) {
     return this.service.remove(+id);
   }

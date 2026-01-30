@@ -240,17 +240,12 @@ describe('InstalacionesService - Permisos', () => {
       );
     });
 
-    it('should deny administrador from updating installation', async () => {
-      const user = { usuarioRol: { rolTipo: 'administrador' }, usuarioId: 1 };
+    it('should allow admin (centro operativo) to update installation', async () => {
+      const user = { usuarioRol: { rolTipo: 'admin' }, usuarioId: 1, usuarioSede: 1 };
       mockUsersService.findOne.mockResolvedValue(user);
       jest.spyOn(service, 'findOne').mockResolvedValue(mockInstalacion as any);
 
-      await expect(service.update(1, { instalacionCodigo: 'INST-002' }, 1, user)).rejects.toThrow(
-        BadRequestException,
-      );
-      await expect(service.update(1, { instalacionCodigo: 'INST-002' }, 1, user)).rejects.toThrow(
-        'No tienes permisos para editar instalaciones',
-      );
+      await expect(service.update(1, { instalacionCodigo: 'INST-002' }, 1, user)).resolves.toBeDefined();
     });
   });
 

@@ -52,7 +52,6 @@ export class AsignacionesTecnicosController {
   @Roles(
     'superadmin',
     'admin',
-    'administrador',
     'admin-internas',
     'admin-redes',
     'almacenista',
@@ -68,7 +67,6 @@ export class AsignacionesTecnicosController {
   @Roles(
     'superadmin',
     'admin',
-    'administrador',
     'admin-internas',
     'admin-redes',
     'almacenista',
@@ -84,7 +82,6 @@ export class AsignacionesTecnicosController {
   @Roles(
     'superadmin',
     'admin',
-    'administrador',
     'admin-internas',
     'admin-redes',
     'almacenista',

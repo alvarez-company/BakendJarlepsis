@@ -30,9 +30,9 @@ function runSqlFile(connection, filename) {
 }
 
 const ROLES = [
-  { rolNombre: 'Super Administrador', rolTipo: 'superadmin', rolDescripcion: 'Administrador con todos los permisos incluyendo cambio de roles' },
-  { rolNombre: 'Administrador', rolTipo: 'admin', rolDescripcion: 'Administrador de oficina con permisos completos excepto cambio de roles' },
-  { rolNombre: 'Administrador - Centro Operativo', rolTipo: 'administrador', rolDescripcion: 'Usuario con acceso de solo lectura a la información del centro operativo. No puede editar ni eliminar datos.' },
+  { rolNombre: 'Super Administrador', rolTipo: 'superadmin', rolDescripcion: 'Rol exclusivo de desarrollo. Todos los permisos incluyendo cambio de roles e impersonación. No se lista en la interfaz.' },
+  { rolNombre: 'Gerencia', rolTipo: 'gerencia', rolDescripcion: 'Máximo nivel para la organización. Mismos permisos que SuperAdmin pero sin impersonación.' },
+  { rolNombre: 'Administrador', rolTipo: 'admin', rolDescripcion: 'Administrador del centro operativo con permisos completos excepto cambio de roles.' },
   { rolNombre: 'Administrador de Internas', rolTipo: 'admin-internas', rolDescripcion: 'Mismos permisos que administrador pero con acceso solo a bodegas de tipo internas de su centro operativo.' },
   { rolNombre: 'Administrador de Redes', rolTipo: 'admin-redes', rolDescripcion: 'Mismos permisos que administrador pero con acceso solo a bodegas de tipo redes de su centro operativo.' },
   { rolNombre: 'Técnico', rolTipo: 'tecnico', rolDescripcion: 'Usuario técnico con acceso a aplicación móvil y instalaciones asignadas' },

@@ -102,63 +102,58 @@ export class InstalacionesService {
     usuarioId: number,
     user?: any,
   ): Promise<Instalacion> {
-    const { usuariosAsignados, instalacionCodigo, ...instalacionData } = createInstalacionDto;
+    const { usuariosAsignados, instalacionCodigo, instalacionTipo: dtoTipo, ...instalacionData } = createInstalacionDto;
 
-    // Validar tipo de instalación según el rol
+    // Validar instalacionTipo (internas | redes) según el rol del usuario
+    const tipo = (dtoTipo || '').toLowerCase();
+    if (tipo !== 'internas' && tipo !== 'redes') {
+      throw new BadRequestException(
+        'Al crear una instalación debe seleccionar el tipo: internas o redes.',
+      );
+    }
+
     if (user) {
       const userRole = user?.usuarioRol?.rolTipo || user?.role;
 
-      if (
-        userRole === 'bodega-internas' ||
-        userRole === 'bodega-redes' ||
-        userRole === 'admin-internas' ||
-        userRole === 'admin-redes'
-      ) {
-        // Cargar el tipo de instalación para validar
-        const tipoInstalacionRaw = await this.instalacionesRepository.query(
-          `SELECT tipoInstalacionId, tipoInstalacionNombre 
-           FROM tipos_instalacion 
-           WHERE tipoInstalacionId = ?`,
-          [createInstalacionDto.tipoInstalacionId],
-        );
-
-        if (!tipoInstalacionRaw || tipoInstalacionRaw.length === 0) {
-          throw new BadRequestException('Tipo de instalación no encontrado');
+      if (userRole === 'admin-internas') {
+        if (tipo !== 'internas') {
+          throw new BadRequestException('Solo puedes crear instalaciones de tipo internas.');
         }
-
-        const tipoNombre = tipoInstalacionRaw[0].tipoInstalacionNombre?.toLowerCase() || '';
-
-        if (
-          (userRole === 'bodega-internas' || userRole === 'admin-internas') &&
-          !tipoNombre.includes('internas')
-        ) {
-          throw new BadRequestException('Solo puede crear instalaciones de tipo "Internas".');
+      } else if (userRole === 'admin-redes') {
+        if (tipo !== 'redes') {
+          throw new BadRequestException('Solo puedes crear instalaciones de tipo redes.');
         }
-
-        if (
-          (userRole === 'bodega-redes' || userRole === 'admin-redes') &&
-          !tipoNombre.includes('redes')
-        ) {
-          throw new BadRequestException('Solo puede crear instalaciones de tipo "Redes".');
+      } else if (userRole === 'bodega-internas') {
+        if (tipo !== 'internas') {
+          throw new BadRequestException('Solo puedes crear instalaciones de tipo internas.');
+        }
+      } else if (userRole === 'bodega-redes') {
+        if (tipo !== 'redes') {
+          throw new BadRequestException('Solo puedes crear instalaciones de tipo redes.');
         }
       }
+      // admin, superadmin, gerencia pueden elegir internas o redes
     }
 
-    // Usar el código de instalación del cliente como identificador único
-    // Si no se proporciona, generar uno automáticamente
-    const identificadorUnico = instalacionCodigo || (await this.generarIdentificadorUnico());
+    // Código de instalación opcional (en redes no siempre hay código)
+    const codigoTrimmed = instalacionCodigo?.trim();
+    const tieneCodigo = Boolean(codigoTrimmed);
 
-    // Verificar que el código de instalación no esté duplicado
-    const instalacionExistente = await this.instalacionesRepository
-      .createQueryBuilder('instalacion')
-      .where('instalacion.identificadorUnico = :codigo', { codigo: identificadorUnico })
-      .orWhere('instalacion.instalacionCodigo = :codigo', { codigo: identificadorUnico })
-      .getOne();
+    let identificadorUnico: string | null = null;
+    if (tieneCodigo) {
+      identificadorUnico = codigoTrimmed ?? null;
+      // Verificar que el código no esté duplicado solo cuando se proporciona
+      const instalacionExistente = await this.instalacionesRepository
+        .createQueryBuilder('instalacion')
+        .where('instalacion.identificadorUnico = :codigo', { codigo: identificadorUnico })
+        .orWhere('instalacion.instalacionCodigo = :codigo', { codigo: identificadorUnico })
+        .getOne();
 
-    if (instalacionExistente) {
-      throw new ConflictException(
-        `El código de instalación '${identificadorUnico}' ya está en uso. Por favor, use un código diferente.`,
-      );
+      if (instalacionExistente) {
+        throw new ConflictException(
+          `El código de instalación '${identificadorUnico}' ya está en uso. Por favor, use un código diferente.`,
+        );
+      }
     }
 
     // Determinar el estado inicial: pendiente si no hay técnicos asignados
@@ -194,8 +189,9 @@ export class InstalacionesService {
 
     const instalacion = this.instalacionesRepository.create({
       ...instalacionData,
-      identificadorUnico,
-      instalacionCodigo: identificadorUnico, // Usar el mismo valor para ambos campos
+      instalacionTipo: tipo as 'internas' | 'redes',
+      identificadorUnico: identificadorUnico ?? null,
+      instalacionCodigo: identificadorUnico ?? null, // Mismo valor que identificadorUnico o null si sin código
       usuarioRegistra: usuarioId,
       estado: estadoInicial,
       estadoInstalacionId: estadoInstalacionId || undefined,
@@ -203,19 +199,18 @@ export class InstalacionesService {
 
     const savedInstalacion = await this.instalacionesRepository.save(instalacion);
 
-    // Si el identificadorUnico no se guardó, actualizarlo directamente con SQL
-    if (!savedInstalacion.identificadorUnico && savedInstalacion.instalacionId) {
+    // Si el identificadorUnico no se guardó y teníamos código, actualizar con SQL (legacy)
+    if (tieneCodigo && !savedInstalacion.identificadorUnico && savedInstalacion.instalacionId) {
       await this.instalacionesRepository.query(
         'UPDATE instalaciones SET identificadorUnico = ? WHERE instalacionId = ?',
         [identificadorUnico, savedInstalacion.instalacionId],
       );
-      // Actualizar el objeto guardado
       savedInstalacion.identificadorUnico = identificadorUnico;
     }
 
-    // Crear grupo de chat automáticamente
+    // Crear grupo de chat automáticamente (usar código o fallback a INST-{id})
     try {
-      const codigoGrupo = savedInstalacion.identificadorUnico;
+      const codigoGrupo = savedInstalacion.identificadorUnico || `INST-${savedInstalacion.instalacionId}`;
       await this.gruposService.crearGrupoInstalacion(savedInstalacion.instalacionId, codigoGrupo);
     } catch (error) {
       console.error(
@@ -476,14 +471,23 @@ export class InstalacionesService {
       });
 
       // SuperAdmin ve todo
-      if (user?.usuarioRol?.rolTipo === 'superadmin' || user?.role === 'superadmin') {
+      if (
+        user?.usuarioRol?.rolTipo === 'superadmin' ||
+        user?.role === 'superadmin' ||
+        user?.usuarioRol?.rolTipo === 'gerencia' ||
+        user?.role === 'gerencia'
+      ) {
         return allInstalaciones;
       }
 
-      // Admin ve instalaciones registradas por él
+      // Admin (centro operativo) ve todas las instalaciones de su sede
       if (user?.usuarioRol?.rolTipo === 'admin' || user?.role === 'admin') {
-        // Filtrar instalaciones registradas por el admin
-        return allInstalaciones.filter((inst) => inst.usuarioRegistra === user.usuarioId);
+        if (user.usuarioSede) {
+          return allInstalaciones.filter(
+            (inst) => inst.bodega?.sedeId === user.usuarioSede,
+          );
+        }
+        return [];
       }
 
       // Técnico ve solo sus instalaciones asignadas (solo asignaciones activas)
@@ -522,11 +526,6 @@ export class InstalacionesService {
         return allInstalaciones;
       }
 
-      // Administrador (Centro Operativo) puede ver todas las instalaciones (solo lectura)
-      if (user?.usuarioRol?.rolTipo === 'administrador' || user?.role === 'administrador') {
-        return allInstalaciones;
-      }
-
       // Bodega Internas y Admin Internas solo ven instalaciones de tipo "internas"
       if (
         user?.usuarioRol?.rolTipo === 'bodega-internas' ||
@@ -558,6 +557,163 @@ export class InstalacionesService {
       console.error('[InstalacionesService.findAll] Error en findAll:', error);
       throw error;
     }
+  }
+
+  /**
+   * Datos para Reporte Metrogas: una fila por material instalado, filtrado por rango de fechas (certificación).
+   */
+  async getReporteMetrogasData(
+    dateStart?: string,
+    dateEnd?: string,
+    user?: any,
+  ): Promise<
+    {
+      certificacion: string;
+      codigoUsuario: string;
+      numeroOrdenActividad: string;
+      descripcionMaterial: string;
+      unid: string;
+      codMaterial: string;
+      cantInstalado: string;
+      codProyecto: string;
+      concepto: string;
+      ubicacion: string;
+      numMedidor: string;
+      precioUnitario: string;
+      total: string;
+      tecnico: string;
+      instalador: string;
+      observaciones: string;
+    }[]
+  > {
+    const instalaciones = await this.findAll(user);
+    let filtered = instalaciones;
+
+    if (dateStart || dateEnd) {
+      const start = dateStart ? new Date(dateStart) : null;
+      const end = dateEnd ? new Date(dateEnd) : null;
+      if (end) end.setHours(23, 59, 59, 999);
+      filtered = instalaciones.filter((i: any) => {
+        const fecha =
+          i.fechaCertificacion || i.fechaConstruccion || i.instalacionFecha || i.fechaCreacion;
+        if (!fecha) return false;
+        const d = new Date(fecha);
+        if (start && d < start) return false;
+        if (end && d > end) return false;
+        return true;
+      });
+    }
+
+    const instalacionIds = filtered.map((i: any) => i.instalacionId).filter(Boolean);
+    if (instalacionIds.length === 0) return [];
+
+    const placeholders = instalacionIds.map(() => '?').join(',');
+    const imRows = await this.instalacionesRepository.query(
+      `SELECT im.instalacionMaterialId, im.instalacionId, im.materialId, im.cantidad, im.observaciones as im_observaciones,
+              m.materialCodigo, m.materialNombre, m.materialPrecio, m.unidadMedidaId,
+              um.unidadMedidaSimbolo, um.unidadMedidaNombre
+       FROM instalaciones_materiales im
+       JOIN materiales m ON im.materialId = m.materialId
+       LEFT JOIN unidades_medida um ON m.unidadMedidaId = um.unidadMedidaId
+       WHERE im.instalacionId IN (${placeholders})`,
+      instalacionIds,
+    );
+
+    const instalacionMaterialIds = imRows.map((r: any) => r.instalacionMaterialId).filter(Boolean);
+    let numerosByIm: Map<number, string> = new Map();
+    if (instalacionMaterialIds.length > 0) {
+      const nmPlaceholders = instalacionMaterialIds.map(() => '?').join(',');
+      const nmRows = await this.instalacionesRepository.query(
+        `SELECT instalacionMaterialId, numeroMedidor FROM numeros_medidor WHERE instalacionMaterialId IN (${nmPlaceholders})`,
+        instalacionMaterialIds,
+      );
+      nmRows.forEach((r: any) => {
+        if (!numerosByIm.has(r.instalacionMaterialId))
+          numerosByIm.set(r.instalacionMaterialId, r.numeroMedidor || '');
+      });
+    }
+
+    const instalacionMap = new Map(filtered.map((i: any) => [i.instalacionId, i]));
+    const rows: any[] = [];
+
+    for (const im of imRows) {
+      const inst = instalacionMap.get(im.instalacionId);
+      if (!inst) continue;
+
+      const fechaCert =
+        inst.fechaCertificacion || inst.fechaConstruccion || inst.instalacionFecha || inst.fechaCreacion;
+      const certificacion = fechaCert
+        ? new Date(fechaCert).toLocaleDateString('es-CO', { day: '2-digit', month: '2-digit', year: 'numeric' })
+        : '';
+
+      const codigoUsuario =
+        inst.cliente?.clienteId?.toString() ||
+        inst.identificadorUnico ||
+        inst.instalacionCodigo ||
+        inst.instalacionId?.toString() ||
+        '';
+
+      const numeroOrden =
+        inst.instalacionCodigo || inst.identificadorUnico || inst.instalacionId?.toString() || '';
+
+      let codProyecto = '';
+      if (inst.instalacionProyectos) {
+        try {
+          const proy =
+            typeof inst.instalacionProyectos === 'string'
+              ? JSON.parse(inst.instalacionProyectos)
+              : inst.instalacionProyectos;
+          const arr = Array.isArray(proy) ? proy : proy?.items ? [proy] : [];
+          codProyecto = arr[0]?.proyectoId?.toString() || arr[0]?.codigo || '';
+        } catch (_e) {
+          codProyecto = '';
+        }
+      }
+
+      const tecnicoNombre =
+        inst.usuariosAsignados?.[0]?.usuario &&
+        (inst.usuariosAsignados[0].usuario.usuarioNombre || inst.usuariosAsignados[0].usuario.usuarioApellido)
+          ? `${inst.usuariosAsignados[0].usuario.usuarioNombre || ''} ${inst.usuariosAsignados[0].usuario.usuarioApellido || ''}`.trim()
+          : '';
+      const iniciales = tecnicoNombre
+        ? tecnicoNombre
+            .split(/\s+/)
+            .map((s: string) => s[0])
+            .join('')
+            .toUpperCase()
+            .slice(0, 2)
+        : '';
+
+      const cantidad = Number(im.cantidad) || 0;
+      const precio = Number(im.materialPrecio) || 0;
+      const total = cantidad * precio;
+
+      const numMedidor =
+        numerosByIm.get(im.instalacionMaterialId) ||
+        inst.instalacionMedidorNumero ||
+        '';
+
+      rows.push({
+        certificacion,
+        codigoUsuario,
+        numeroOrdenActividad: numeroOrden,
+        descripcionMaterial: im.materialNombre || '',
+        unid: im.unidadMedidaSimbolo || im.unidadMedidaNombre || 'UND',
+        codMaterial: im.materialCodigo || '',
+        cantInstalado: cantidad.toFixed(2).replace('.', ','),
+        codProyecto,
+        concepto: 'MATERIAL',
+        ubicacion: 'CM',
+        numMedidor: numMedidor.toString(),
+        precioUnitario: precio.toFixed(3).replace('.', ','),
+        total: total.toFixed(2).replace('.', ','),
+        tecnico: iniciales || 'CS',
+        instalador: tecnicoNombre || '',
+        observaciones: inst.observacionesTecnico || im.im_observaciones || '',
+      });
+    }
+
+    return rows;
   }
 
   async findOne(id: number): Promise<Instalacion> {
@@ -736,35 +892,64 @@ export class InstalacionesService {
     usuarioId?: number,
     user?: any,
   ): Promise<Instalacion> {
-    const { usuariosAsignados, instalacionCodigo, ...instalacionData } = updateInstalacionDto;
+    const { usuariosAsignados, instalacionCodigo, instalacionTipo: dtoTipo, ...instalacionData } = updateInstalacionDto;
 
     const instalacion = await this.findOne(id);
+
+    // Si se envía instalacionTipo en el update, validar según el rol
+    if (dtoTipo !== undefined && dtoTipo !== null) {
+      const tipo = (dtoTipo as string).toLowerCase();
+      if (tipo !== 'internas' && tipo !== 'redes') {
+        throw new BadRequestException('instalacionTipo debe ser "internas" o "redes".');
+      }
+      if (user) {
+        const rolTipo = user.usuarioRol?.rolTipo || user.role;
+        if (rolTipo === 'admin-internas' && tipo !== 'internas') {
+          throw new BadRequestException('Solo puedes asignar instalaciones de tipo internas.');
+        }
+        if (rolTipo === 'admin-redes' && tipo !== 'redes') {
+          throw new BadRequestException('Solo puedes asignar instalaciones de tipo redes.');
+        }
+        if (rolTipo === 'bodega-internas' && tipo !== 'internas') {
+          throw new BadRequestException('Solo puedes asignar instalaciones de tipo internas.');
+        }
+        if (rolTipo === 'bodega-redes' && tipo !== 'redes') {
+          throw new BadRequestException('Solo puedes asignar instalaciones de tipo redes.');
+        }
+      }
+      (instalacionData as any).instalacionTipo = tipo as 'internas' | 'redes';
+    }
 
     // Validar permisos
     if (user) {
       const rolTipo = user.usuarioRol?.rolTipo || user.role;
 
-      // Almacenista y administrador no pueden editar instalaciones
-      if (rolTipo === 'almacenista' || rolTipo === 'administrador') {
+      // Almacenista no puede editar instalaciones (solo lectura)
+      if (rolTipo === 'almacenista') {
         throw new BadRequestException('No tienes permisos para editar instalaciones');
       }
 
+      // Usar instalacionTipo si existe; si no, fallback al nombre del tipo de instalación (legacy)
+      const tipoInstalacion = (instalacion as any).instalacionTipo?.toLowerCase()
+        || instalacion.tipoInstalacion?.tipoInstalacionNombre?.toLowerCase()
+        || '';
+
       // Bodega Internas y Admin Internas solo pueden editar instalaciones de tipo "internas"
       if (rolTipo === 'bodega-internas' || rolTipo === 'admin-internas') {
-        const tipoNombre = instalacion.tipoInstalacion?.tipoInstalacionNombre?.toLowerCase() || '';
-        if (!tipoNombre.includes('internas')) {
+        const esInternas = tipoInstalacion === 'internas' || tipoInstalacion.includes('internas');
+        if (!esInternas) {
           throw new BadRequestException(
-            'El rol "Bodega Internas" solo puede editar instalaciones de tipo "Internas"',
+            'El rol "Bodega Internas" / "Administrador Internas" solo puede editar instalaciones de tipo "Internas"',
           );
         }
       }
 
       // Bodega Redes y Admin Redes solo pueden editar instalaciones de tipo "redes"
       if (rolTipo === 'bodega-redes' || rolTipo === 'admin-redes') {
-        const tipoNombre = instalacion.tipoInstalacion?.tipoInstalacionNombre?.toLowerCase() || '';
-        if (!tipoNombre.includes('redes')) {
+        const esRedes = tipoInstalacion === 'redes' || tipoInstalacion.includes('redes');
+        if (!esRedes) {
           throw new BadRequestException(
-            'El rol "Bodega Redes" solo puede editar instalaciones de tipo "Redes"',
+            'El rol "Bodega Redes" / "Administrador Redes" solo puede editar instalaciones de tipo "Redes"',
           );
         }
       }
@@ -786,26 +971,30 @@ export class InstalacionesService {
 
     const estadoAnterior = instalacion.estado;
 
-    // Si se está actualizando el código de instalación, verificar que no esté duplicado
-    if (instalacionCodigo && instalacionCodigo !== instalacion.identificadorUnico) {
-      const instalacionExistente = await this.instalacionesRepository
-        .createQueryBuilder('instalacion')
-        .where('instalacion.instalacionId != :id', { id })
-        .andWhere(
-          '(instalacion.identificadorUnico = :codigo OR instalacion.instalacionCodigo = :codigo)',
-          { codigo: instalacionCodigo },
-        )
-        .getOne();
+    // Actualizar código de instalación (opcional; se puede dejar vacío o borrar)
+    if (instalacionCodigo !== undefined) {
+      const codigoTrimmed = typeof instalacionCodigo === 'string' ? instalacionCodigo.trim() : '';
+      if (!codigoTrimmed) {
+        instalacion.identificadorUnico = null;
+        instalacion.instalacionCodigo = null;
+      } else if (codigoTrimmed !== (instalacion.identificadorUnico ?? instalacion.instalacionCodigo)) {
+        const instalacionExistente = await this.instalacionesRepository
+          .createQueryBuilder('instalacion')
+          .where('instalacion.instalacionId != :id', { id })
+          .andWhere(
+            '(instalacion.identificadorUnico = :codigo OR instalacion.instalacionCodigo = :codigo)',
+            { codigo: codigoTrimmed },
+          )
+          .getOne();
 
-      if (instalacionExistente) {
-        throw new ConflictException(
-          `El código de instalación '${instalacionCodigo}' ya está en uso por otra instalación. Por favor, use un código diferente.`,
-        );
+        if (instalacionExistente) {
+          throw new ConflictException(
+            `El código de instalación '${codigoTrimmed}' ya está en uso por otra instalación. Por favor, use un código diferente.`,
+          );
+        }
+        instalacion.identificadorUnico = codigoTrimmed;
+        instalacion.instalacionCodigo = codigoTrimmed;
       }
-
-      // Actualizar ambos campos con el nuevo código
-      instalacion.identificadorUnico = instalacionCodigo;
-      instalacion.instalacionCodigo = instalacionCodigo;
     }
 
     Object.assign(instalacion, instalacionData);
@@ -905,8 +1094,8 @@ export class InstalacionesService {
     if (user) {
       const rolTipo = user.usuarioRol?.rolTipo || user.role;
 
-      // Almacenista y administrador no pueden eliminar instalaciones
-      if (rolTipo === 'almacenista' || rolTipo === 'administrador') {
+      // Almacenista no puede eliminar instalaciones
+      if (rolTipo === 'almacenista') {
         throw new BadRequestException('No tienes permisos para eliminar instalaciones');
       }
 
@@ -1034,7 +1223,7 @@ export class InstalacionesService {
     // Validar que almacenista no pueda cambiar estado de instalaciones
     if (user) {
       const rolTipo = user.usuarioRol?.rolTipo || user.role;
-      if (rolTipo === 'almacenista' || rolTipo === 'administrador') {
+      if (rolTipo === 'almacenista') {
         throw new BadRequestException('No tienes permisos para cambiar el estado de instalaciones');
       }
     }
@@ -1176,6 +1365,7 @@ export class InstalacionesService {
           .filter(
             (u: any) =>
               u.usuarioRol?.rolTipo === 'superadmin' ||
+              u.usuarioRol?.rolTipo === 'gerencia' ||
               u.usuarioRol?.rolTipo === 'admin' ||
               u.usuarioRol?.rolTipo === 'supervisor',
           )

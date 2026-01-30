@@ -53,7 +53,6 @@ export class InstalacionesController {
   @Roles(
     'superadmin',
     'admin',
-    'administrador',
     'admin-internas',
     'admin-redes',
     'almacenista',
@@ -78,7 +77,6 @@ export class InstalacionesController {
   @Roles(
     'superadmin',
     'admin',
-    'administrador',
     'admin-internas',
     'admin-redes',
     'almacenista',
@@ -153,11 +151,121 @@ export class InstalacionesController {
     );
   }
 
+  @Get('export/metrogas/excel')
+  @Roles(
+    'superadmin',
+    'gerencia',
+    'admin',
+    'admin-internas',
+    'admin-redes',
+  )
+  @ApiOperation({ summary: 'Export Reporte Metrogas to Excel (by date range)' })
+  @ApiQuery({ name: 'dateStart', required: false, type: String })
+  @ApiQuery({ name: 'dateEnd', required: false, type: String })
+  async exportMetrogasToExcel(
+    @Request() req,
+    @Res() res: Response,
+    @Query('dateStart') dateStart?: string,
+    @Query('dateEnd') dateEnd?: string,
+  ) {
+    try {
+      const rows = await this.instalacionesService.getReporteMetrogasData(
+        dateStart,
+        dateEnd,
+        req.user,
+      );
+      const columns = [
+        { key: 'certificacion', label: 'CERTIFICACION' },
+        { key: 'codigoUsuario', label: 'CÓDIGO USUARIO' },
+        { key: 'numeroOrdenActividad', label: 'NUMERO ORDEN DE ACTIVIDAD' },
+        { key: 'descripcionMaterial', label: 'DESCRIPCION DEL MATERIAL' },
+        { key: 'unid', label: 'Unid.' },
+        { key: 'codMaterial', label: 'Cod. Material/M.O.' },
+        { key: 'cantInstalado', label: 'Cant Instalado' },
+        { key: 'codProyecto', label: 'COD PROYECTO' },
+        { key: 'concepto', label: 'CONCEPTO' },
+        { key: 'ubicacion', label: 'UBICACIÓN' },
+        { key: 'numMedidor', label: '# MEDIDOR' },
+        { key: 'precioUnitario', label: '$ UNITARIO' },
+        { key: 'total', label: '$ TOTAL' },
+        { key: 'tecnico', label: 'TECNICO' },
+        { key: 'instalador', label: 'INSTALADOR' },
+        { key: 'observaciones', label: 'OBSERVACIONES' },
+      ];
+      const buffer = await this.exportacionService.exportToExcel({
+        columns,
+        data: rows,
+        filename: 'reporte-metrogas',
+      });
+      res.setHeader(
+        'Content-Type',
+        'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+      );
+      res.setHeader('Content-Disposition', 'attachment; filename="reporte-metrogas.xlsx"');
+      res.send(buffer);
+    } catch (error) {
+      res.status(500).json({ message: 'Error al exportar Reporte Metrogas', error: error?.message });
+    }
+  }
+
+  @Get('export/metrogas/pdf')
+  @Roles(
+    'superadmin',
+    'gerencia',
+    'admin',
+    'admin-internas',
+    'admin-redes',
+  )
+  @ApiOperation({ summary: 'Export Reporte Metrogas to PDF (by date range)' })
+  @ApiQuery({ name: 'dateStart', required: false, type: String })
+  @ApiQuery({ name: 'dateEnd', required: false, type: String })
+  async exportMetrogasToPdf(
+    @Request() req,
+    @Res() res: Response,
+    @Query('dateStart') dateStart?: string,
+    @Query('dateEnd') dateEnd?: string,
+  ) {
+    try {
+      const rows = await this.instalacionesService.getReporteMetrogasData(
+        dateStart,
+        dateEnd,
+        req.user,
+      );
+      const columns = [
+        { key: 'certificacion', label: 'CERTIFICACION' },
+        { key: 'codigoUsuario', label: 'CÓDIGO USUARIO' },
+        { key: 'numeroOrdenActividad', label: 'NUMERO ORDEN DE ACTIVIDAD' },
+        { key: 'descripcionMaterial', label: 'DESCRIPCION DEL MATERIAL' },
+        { key: 'unid', label: 'Unid.' },
+        { key: 'codMaterial', label: 'Cod. Material/M.O.' },
+        { key: 'cantInstalado', label: 'Cant Instalado' },
+        { key: 'codProyecto', label: 'COD PROYECTO' },
+        { key: 'concepto', label: 'CONCEPTO' },
+        { key: 'ubicacion', label: 'UBICACIÓN' },
+        { key: 'numMedidor', label: '# MEDIDOR' },
+        { key: 'precioUnitario', label: '$ UNITARIO' },
+        { key: 'total', label: '$ TOTAL' },
+        { key: 'tecnico', label: 'TECNICO' },
+        { key: 'instalador', label: 'INSTALADOR' },
+        { key: 'observaciones', label: 'OBSERVACIONES' },
+      ];
+      const buffer = await this.exportacionService.exportToPdf({
+        columns,
+        data: rows,
+        filename: 'reporte-metrogas',
+      });
+      res.setHeader('Content-Type', 'application/pdf');
+      res.setHeader('Content-Disposition', 'attachment; filename="reporte-metrogas.pdf"');
+      res.send(buffer);
+    } catch (error) {
+      res.status(500).json({ message: 'Error al exportar Reporte Metrogas', error: error?.message });
+    }
+  }
+
   @Get('export/excel')
   @Roles(
     'superadmin',
     'admin',
-    'administrador',
     'admin-internas',
     'admin-redes',
     'almacenista',
@@ -275,7 +383,7 @@ export class InstalacionesController {
                 .join('; ');
             }
           } catch (e) {
-            __materialesStr = 'Error al parsear';
+            _materialesStr = 'Error al parsear';
           }
         }
 
@@ -345,7 +453,6 @@ export class InstalacionesController {
   @Roles(
     'superadmin',
     'admin',
-    'administrador',
     'admin-internas',
     'admin-redes',
     'almacenista',
@@ -463,7 +570,7 @@ export class InstalacionesController {
                 .join('; ');
             }
           } catch (e) {
-            __materialesStr = 'Error al parsear';
+            _materialesStr = 'Error al parsear';
           }
         }
 

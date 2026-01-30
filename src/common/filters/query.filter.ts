@@ -10,6 +10,7 @@ export class QueryFilter {
 
     switch (userRole) {
       case 'superadmin':
+      case 'gerencia':
         return resource; // Ve todo
 
       case 'admin':
@@ -20,10 +21,6 @@ export class QueryFilter {
             item.sede?.sedeId === user.usuarioSede ||
             item.bodega?.sedeId === user.usuarioSede,
         );
-
-      case 'administrador':
-        // Administrador (Centro Operativo) - solo lectura, ve todo
-        return resource;
 
       case 'bodega':
         // Solo ve recursos de su bodega
