@@ -45,7 +45,8 @@ export class MaterialesController {
   @Roles(
     'superadmin',
     'admin',
-    'administrador',
+    'admin-internas',
+    'admin-redes',
     'almacenista',
     'tecnico',
     'soldador',
@@ -61,7 +62,8 @@ export class MaterialesController {
   @Roles(
     'superadmin',
     'admin',
-    'administrador',
+    'admin-internas',
+    'admin-redes',
     'almacenista',
     'tecnico',
     'soldador',
@@ -69,8 +71,8 @@ export class MaterialesController {
     'bodega-redes',
   )
   @ApiOperation({ summary: 'Get a material by ID' })
-  findOne(@Param('id') id: string) {
-    return this.materialesService.findOne(+id);
+  findOne(@Param('id') id: string, @Request() req?: any) {
+    return this.materialesService.findOne(+id, req?.user);
   }
 
   @Patch(':id')
@@ -103,14 +105,17 @@ export class MaterialesController {
   @Roles('superadmin', 'admin', 'almacenista')
   @ApiOperation({
     summary:
-      'Asignar números de medidor a un material. El material se marcará automáticamente como medidor si no lo está.',
+      'Asignar números de medidor a un material. Cada item puede incluir bodegaId; si no se asigna bodega, el medidor queda en el centro operativo.',
   })
-  async asignarNumerosMedidor(@Param('id') id: string, @Body() body: { numerosMedidor: string[] }) {
-    return this.numerosMedidorService.crearMultiples(+id, body.numerosMedidor);
+  async asignarNumerosMedidor(
+    @Param('id') id: string,
+    @Body() body: { items: Array<{ numeroMedidor: string; bodegaId?: number }> },
+  ) {
+    return this.numerosMedidorService.crearMultiples(+id, body.items ?? []);
   }
 
   @Delete(':id')
-  @Roles('superadmin')
+  @Roles('superadmin', 'gerencia')
   @ApiOperation({ summary: 'Delete a material' })
   remove(@Param('id') id: string) {
     return this.materialesService.remove(+id);
@@ -120,7 +125,8 @@ export class MaterialesController {
   @Roles(
     'superadmin',
     'admin',
-    'administrador',
+    'admin-internas',
+    'admin-redes',
     'almacenista',
     'tecnico',
     'bodega-internas',
@@ -197,7 +203,8 @@ export class MaterialesController {
   @Roles(
     'superadmin',
     'admin',
-    'administrador',
+    'admin-internas',
+    'admin-redes',
     'almacenista',
     'tecnico',
     'bodega-internas',

@@ -1,5 +1,5 @@
 import { ApiProperty } from '@nestjs/swagger';
-import { IsString, IsNumber, IsOptional, IsBoolean } from 'class-validator';
+import { IsString, IsNumber, IsOptional, IsBoolean, IsIn } from 'class-validator';
 
 export class CreateBodegaDto {
   @ApiProperty({ example: 'Bodega Principal' })
@@ -41,11 +41,11 @@ export class CreateBodegaDto {
   bodegaEstado?: boolean;
 
   @ApiProperty({
-    required: false,
+    required: true,
     enum: ['internas', 'redes'],
-    description: 'Tipo de bodega: internas o redes',
+    description: 'Tipo de bodega: internas o redes. Obligatorio al crear.',
   })
   @IsString()
-  @IsOptional()
-  bodegaTipo?: string;
+  @IsIn(['internas', 'redes'], { message: 'bodegaTipo debe ser "internas" o "redes"' })
+  bodegaTipo: 'internas' | 'redes';
 }

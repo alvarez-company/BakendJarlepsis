@@ -47,6 +47,9 @@ export class NumeroMedidor {
   @Column({ nullable: true })
   instalacionId: number; // Instalación donde está (redundante pero útil para consultas)
 
+  @Column({ nullable: true })
+  bodegaId: number; // Bodega donde queda el medidor; si es null, queda en el centro operativo (sede)
+
   @Column({ type: 'text', nullable: true })
   observaciones: string;
 
@@ -65,6 +68,10 @@ export class NumeroMedidor {
   @ManyToOne('User', 'numerosMedidor', { nullable: true, onDelete: 'SET NULL' })
   @JoinColumn({ name: 'usuarioId' })
   usuario: any;
+
+  @ManyToOne('Bodega', { nullable: true, onDelete: 'SET NULL' })
+  @JoinColumn({ name: 'bodegaId' })
+  bodega: any;
 
   @CreateDateColumn()
   fechaCreacion: Date;

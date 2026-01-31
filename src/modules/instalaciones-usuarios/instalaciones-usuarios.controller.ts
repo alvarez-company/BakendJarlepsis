@@ -1,4 +1,4 @@
-import { Controller, Get, Post, Body, Param, Delete, UseGuards, Request } from '@nestjs/common';
+import { Controller, Get, Post, Body, Param, Delete, UseGuards } from '@nestjs/common';
 import { ApiTags, ApiBearerAuth, ApiOperation } from '@nestjs/swagger';
 import { InstalacionesUsuariosService } from './instalaciones-usuarios.service';
 import { AssignUsuariosToInstalacionDto } from './dto/assign-usuarios-to-instalacion.dto';
@@ -14,7 +14,7 @@ export class InstalacionesUsuariosController {
   constructor(private readonly service: InstalacionesUsuariosService) {}
 
   @Post(':instalacionId/asignar')
-  @Roles('superadmin', 'admin', 'bodega-internas', 'bodega-redes')
+  @Roles('superadmin', 'admin', 'admin-internas', 'admin-redes', 'bodega-internas', 'bodega-redes')
   @ApiOperation({ summary: 'Asignar múltiples usuarios a una instalación' })
   asignarUsuarios(
     @Param('instalacionId') instalacionId: string,
@@ -27,7 +27,8 @@ export class InstalacionesUsuariosController {
   @Roles(
     'superadmin',
     'admin',
-    'administrador',
+    'admin-internas',
+    'admin-redes',
     'almacenista',
     'tecnico',
     'soldador',
@@ -43,7 +44,8 @@ export class InstalacionesUsuariosController {
   @Roles(
     'superadmin',
     'admin',
-    'administrador',
+    'admin-internas',
+    'admin-redes',
     'almacenista',
     'tecnico',
     'soldador',
@@ -56,7 +58,7 @@ export class InstalacionesUsuariosController {
   }
 
   @Delete(':id')
-  @Roles('superadmin', 'admin', 'bodega-internas', 'bodega-redes')
+  @Roles('superadmin', 'admin', 'admin-internas', 'admin-redes', 'bodega-internas', 'bodega-redes')
   @ApiOperation({ summary: 'Desasignar usuario de instalación' })
   remove(@Param('id') id: string) {
     return this.service.remove(+id);

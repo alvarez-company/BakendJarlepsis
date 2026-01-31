@@ -8,11 +8,7 @@ import {
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository, In } from 'typeorm';
 import { NumeroMedidor, EstadoNumeroMedidor } from './numero-medidor.entity';
-import {
-  CreateNumeroMedidorDto,
-  UpdateNumeroMedidorDto,
-  AsignarNumerosMedidorDto,
-} from './dto/create-numero-medidor.dto';
+import { CreateNumeroMedidorDto, UpdateNumeroMedidorDto } from './dto/create-numero-medidor.dto';
 import { MaterialesService } from '../materiales/materiales.service';
 
 @Injectable()
@@ -56,7 +52,10 @@ export class NumerosMedidorService {
     return this.numerosMedidorRepository.save(numeroMedidor);
   }
 
-  async crearMultiples(materialId: number, numerosMedidor: string[]): Promise<NumeroMedidor[]> {
+  async crearMultiples(
+    materialId: number,
+    items: Array<{ numeroMedidor: string; bodegaId?: number }>,
+  ): Promise<NumeroMedidor[]> {
     // Verificar que el material existe
     const material = await this.materialesService.findOne(materialId);
     if (!material) {
@@ -71,7 +70,8 @@ export class NumerosMedidorService {
     const resultados: NumeroMedidor[] = [];
     const errores: string[] = [];
 
-    for (const numero of numerosMedidor) {
+    for (const item of items) {
+      const numero = item.numeroMedidor;
       try {
         // Normalizar el número (trim y lowercase) para comparación
         const numeroNormalizado = numero.trim().toLowerCase();
@@ -92,6 +92,7 @@ export class NumerosMedidorService {
           materialId,
           numeroMedidor: numero,
           estado: EstadoNumeroMedidor.DISPONIBLE,
+          bodegaId: item.bodegaId ?? null, // Si no se asigna bodega, queda en centro operativo
         });
 
         resultados.push(await this.numerosMedidorRepository.save(nuevo));
@@ -111,8 +112,19 @@ export class NumerosMedidorService {
     return resultados;
   }
 
+  /** Filtra números de medidor por centro operativo (sede): bodega del centro o técnicos del centro */
+  private filterBySede(numeros: NumeroMedidor[], sedeId: number): NumeroMedidor[] {
+    return numeros.filter((n: any) => {
+      if (n.bodega?.sedeId === sedeId) return true;
+      if (n.usuario?.usuarioSede === sedeId) return true;
+      if (!n.bodegaId && !n.usuarioId) return false; // sin bodega ni técnico: no mostrar a otros centros
+      return false;
+    });
+  }
+
   async findAll(
     paginationDto?: any,
+    user?: any,
   ): Promise<{ data: NumeroMedidor[]; total: number; page: number; limit: number }> {
     const page = paginationDto?.page || 1;
     const limit = paginationDto?.limit || 10;
@@ -125,12 +137,17 @@ export class NumerosMedidorService {
       .leftJoinAndSelect('numero.usuario', 'usuario')
       .leftJoinAndSelect('numero.inventarioTecnico', 'inventarioTecnico')
       .leftJoinAndSelect('numero.instalacionMaterial', 'instalacionMaterial')
+      .leftJoinAndSelect('numero.bodega', 'bodega')
+      .leftJoinAndSelect('bodega.sede', 'bodegaSede')
       .orderBy('numero.fechaCreacion', 'DESC')
       .skip(skip)
       .take(limit);
 
-    const [data, total] = await queryBuilder.getManyAndCount();
-
+    let [data, total] = await queryBuilder.getManyAndCount();
+    if (user?.usuarioSede) {
+      data = this.filterBySede(data, user.usuarioSede);
+      total = data.length;
+    }
     return {
       data,
       total,
@@ -139,18 +156,25 @@ export class NumerosMedidorService {
     };
   }
 
-  async findByMaterial(materialId: number, estado?: EstadoNumeroMedidor): Promise<NumeroMedidor[]> {
+  async findByMaterial(
+    materialId: number,
+    estado?: EstadoNumeroMedidor,
+    user?: any,
+  ): Promise<NumeroMedidor[]> {
     const where: any = { materialId };
 
-    // Si se especifica un estado, filtrar por él
     if (estado) {
       where.estado = estado;
     }
 
-    return this.numerosMedidorRepository.find({
+    let numeros = await this.numerosMedidorRepository.find({
       where,
-      relations: ['material', 'usuario', 'inventarioTecnico', 'instalacionMaterial'],
+      relations: ['material', 'usuario', 'inventarioTecnico', 'instalacionMaterial', 'bodega', 'bodega.sede'],
     });
+    if (user?.usuarioSede) {
+      numeros = this.filterBySede(numeros, user.usuarioSede);
+    }
+    return numeros;
   }
 
   async findByUsuario(usuarioId: number): Promise<NumeroMedidor[]> {
@@ -212,8 +236,8 @@ export class NumerosMedidorService {
     });
   }
 
-  async findByEstado(estado: EstadoNumeroMedidor): Promise<NumeroMedidor[]> {
-    return this.numerosMedidorRepository.find({
+  async findByEstado(estado: EstadoNumeroMedidor, user?: any): Promise<NumeroMedidor[]> {
+    let numeros = await this.numerosMedidorRepository.find({
       where: { estado },
       relations: [
         'material',
@@ -221,8 +245,14 @@ export class NumerosMedidorService {
         'usuario',
         'inventarioTecnico',
         'instalacionMaterial',
+        'bodega',
+        'bodega.sede',
       ],
     });
+    if (user?.usuarioSede) {
+      numeros = this.filterBySede(numeros, user.usuarioSede);
+    }
+    return numeros;
   }
 
   async findOne(id: number): Promise<NumeroMedidor> {

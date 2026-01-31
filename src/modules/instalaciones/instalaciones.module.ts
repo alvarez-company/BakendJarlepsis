@@ -19,6 +19,7 @@ import { InstalacionesMaterialesModule } from '../instalaciones-materiales/insta
 import { InventarioTecnicoModule } from '../inventario-tecnico/inventario-tecnico.module';
 import { UsersModule } from '../users/users.module';
 import { NumerosMedidorModule } from '../numeros-medidor/numeros-medidor.module';
+import { AuthModule } from '../auth/auth.module';
 
 @Module({
   imports: [
@@ -38,6 +39,7 @@ import { NumerosMedidorModule } from '../numeros-medidor/numeros-medidor.module'
     forwardRef(() => InventarioTecnicoModule),
     forwardRef(() => UsersModule),
     forwardRef(() => NumerosMedidorModule),
+    forwardRef(() => AuthModule),
   ],
   controllers: [InstalacionesController],
   providers: [InstalacionesService],

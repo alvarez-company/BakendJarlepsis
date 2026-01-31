@@ -1,6 +1,5 @@
 import { Test, TestingModule } from '@nestjs/testing';
 import { getRepositoryToken } from '@nestjs/typeorm';
-import { Repository } from 'typeorm';
 import { BadRequestException } from '@nestjs/common';
 import { InstalacionesService } from './instalaciones.service';
 import { Instalacion } from './instalacion.entity';
@@ -22,7 +21,7 @@ import { NumerosMedidorService } from '../numeros-medidor/numeros-medidor.servic
 
 describe('InstalacionesService - Permisos', () => {
   let service: InstalacionesService;
-  let usersService: UsersService;
+  let _usersService: UsersService;
 
   const mockRepository = {
     find: jest.fn(),
@@ -162,7 +161,7 @@ describe('InstalacionesService - Permisos', () => {
     }).compile();
 
     service = module.get<InstalacionesService>(InstalacionesService);
-    usersService = module.get<UsersService>(UsersService);
+    _usersService = module.get<UsersService>(UsersService);
   });
 
   afterEach(() => {
@@ -241,17 +240,12 @@ describe('InstalacionesService - Permisos', () => {
       );
     });
 
-    it('should deny administrador from updating installation', async () => {
-      const user = { usuarioRol: { rolTipo: 'administrador' }, usuarioId: 1 };
+    it('should allow admin (centro operativo) to update installation', async () => {
+      const user = { usuarioRol: { rolTipo: 'admin' }, usuarioId: 1, usuarioSede: 1 };
       mockUsersService.findOne.mockResolvedValue(user);
       jest.spyOn(service, 'findOne').mockResolvedValue(mockInstalacion as any);
 
-      await expect(service.update(1, { instalacionCodigo: 'INST-002' }, 1, user)).rejects.toThrow(
-        BadRequestException,
-      );
-      await expect(service.update(1, { instalacionCodigo: 'INST-002' }, 1, user)).rejects.toThrow(
-        'No tienes permisos para editar instalaciones',
-      );
+      await expect(service.update(1, { instalacionCodigo: 'INST-002' }, 1, user)).resolves.toBeDefined();
     });
   });
 

@@ -22,11 +22,12 @@ import { ExportacionService } from '../exportacion/exportacion.service';
 import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard';
 import { RolesGuard } from '../../common/guards/roles.guard';
 import { Roles } from '../../common/decorators/roles.decorator';
+import { ImpersonationGuard } from '../auth/guards/impersonation.guard';
 
 @ApiTags('instalaciones')
 @ApiBearerAuth()
 @Controller('instalaciones')
-@UseGuards(JwtAuthGuard, RolesGuard)
+@UseGuards(JwtAuthGuard, ImpersonationGuard, RolesGuard)
 export class InstalacionesController {
   constructor(
     private readonly instalacionesService: InstalacionesService,
@@ -34,7 +35,16 @@ export class InstalacionesController {
   ) {}
 
   @Post()
-  @Roles('superadmin', 'admin', 'tecnico', 'soldador', 'bodega-internas', 'bodega-redes')
+  @Roles(
+    'superadmin',
+    'admin',
+    'admin-internas',
+    'admin-redes',
+    'tecnico',
+    'soldador',
+    'bodega-internas',
+    'bodega-redes',
+  )
   @ApiOperation({ summary: 'Create a new instalacion' })
   create(@Body() createInstalacionDto: CreateInstalacionDto, @Request() req) {
     return this.instalacionesService.create(createInstalacionDto, req.user.usuarioId, req.user);
@@ -44,7 +54,8 @@ export class InstalacionesController {
   @Roles(
     'superadmin',
     'admin',
-    'administrador',
+    'admin-internas',
+    'admin-redes',
     'almacenista',
     'tecnico',
     'soldador',
@@ -67,7 +78,8 @@ export class InstalacionesController {
   @Roles(
     'superadmin',
     'admin',
-    'administrador',
+    'admin-internas',
+    'admin-redes',
     'almacenista',
     'tecnico',
     'soldador',
@@ -75,16 +87,25 @@ export class InstalacionesController {
     'bodega-redes',
   )
   @ApiOperation({ summary: 'Get an instalacion by ID' })
-  findOne(@Param('id') id: string) {
+  findOne(@Param('id') id: string, @Request() req) {
     const instalacionId = parseInt(id, 10);
     if (isNaN(instalacionId)) {
       throw new NotFoundException(`ID de instalación inválido: ${id}`);
     }
-    return this.instalacionesService.findOne(instalacionId);
+    return this.instalacionesService.findOne(instalacionId, req.user);
   }
 
   @Patch(':id')
-  @Roles('superadmin', 'admin', 'tecnico', 'soldador', 'bodega-internas', 'bodega-redes')
+  @Roles(
+    'superadmin',
+    'admin',
+    'admin-internas',
+    'admin-redes',
+    'tecnico',
+    'soldador',
+    'bodega-internas',
+    'bodega-redes',
+  )
   @ApiOperation({ summary: 'Update an instalacion' })
   update(
     @Param('id') id: string,
@@ -107,7 +128,16 @@ export class InstalacionesController {
   }
 
   @Post(':id/actualizar-estado')
-  @Roles('superadmin', 'admin', 'tecnico', 'soldador', 'bodega-internas', 'bodega-redes')
+  @Roles(
+    'superadmin',
+    'admin',
+    'admin-internas',
+    'admin-redes',
+    'tecnico',
+    'soldador',
+    'bodega-internas',
+    'bodega-redes',
+  )
   @ApiOperation({ summary: 'Update instalacion status' })
   actualizarEstado(
     @Param('id') id: string,
@@ -122,11 +152,123 @@ export class InstalacionesController {
     );
   }
 
+  @Get('export/metrogas/excel')
+  @Roles(
+    'superadmin',
+    'gerencia',
+    'admin',
+    'admin-internas',
+    'admin-redes',
+  )
+  @ApiOperation({ summary: 'Export Reporte Metrogas to Excel (by date range)' })
+  @ApiQuery({ name: 'dateStart', required: false, type: String })
+  @ApiQuery({ name: 'dateEnd', required: false, type: String })
+  async exportMetrogasToExcel(
+    @Request() req,
+    @Res() res: Response,
+    @Query('dateStart') dateStart?: string,
+    @Query('dateEnd') dateEnd?: string,
+  ) {
+    try {
+      const rows = await this.instalacionesService.getReporteMetrogasData(
+        dateStart,
+        dateEnd,
+        req.user,
+      );
+      const columns = [
+        { key: 'certificacion', label: 'CERTIFICACION' },
+        { key: 'codigoUsuario', label: 'CÓDIGO USUARIO' },
+        { key: 'numeroOrdenActividad', label: 'NUMERO ORDEN DE ACTIVIDAD' },
+        { key: 'descripcionMaterial', label: 'DESCRIPCION DEL MATERIAL' },
+        { key: 'unid', label: 'Unid.' },
+        { key: 'codMaterial', label: 'Cod. Material/M.O.' },
+        { key: 'cantInstalado', label: 'Cant Instalado' },
+        { key: 'codProyecto', label: 'COD PROYECTO' },
+        { key: 'concepto', label: 'CONCEPTO' },
+        { key: 'ubicacion', label: 'UBICACIÓN' },
+        { key: 'numMedidor', label: '# MEDIDOR' },
+        { key: 'precioUnitario', label: '$ UNITARIO' },
+        { key: 'total', label: '$ TOTAL' },
+        { key: 'tecnico', label: 'TECNICO' },
+        { key: 'instalador', label: 'INSTALADOR' },
+        { key: 'observaciones', label: 'OBSERVACIONES' },
+      ];
+      const buffer = await this.exportacionService.exportToExcel({
+        columns,
+        data: rows,
+        filename: 'reporte-metrogas',
+      });
+      res.setHeader(
+        'Content-Type',
+        'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+      );
+      res.setHeader('Content-Disposition', 'attachment; filename="reporte-metrogas.xlsx"');
+      res.send(buffer);
+    } catch (error) {
+      res.status(500).json({ message: 'Error al exportar Reporte Metrogas', error: error?.message });
+    }
+  }
+
+  @Get('export/metrogas/pdf')
+  @Roles(
+    'superadmin',
+    'gerencia',
+    'admin',
+    'admin-internas',
+    'admin-redes',
+  )
+  @ApiOperation({ summary: 'Export Reporte Metrogas to PDF (by date range)' })
+  @ApiQuery({ name: 'dateStart', required: false, type: String })
+  @ApiQuery({ name: 'dateEnd', required: false, type: String })
+  async exportMetrogasToPdf(
+    @Request() req,
+    @Res() res: Response,
+    @Query('dateStart') dateStart?: string,
+    @Query('dateEnd') dateEnd?: string,
+  ) {
+    try {
+      const rows = await this.instalacionesService.getReporteMetrogasData(
+        dateStart,
+        dateEnd,
+        req.user,
+      );
+      const columns = [
+        { key: 'certificacion', label: 'CERTIFICACION' },
+        { key: 'codigoUsuario', label: 'CÓDIGO USUARIO' },
+        { key: 'numeroOrdenActividad', label: 'NUMERO ORDEN DE ACTIVIDAD' },
+        { key: 'descripcionMaterial', label: 'DESCRIPCION DEL MATERIAL' },
+        { key: 'unid', label: 'Unid.' },
+        { key: 'codMaterial', label: 'Cod. Material/M.O.' },
+        { key: 'cantInstalado', label: 'Cant Instalado' },
+        { key: 'codProyecto', label: 'COD PROYECTO' },
+        { key: 'concepto', label: 'CONCEPTO' },
+        { key: 'ubicacion', label: 'UBICACIÓN' },
+        { key: 'numMedidor', label: '# MEDIDOR' },
+        { key: 'precioUnitario', label: '$ UNITARIO' },
+        { key: 'total', label: '$ TOTAL' },
+        { key: 'tecnico', label: 'TECNICO' },
+        { key: 'instalador', label: 'INSTALADOR' },
+        { key: 'observaciones', label: 'OBSERVACIONES' },
+      ];
+      const buffer = await this.exportacionService.exportToPdf({
+        columns,
+        data: rows,
+        filename: 'reporte-metrogas',
+      });
+      res.setHeader('Content-Type', 'application/pdf');
+      res.setHeader('Content-Disposition', 'attachment; filename="reporte-metrogas.pdf"');
+      res.send(buffer);
+    } catch (error) {
+      res.status(500).json({ message: 'Error al exportar Reporte Metrogas', error: error?.message });
+    }
+  }
+
   @Get('export/excel')
   @Roles(
     'superadmin',
     'admin',
-    'administrador',
+    'admin-internas',
+    'admin-redes',
     'almacenista',
     'tecnico',
     'soldador',
@@ -227,7 +369,7 @@ export class InstalacionesController {
             : 'Sin asignar';
 
         // Formatear materiales instalados si existen
-        let materialesStr = '-';
+        let _materialesStr = '-';
         if (i.materialesInstalados) {
           try {
             const materiales =
@@ -235,14 +377,14 @@ export class InstalacionesController {
                 ? JSON.parse(i.materialesInstalados)
                 : i.materialesInstalados;
             if (Array.isArray(materiales) && materiales.length > 0) {
-              materialesStr = materiales
+              _materialesStr = materiales
                 .map(
                   (m: any) => `${m.nombre || m.materialNombre || 'Material'} (${m.cantidad || 0})`,
                 )
                 .join('; ');
             }
           } catch (e) {
-            materialesStr = 'Error al parsear';
+            _materialesStr = 'Error al parsear';
           }
         }
 
@@ -312,7 +454,8 @@ export class InstalacionesController {
   @Roles(
     'superadmin',
     'admin',
-    'administrador',
+    'admin-internas',
+    'admin-redes',
     'almacenista',
     'tecnico',
     'soldador',
@@ -413,7 +556,7 @@ export class InstalacionesController {
             : 'Sin asignar';
 
         // Formatear materiales instalados si existen
-        let materialesStr = '-';
+        let _materialesStr = '-';
         if (i.materialesInstalados) {
           try {
             const materiales =
@@ -421,14 +564,14 @@ export class InstalacionesController {
                 ? JSON.parse(i.materialesInstalados)
                 : i.materialesInstalados;
             if (Array.isArray(materiales) && materiales.length > 0) {
-              materialesStr = materiales
+              _materialesStr = materiales
                 .map(
                   (m: any) => `${m.nombre || m.materialNombre || 'Material'} (${m.cantidad || 0})`,
                 )
                 .join('; ');
             }
           } catch (e) {
-            materialesStr = 'Error al parsear';
+            _materialesStr = 'Error al parsear';
           }
         }
 

@@ -1,5 +1,4 @@
 import { Test, TestingModule } from '@nestjs/testing';
-import { ExecutionContext, UnauthorizedException } from '@nestjs/common';
 import { Reflector } from '@nestjs/core';
 import { InstalacionesMaterialesController } from './instalaciones-materiales.controller';
 import { InstalacionesMaterialesService } from './instalaciones-materiales.service';
@@ -7,10 +6,10 @@ import { RolesGuard } from '../../common/guards/roles.guard';
 import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard';
 
 describe('InstalacionesMaterialesController - Roles y Permisos', () => {
-  let controller: InstalacionesMaterialesController;
-  let service: InstalacionesMaterialesService;
+  let _controller: InstalacionesMaterialesController;
+  let _service: InstalacionesMaterialesService;
   let rolesGuard: RolesGuard;
-  let reflector: Reflector;
+  let _reflector: Reflector;
 
   const mockService = {
     create: jest.fn(),
@@ -60,10 +59,10 @@ describe('InstalacionesMaterialesController - Roles y Permisos', () => {
       ],
     }).compile();
 
-    controller = module.get<InstalacionesMaterialesController>(InstalacionesMaterialesController);
-    service = module.get<InstalacionesMaterialesService>(InstalacionesMaterialesService);
+    _controller = module.get<InstalacionesMaterialesController>(InstalacionesMaterialesController);
+    _service = module.get<InstalacionesMaterialesService>(InstalacionesMaterialesService);
     rolesGuard = module.get<RolesGuard>(RolesGuard);
-    reflector = module.get<Reflector>(Reflector);
+    _reflector = module.get<Reflector>(Reflector);
   });
 
   afterEach(() => {

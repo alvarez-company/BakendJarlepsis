@@ -32,11 +32,15 @@ export class Instalacion {
   @Column({ nullable: true, unique: true })
   identificadorUnico: string; // INST-1, INST-2, etc.
 
-  @Column()
-  instalacionCodigo: string; // Código de instalación (obligatorio)
+  @Column({ nullable: true })
+  instalacionCodigo: string | null; // Código de instalación (opcional; en redes no siempre hay código)
 
   @Column()
   tipoInstalacionId: number;
+
+  /** Tipo de instalación: 'internas' | 'redes'. Define si la instalación es de internas o de redes. */
+  @Column({ type: 'varchar', length: 20, nullable: true })
+  instalacionTipo: 'internas' | 'redes' | null;
 
   @Column()
   clienteId: number;

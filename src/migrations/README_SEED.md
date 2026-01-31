@@ -1,6 +1,8 @@
 # Script de Población de Datos - Colombia
 
-Este script SQL contiene los datos de Colombia que necesitas para poblar las tablas del sistema.
+**Seeds oficiales del proyecto**: el seed completo es `npm run seed` (`scripts/seed-full.js`) y el SQL equivalente es `src/migrations/full_seed.sql`. Solo superadmin: `npm run seed:superadmin`. Ver `documents/SEED_Y_RESET.md`.
+
+Este archivo documenta **`seed_colombia.sql`**, que contiene los datos de Colombia (país, departamentos, municipios de Santander y Norte de Santander). El seed completo (`seed-full.js`) lo ejecuta automáticamente.
 
 ## Contenido
 

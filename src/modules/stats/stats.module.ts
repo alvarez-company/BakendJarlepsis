@@ -1,4 +1,4 @@
-import { Module } from '@nestjs/common';
+import { Module, forwardRef } from '@nestjs/common';
 import { TypeOrmModule } from '@nestjs/typeorm';
 import { StatsController } from './stats.controller';
 import { StatsService } from './stats.service';
@@ -12,9 +12,11 @@ import { InstalacionUsuario } from '../instalaciones-usuarios/instalacion-usuari
 import { Municipio } from '../municipios/municipio.entity';
 import { Categoria } from '../categorias/categoria.entity';
 import { InventarioTecnico } from '../inventario-tecnico/inventario-tecnico.entity';
+import { BodegasModule } from '../bodegas/bodegas.module';
 
 @Module({
   imports: [
+    forwardRef(() => BodegasModule),
     TypeOrmModule.forFeature([
       Material,
       Instalacion,

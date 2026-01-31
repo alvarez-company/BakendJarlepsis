@@ -16,7 +16,6 @@ export class EstadosTrasladoController {
   @Roles(
     'superadmin',
     'admin',
-    'administrador',
     'almacenista',
     'tecnico',
     'soldador',

@@ -22,19 +22,21 @@ import { PaginationDto } from '../../common/dto/pagination.dto';
 import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard';
 import { RolesGuard } from '../../common/guards/roles.guard';
 import { Roles } from '../../common/decorators/roles.decorator';
+import { ImpersonationGuard } from '../auth/guards/impersonation.guard';
 
 @ApiTags('users')
 @ApiBearerAuth()
 @Controller('users')
-@UseGuards(JwtAuthGuard, RolesGuard)
+@UseGuards(JwtAuthGuard, ImpersonationGuard, RolesGuard)
 export class UsersController {
   constructor(private readonly usersService: UsersService) {}
 
   @Post()
-  @Roles('superadmin', 'admin', 'bodega-internas', 'bodega-redes')
+  @Roles('superadmin', 'gerencia', 'admin', 'admin-internas', 'admin-redes')
   @ApiOperation({ summary: 'Create a new user' })
   create(@Body() createUserDto: CreateUserDto, @Request() req) {
-    return this.usersService.create(createUserDto, req.user.usuarioId);
+    const rolTipo = req.user.usuarioRol?.rolTipo || req.user.role;
+    return this.usersService.create(createUserDto, req.user.usuarioId, rolTipo);
   }
 
   // Endpoints para el usuario actual (sin restricción de roles) - DEBEN IR ANTES de las rutas genéricas
@@ -46,7 +48,7 @@ export class UsersController {
     }
     const user = await this.usersService.findOne(req.user.usuarioId);
     // Remover la contraseña de la respuesta
-    const { usuarioContrasena, ...userWithoutPassword } = user;
+    const { usuarioContrasena: _usuarioContrasena, ...userWithoutPassword } = user;
     return userWithoutPassword;
   }
 
@@ -69,46 +71,66 @@ export class UsersController {
   }
 
   @Get()
-  @Roles('superadmin', 'admin', 'administrador', 'bodega-internas', 'bodega-redes')
+  @Roles(
+    'superadmin',
+    'gerencia',
+    'admin',
+    'admin-internas',
+    'admin-redes',
+    'bodega-internas',
+    'bodega-redes',
+  )
   @ApiOperation({ summary: 'Get all users with pagination' })
   @ApiQuery({ name: 'page', required: false, type: Number })
   @ApiQuery({ name: 'limit', required: false, type: Number })
   @ApiQuery({ name: 'search', required: false, type: String })
-  findAll(@Query() paginationDto: PaginationDto, @Query('search') search?: string) {
-    return this.usersService.findAll(paginationDto, search);
+  findAll(
+    @Query() paginationDto: PaginationDto,
+    @Query('search') search?: string,
+    @Request() req?: { user?: any },
+  ) {
+    return this.usersService.findAll(paginationDto, search, req?.user);
   }
 
   @Get(':id')
-  @Roles('superadmin', 'admin', 'administrador', 'bodega-internas', 'bodega-redes')
+  @Roles(
+    'superadmin',
+    'gerencia',
+    'admin',
+    'admin-internas',
+    'admin-redes',
+    'bodega-internas',
+    'bodega-redes',
+  )
   @ApiOperation({ summary: 'Get a user by ID' })
-  findOne(@Param('id') id: string) {
-    return this.usersService.findOne(+id);
+  findOne(@Param('id') id: string, @Request() req?: { user?: any }) {
+    return this.usersService.findOne(+id, req?.user);
   }
 
   // Rutas específicas deben ir ANTES de las rutas genéricas
   @Patch(':id/cancelar-contrato')
-  @Roles('superadmin', 'admin')
+  @Roles('superadmin', 'gerencia', 'admin')
   @ApiOperation({ summary: 'Cancelar contrato de técnico y transferir materiales a la sede' })
   cancelarContrato(@Param('id') id: string, @Request() req) {
     return this.usersService.cancelarContrato(+id, req.user.usuarioId);
   }
 
   @Patch(':id/estado')
-  @Roles('superadmin', 'admin')
-  @ApiOperation({ summary: 'Update user status (Admin/SuperAdmin only)' })
+  @Roles('superadmin', 'gerencia', 'admin')
+  @ApiOperation({ summary: 'Update user status (SuperAdmin/Gerencia/Admin only)' })
   updateEstado(@Param('id') id: string, @Body() updateEstadoDto: UpdateEstadoUsuarioDto) {
     return this.usersService.updateEstado(+id, updateEstadoDto.usuarioEstado);
   }
 
   @Post(':id/change-role')
-  @Roles('superadmin')
-  @ApiOperation({ summary: 'Change user role (SuperAdmin only)' })
+  @Roles('superadmin', 'gerencia')
+  @ApiOperation({ summary: 'Change user role (SuperAdmin o Gerencia). No se puede asignar rol Super Administrador.' })
   changeRole(@Param('id') id: string, @Body() changeRoleDto: ChangeRoleDto) {
     return this.usersService.changeRole(+id, changeRoleDto.usuarioRolId);
   }
 
   @Patch(':id')
-  @Roles('superadmin', 'admin', 'bodega-internas', 'bodega-redes')
+  @Roles('superadmin', 'gerencia', 'admin', 'admin-internas', 'admin-redes', 'bodega-internas', 'bodega-redes')
   @ApiOperation({ summary: 'Update a user' })
   update(@Param('id') id: string, @Body() updateUserDto: UpdateUserDto, @Request() req) {
     const rolTipo = req.user.usuarioRol?.rolTipo || req.user.role;
@@ -116,8 +138,8 @@ export class UsersController {
   }
 
   @Delete(':id')
-  @Roles('superadmin')
-  @ApiOperation({ summary: 'Delete a user' })
+  @Roles('superadmin', 'gerencia')
+  @ApiOperation({ summary: 'Delete a user (no se puede eliminar el usuario Super Administrador)' })
   remove(@Param('id') id: string) {
     return this.usersService.remove(+id);
   }

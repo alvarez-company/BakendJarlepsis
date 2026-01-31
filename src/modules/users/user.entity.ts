@@ -39,6 +39,9 @@ export class User {
   @Column({ unique: true })
   usuarioDocumento: string;
 
+  @Column({ nullable: true })
+  tipoDocumentoId: number;
+
   @Column()
   usuarioContrasena: string;
 
@@ -62,6 +65,10 @@ export class User {
   @ManyToOne('Bodega', 'usuarios', { nullable: true })
   @JoinColumn({ name: 'usuarioBodega' })
   bodega: any;
+
+  @ManyToOne('TipoDocumentoIdentidad', { nullable: true })
+  @JoinColumn({ name: 'tipoDocumentoId' })
+  tipoDocumento: any;
 
   @OneToMany('Instalacion', 'usuarioTecnico')
   instalaciones: any[];

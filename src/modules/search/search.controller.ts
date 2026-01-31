@@ -1,4 +1,4 @@
-import { Controller, Get, Query, UseGuards } from '@nestjs/common';
+import { Controller, Get, Query, UseGuards, Request } from '@nestjs/common';
 import { ApiTags, ApiBearerAuth, ApiOperation, ApiQuery } from '@nestjs/swagger';
 import { SearchService } from './search.service';
 import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard';
@@ -16,7 +16,8 @@ export class SearchController {
   @Roles(
     'superadmin',
     'admin',
-    'administrador',
+    'admin-internas',
+    'admin-redes',
     'almacenista',
     'tecnico',
     'soldador',
@@ -25,13 +26,13 @@ export class SearchController {
   )
   @ApiOperation({ summary: 'Global search across all entities' })
   @ApiQuery({ name: 'q', required: true, description: 'Search query' })
-  async globalSearch(@Query('q') query: string) {
+  async globalSearch(@Query('q') query: string, @Request() req?: any) {
     if (!query || query.trim() === '') {
       return {
         results: [],
         total: 0,
       };
     }
-    return this.searchService.globalSearch(query);
+    return this.searchService.globalSearch(query, req?.user);
   }
 }

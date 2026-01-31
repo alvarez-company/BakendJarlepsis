@@ -4,9 +4,7 @@ import {
   PrimaryGeneratedColumn,
   CreateDateColumn,
   UpdateDateColumn,
-  OneToMany,
 } from 'typeorm';
-import { Instalacion } from '../instalaciones/instalacion.entity';
 
 @Entity('estados_instalacion')
 export class EstadoInstalacionEntity {

@@ -1,6 +1,6 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Repository, DeepPartial } from 'typeorm';
+import { Repository } from 'typeorm';
 import { Cliente, EstadoCliente } from './cliente.entity';
 import { CreateClienteDto } from './dto/create-cliente.dto';
 import { UpdateClienteDto } from './dto/update-cliente.dto';
@@ -60,10 +60,10 @@ export class ClientesService {
     return cliente;
   }
 
-  async findAll(): Promise<Cliente[]> {
+  async findAll(user?: any): Promise<Cliente[]> {
     try {
       // Cargar clientes directamente usando find() - TypeORM manejará automáticamente los campos de la entidad
-      const clientes = await this.clientesRepository.find({
+      let clientes = await this.clientesRepository.find({
         select: [
           'clienteId',
           'nombreUsuario',
@@ -128,6 +128,22 @@ export class ClientesService {
         }
       }
 
+      // Restricción por centro operativo: admin / admin-internas / admin-redes solo ven clientes con al menos una instalación en bodega de su sede
+      const rolTipo = (user?.usuarioRol?.rolTipo ?? user?.role ?? '').toString().toLowerCase();
+      const sedeRestricted =
+        (rolTipo === 'admin' || rolTipo === 'admin-internas' || rolTipo === 'admin-redes') &&
+        user?.usuarioSede;
+      if (sedeRestricted) {
+        const rows = await this.clientesRepository.query(
+          `SELECT DISTINCT i.clienteId FROM instalaciones i
+           INNER JOIN bodegas b ON i.bodegaId = b.bodegaId
+           WHERE b.sedeId = ?`,
+          [user.usuarioSede],
+        );
+        const allowedClienteIds = new Set((rows || []).map((r: any) => r.clienteId));
+        clientes = clientes.filter((c) => allowedClienteIds.has(c.clienteId));
+      }
+
       return clientes;
     } catch (error) {
       console.error('Error en findAll de clientes:', error);
@@ -136,7 +152,7 @@ export class ClientesService {
     }
   }
 
-  async findOne(id: number): Promise<Cliente> {
+  async findOne(id: number, user?: any): Promise<Cliente> {
     // No cargar la relación instalaciones automáticamente
     // Las instalaciones se cargan manualmente cuando es necesario
     const cliente = await this.clientesRepository
@@ -158,6 +174,23 @@ export class ClientesService {
       .getOne();
     if (!cliente) {
       throw new NotFoundException(`Cliente con ID ${id} no encontrado`);
+    }
+
+    // Restricción por centro operativo: admin / admin-internas / admin-redes solo acceden a clientes con instalación en bodega de su sede
+    const rolTipo = (user?.usuarioRol?.rolTipo ?? user?.role ?? '').toString().toLowerCase();
+    const sedeRestricted =
+      (rolTipo === 'admin' || rolTipo === 'admin-internas' || rolTipo === 'admin-redes') &&
+      user?.usuarioSede;
+    if (sedeRestricted) {
+      const rows = await this.clientesRepository.query(
+        `SELECT 1 FROM instalaciones i
+         INNER JOIN bodegas b ON i.bodegaId = b.bodegaId
+         WHERE i.clienteId = ? AND b.sedeId = ? LIMIT 1`,
+        [id, user.usuarioSede],
+      );
+      if (!rows || rows.length === 0) {
+        throw new NotFoundException(`Cliente con ID ${id} no encontrado`);
+      }
     }
 
     // Obtener la instalación asignada más reciente
@@ -191,8 +224,9 @@ export class ClientesService {
   async update(
     id: number,
     updateClienteDto: UpdateClienteDto & { clienteEstado?: EstadoCliente },
+    user?: any,
   ): Promise<Cliente> {
-    const cliente = await this.findOne(id);
+    await this.findOne(id, user);
 
     // Actualizar solo los campos permitidos usando QueryBuilder
     const updateValues: any = {};
@@ -229,11 +263,11 @@ export class ClientesService {
         .execute();
     }
 
-    return this.findOne(id);
+    return this.findOne(id, user);
   }
 
-  async remove(id: number): Promise<void> {
-    const cliente = await this.findOne(id);
+  async remove(id: number, user?: any): Promise<void> {
+    const cliente = await this.findOne(id, user);
     await this.clientesRepository.remove(cliente);
   }
 }

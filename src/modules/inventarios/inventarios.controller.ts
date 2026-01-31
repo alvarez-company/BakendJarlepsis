@@ -9,6 +9,7 @@ import {
   UseGuards,
   Res,
   Query,
+  Request,
 } from '@nestjs/common';
 import { ApiTags, ApiBearerAuth, ApiOperation, ApiQuery } from '@nestjs/swagger';
 import { Response } from 'express';
@@ -41,7 +42,8 @@ export class InventariosController {
   @Roles(
     'superadmin',
     'admin',
-    'administrador',
+    'admin-internas',
+    'admin-redes',
     'almacenista',
     'tecnico',
     'soldador',
@@ -49,15 +51,16 @@ export class InventariosController {
     'bodega-redes',
   )
   @ApiOperation({ summary: 'Get all inventarios' })
-  findAll() {
-    return this.inventariosService.findAll();
+  findAll(@Request() req) {
+    return this.inventariosService.findAll(req.user);
   }
 
   @Get(':id')
   @Roles(
     'superadmin',
     'admin',
-    'administrador',
+    'admin-internas',
+    'admin-redes',
     'almacenista',
     'tecnico',
     'soldador',
@@ -65,8 +68,8 @@ export class InventariosController {
     'bodega-redes',
   )
   @ApiOperation({ summary: 'Get an inventario by ID' })
-  findOne(@Param('id') id: string) {
-    return this.inventariosService.findOne(+id);
+  findOne(@Param('id') id: string, @Request() req) {
+    return this.inventariosService.findOne(+id, req.user);
   }
 
   @Patch(':id')
@@ -77,19 +80,31 @@ export class InventariosController {
   }
 
   @Delete(':id')
-  @Roles('superadmin')
+  @Roles('superadmin', 'gerencia')
   @ApiOperation({ summary: 'Delete an inventario' })
   remove(@Param('id') id: string) {
     return this.inventariosService.remove(+id);
   }
 
   @Get('export/excel')
-  @Roles('superadmin', 'admin', 'administrador', 'almacenista', 'tecnico', 'soldador')
+  @Roles(
+    'superadmin',
+    'admin',
+    'admin-internas',
+    'admin-redes',
+    'almacenista',
+    'tecnico',
+    'soldador',
+  )
   @ApiOperation({ summary: 'Export inventories to Excel' })
   @ApiQuery({ name: 'filters', required: false, type: String })
-  async exportToExcel(@Res() res: Response, @Query('filters') filters?: string) {
+  async exportToExcel(
+    @Res() res: Response,
+    @Query('filters') filters?: string,
+    @Request() req?: any,
+  ) {
     try {
-      const inventarios = await this.inventariosService.findAll();
+      const inventarios = await this.inventariosService.findAll(req?.user);
 
       let filteredData = inventarios;
       if (filters) {
@@ -140,12 +155,24 @@ export class InventariosController {
   }
 
   @Get('export/pdf')
-  @Roles('superadmin', 'admin', 'administrador', 'almacenista', 'tecnico', 'soldador')
+  @Roles(
+    'superadmin',
+    'admin',
+    'admin-internas',
+    'admin-redes',
+    'almacenista',
+    'tecnico',
+    'soldador',
+  )
   @ApiOperation({ summary: 'Export inventories to PDF' })
   @ApiQuery({ name: 'filters', required: false, type: String })
-  async exportToPdf(@Res() res: Response, @Query('filters') filters?: string) {
+  async exportToPdf(
+    @Res() res: Response,
+    @Query('filters') filters?: string,
+    @Request() req?: any,
+  ) {
     try {
-      const inventarios = await this.inventariosService.findAll();
+      const inventarios = await this.inventariosService.findAll(req?.user);
 
       let filteredData = inventarios;
       if (filters) {

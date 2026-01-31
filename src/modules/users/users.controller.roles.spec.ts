@@ -1,5 +1,4 @@
 import { Test, TestingModule } from '@nestjs/testing';
-import { ExecutionContext } from '@nestjs/common';
 import { Reflector } from '@nestjs/core';
 import { UsersController } from './users.controller';
 import { UsersService } from './users.service';
@@ -7,10 +6,10 @@ import { RolesGuard } from '../../common/guards/roles.guard';
 import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard';
 
 describe('UsersController - Roles y Permisos', () => {
-  let controller: UsersController;
-  let service: UsersService;
+  let _controller: UsersController;
+  let _service: UsersService;
   let rolesGuard: RolesGuard;
-  let reflector: Reflector;
+  let _reflector: Reflector;
 
   const mockService = {
     create: jest.fn(),
@@ -61,10 +60,10 @@ describe('UsersController - Roles y Permisos', () => {
       ],
     }).compile();
 
-    controller = module.get<UsersController>(UsersController);
-    service = module.get<UsersService>(UsersService);
+    _controller = module.get<UsersController>(UsersController);
+    _service = module.get<UsersService>(UsersService);
     rolesGuard = module.get<RolesGuard>(RolesGuard);
-    reflector = module.get<Reflector>(Reflector);
+    _reflector = module.get<Reflector>(Reflector);
   });
 
   afterEach(() => {

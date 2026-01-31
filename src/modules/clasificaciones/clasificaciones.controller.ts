@@ -34,7 +34,6 @@ export class ClasificacionesController {
   @Roles(
     'superadmin',
     'admin',
-    'administrador',
     'almacenista',
     'tecnico',
     'soldador',
@@ -49,7 +48,6 @@ export class ClasificacionesController {
   @Roles(
     'superadmin',
     'admin',
-    'administrador',
     'almacenista',
     'tecnico',
     'soldador',
@@ -67,7 +65,7 @@ export class ClasificacionesController {
   }
 
   @Delete(':id')
-  @Roles('superadmin')
+  @Roles('superadmin', 'gerencia')
   remove(@Param('id') id: string) {
     return this.clasificacionesService.remove(+id);
   }

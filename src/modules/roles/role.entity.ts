@@ -9,9 +9,14 @@ import {
 import { User } from '../users/user.entity';
 
 export enum RoleType {
+  /** Rol exclusivo del desarrollador del sistema. Un solo usuario en todo el sistema. No se lista en usuarios. Usado para procesos internos de desarrollo e impersonación. */
   SUPERADMIN = 'superadmin',
+  /** Gerencia: mismos permisos que SuperAdmin pero sin impersonación. Rol de máximo nivel para la organización. */
+  GERENCIA = 'gerencia',
+  /** Único rol Administrador: siempre asignado a un centro operativo (sede). Gestiona todo su centro. */
   ADMIN = 'admin',
-  ADMINISTRADOR = 'administrador', // Centro Operativo - solo lectura
+  ADMIN_INTERNAS = 'admin-internas', // Administrador solo bodegas internas (misma sede)
+  ADMIN_REDES = 'admin-redes', // Administrador solo bodegas redes (misma sede)
   TECNICO = 'tecnico',
   SOLDADOR = 'soldador',
   ALMACENISTA = 'almacenista',

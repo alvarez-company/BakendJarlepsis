@@ -22,7 +22,19 @@ Los siguientes roles están definidos y deben estar disponibles en el sistema:
 - **Centro Operativo**: Requerido
 - **Bodega**: No requiere
 
-### 4. Almacenista (`almacenista`)
+### 4. Administrador de Internas (`admin-internas`)
+- **Descripción**: Mismos permisos que administrador pero con acceso solo a bodegas de tipo **internas** de su centro operativo.
+- **Permisos**: Igual que administrador, restringido a bodegas tipo internas de su sede
+- **Centro Operativo**: Requerido
+- **Bodega**: No requiere (ve y gestiona solo bodegas internas de su sede)
+
+### 5. Administrador de Redes (`admin-redes`)
+- **Descripción**: Mismos permisos que administrador pero con acceso solo a bodegas de tipo **redes** de su centro operativo.
+- **Permisos**: Igual que administrador, restringido a bodegas tipo redes de su sede
+- **Centro Operativo**: Requerido
+- **Bodega**: No requiere (ve y gestiona solo bodegas redes de su sede)
+
+### 6. Almacenista (`almacenista`)
 - **Descripción**: Gestión de movimientos de inventario
 - **Permisos**: 
   - Entradas, Salidas, Asignaciones, Devoluciones, Traslados
@@ -32,19 +44,19 @@ Los siguientes roles están definidos y deben estar disponibles en el sistema:
 - **Centro Operativo**: Requerido
 - **Bodega**: No requiere
 
-### 5. Técnico (`tecnico`)
+### 7. Técnico (`tecnico`)
 - **Descripción**: Personal de campo
 - **Permisos**: Ver instalaciones asignadas, registrar materiales
 - **Centro Operativo**: Requerido
 - **Bodega**: No requiere
 
-### 6. Soldador (`soldador`)
+### 8. Soldador (`soldador`)
 - **Descripción**: Personal de campo especializado en soldadura
 - **Permisos**: Similar a técnico
 - **Centro Operativo**: Requerido
 - **Bodega**: No requiere
 
-### 7. Bodega Internas (`bodega-internas`)
+### 9. Bodega Internas (`bodega-internas`)
 - **Descripción**: Gestión de bodegas internas
 - **Permisos**: 
   - Asignar instalaciones
@@ -54,7 +66,7 @@ Los siguientes roles están definidos y deben estar disponibles en el sistema:
 - **Centro Operativo**: No requiere
 - **Bodega**: Requerido
 
-### 8. Bodega Redes (`bodega-redes`)
+### 10. Bodega Redes (`bodega-redes`)
 - **Descripción**: Gestión de bodegas de redes
 - **Permisos**: 
   - Asignar instalaciones
@@ -64,18 +76,20 @@ Los siguientes roles están definidos y deben estar disponibles en el sistema:
 - **Centro Operativo**: No requiere
 - **Bodega**: Requerido
 
-## Roles Legacy (Mantenidos para compatibilidad)
+## Roles Legacy (ELIMINADOS)
 
-Estos roles se mantienen para compatibilidad con datos existentes, pero NO deben usarse en nuevos usuarios:
+Los siguientes roles legacy han sido eliminados del sistema. Los usuarios que tenían estos roles fueron migrados a roles principales:
 
-- `bodega` - Encargado de Bodega (legacy)
-- `empleado` - Empleado común (legacy)
-- `inventario` - Gestión de inventario (legacy)
-- `traslados` - Gestión de traslados (legacy)
-- `devoluciones` - Gestión de devoluciones (legacy)
-- `salidas` - Gestión de salidas (legacy)
-- `entradas` - Gestión de entradas (legacy)
-- `instalaciones` - Gestión de instalaciones (legacy)
+- ~~`bodega` - Encargado de Bodega~~ → Migrado a `bodega-internas` o `bodega-redes`
+- ~~`empleado` - Empleado común~~ → Eliminado
+- ~~`inventario` - Gestión de inventario~~ → Eliminado
+- ~~`traslados` - Gestión de traslados~~ → Eliminado
+- ~~`devoluciones` - Gestión de devoluciones~~ → Eliminado
+- ~~`salidas` - Gestión de salidas~~ → Eliminado
+- ~~`entradas` - Gestión de entradas~~ → Eliminado
+- ~~`instalaciones` - Gestión de instalaciones~~ → Eliminado
+
+**Nota**: El enum de la base de datos aún incluye estos valores para compatibilidad histórica, pero no se deben crear nuevos usuarios con estos roles.
 
 ## Verificación de Consistencia
 
@@ -91,16 +105,21 @@ Estos roles se mantienen para compatibilidad con datos existentes, pero NO deben
 - ✅ Validaciones según rol
 
 ### Base de Datos
-- ⚠️ **ACCIÓN REQUERIDA**: Ejecutar migraciones SQL:
-  1. `2025-01-XX_update_rolTipo_enum.sql` - Actualiza el enum
-  2. `2025-01-XX_ensure_all_roles.sql` - Asegura todos los roles
-  3. `2025-01-XX_add_new_roles.sql` - Agrega nuevos roles (si no se ejecutó)
+- ✅ Ejecutar script de corrección de roles: `npm run fix:roles`
+- ✅ Ejecutar script para eliminar rol legacy: `npm run delete:encargado-bodega`
 
-## Orden de Ejecución de Migraciones
+## Scripts de Mantenimiento
 
-1. `2025-01-XX_update_rolTipo_enum.sql` - Primero actualizar el enum
-2. `2025-01-XX_ensure_all_roles.sql` - Luego asegurar que todos los roles existan
-3. `2025-01-XX_add_new_roles.sql` - Finalmente agregar nuevos roles (si es necesario)
+```bash
+# Corregir enum y actualizar roles
+npm run fix:roles
+
+# Eliminar rol "Encargado de Bodega" (migra usuarios a Almacenista)
+npm run delete:encargado-bodega
+
+# Agregar tipos de documento y roles iniciales
+npm run seed:tipos-roles
+```
 
 ## Notas Importantes
 

@@ -5,7 +5,7 @@ import { MigrationInterface, QueryRunner } from 'typeorm';
  * - unidadMedidaId en materiales
  * - identificadorUnico en instalaciones
  * - clienteEstado en clientes
- * 
+ *
  * Esta migración es una versión simplificada y enfocada de las columnas críticas
  * que están causando errores en el sistema.
  */
@@ -52,7 +52,7 @@ export class AddMissingColumns1763053167124 implements MigrationInterface {
     // ============================================
     const materialesTable = await queryRunner.getTable('materiales');
     const unidadMedidaIdColumn = materialesTable?.findColumnByName('unidadMedidaId');
-    
+
     if (!unidadMedidaIdColumn) {
       await queryRunner.query(`
         ALTER TABLE \`materiales\` 
@@ -81,7 +81,7 @@ export class AddMissingColumns1763053167124 implements MigrationInterface {
             AND CONSTRAINT_NAME IS NOT NULL
             AND REFERENCED_TABLE_NAME = 'unidades_medida';
         `);
-        
+
         if (fkExists && fkExists[0] && fkExists[0].count === 0) {
           await queryRunner.query(`
             ALTER TABLE \`materiales\` 
@@ -101,13 +101,13 @@ export class AddMissingColumns1763053167124 implements MigrationInterface {
     // ============================================
     const instalacionesTable = await queryRunner.getTable('instalaciones');
     const identificadorUnicoColumn = instalacionesTable?.findColumnByName('identificadorUnico');
-    
+
     if (!identificadorUnicoColumn) {
       await queryRunner.query(`
         ALTER TABLE \`instalaciones\` 
         ADD COLUMN \`identificadorUnico\` VARCHAR(50) NULL AFTER \`instalacionCodigo\`;
       `);
-      
+
       // Crear índice único si no existe
       try {
         await queryRunner.query(`
@@ -125,7 +125,7 @@ export class AddMissingColumns1763053167124 implements MigrationInterface {
     // ============================================
     const clientesTable = await queryRunner.getTable('clientes');
     const clienteEstadoColumn = clientesTable?.findColumnByName('clienteEstado');
-    
+
     if (!clienteEstadoColumn) {
       await queryRunner.query(`
         ALTER TABLE \`clientes\` 
@@ -139,7 +139,7 @@ export class AddMissingColumns1763053167124 implements MigrationInterface {
     // Eliminar identificadorUnico de instalaciones
     const instalacionesTable = await queryRunner.getTable('instalaciones');
     const identificadorUnicoColumn = instalacionesTable?.findColumnByName('identificadorUnico');
-    
+
     if (identificadorUnicoColumn) {
       // Eliminar índice primero
       try {
@@ -149,7 +149,7 @@ export class AddMissingColumns1763053167124 implements MigrationInterface {
       } catch (error) {
         // Ignorar si no existe
       }
-      
+
       await queryRunner.query(`
         ALTER TABLE \`instalaciones\` 
         DROP COLUMN \`identificadorUnico\`;
@@ -159,7 +159,7 @@ export class AddMissingColumns1763053167124 implements MigrationInterface {
     // Eliminar unidadMedidaId de materiales
     const materialesTable = await queryRunner.getTable('materiales');
     const unidadMedidaIdColumn = materialesTable?.findColumnByName('unidadMedidaId');
-    
+
     if (unidadMedidaIdColumn) {
       // Eliminar foreign key primero
       try {
@@ -170,7 +170,7 @@ export class AddMissingColumns1763053167124 implements MigrationInterface {
       } catch (error) {
         // Ignorar si no existe
       }
-      
+
       await queryRunner.query(`
         ALTER TABLE \`materiales\` 
         DROP COLUMN \`unidadMedidaId\`;
@@ -180,7 +180,7 @@ export class AddMissingColumns1763053167124 implements MigrationInterface {
     // Eliminar clienteEstado de clientes
     const clientesTable = await queryRunner.getTable('clientes');
     const clienteEstadoColumn = clientesTable?.findColumnByName('clienteEstado');
-    
+
     if (clienteEstadoColumn) {
       await queryRunner.query(`
         ALTER TABLE \`clientes\` 

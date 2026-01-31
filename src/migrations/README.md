@@ -49,3 +49,8 @@ npm run migration:revert
 - Las migraciones se ejecutan en orden cronológico según el timestamp en el nombre del archivo
 - TypeORM solo ejecuta migraciones TypeScript (.ts), no archivos SQL directos
 
+## Archivos SQL en esta carpeta
+
+- **`full_seed.sql`**: seed completo en SQL (tablas auxiliares + datos). Ejecutar en MySQL después de `npm run migration:run`. Ver `documents/SEED_Y_RESET.md`.
+- **`seed_colombia.sql`**: datos de Colombia (país, departamentos, municipios). Lo ejecuta `npm run seed` (`seed-full.js`).
+- **`2025-01-XX_create_estados_tables.sql`**, **`2025-01-XX_create_auditoria_inventario.sql`**, **`2025-11-19_create_clasificaciones.sql`**, **`2025-01-XX_create_numeros_medidor_table.sql`**: tablas auxiliares que ejecuta el seed (`seed-full.js`). No los ejecuta TypeORM.

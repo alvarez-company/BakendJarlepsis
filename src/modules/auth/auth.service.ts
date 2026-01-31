@@ -93,6 +93,56 @@ export class AuthService {
     }
   }
 
+  /**
+   * Login exclusivo para la miniapp:
+   * SOLO permite técnicos y soldadores. Bloquea cualquier otro rol.
+   */
+  async loginMiniapp(loginDto: LoginDto) {
+    try {
+      const user = await this.validateUser(loginDto.email, loginDto.password);
+
+      if (!user.usuarioRol) {
+        throw new UnauthorizedException('Error al obtener información del usuario');
+      }
+
+      const rolTipo = user.usuarioRol?.rolTipo || 'empleado';
+
+      // Miniapp SOLO para técnicos y soldadores
+      if (rolTipo !== 'tecnico' && rolTipo !== 'soldador') {
+        throw new UnauthorizedException(
+          'Solo técnicos y soldadores pueden iniciar sesión en la aplicación móvil',
+        );
+      }
+
+      const payload = {
+        email: user.usuarioCorreo,
+        sub: user.usuarioId,
+        role: rolTipo,
+        usuarioId: user.usuarioId,
+      };
+
+      return {
+        access_token: this.jwtService.sign(payload),
+        user: {
+          usuarioId: user.usuarioId,
+          usuarioCorreo: user.usuarioCorreo,
+          usuarioNombre: user.usuarioNombre,
+          usuarioApellido: user.usuarioApellido,
+          usuarioRolId: user.usuarioRolId,
+          rolTipo: rolTipo,
+          usuarioSede: user.usuarioSede,
+          usuarioBodega: user.usuarioBodega,
+          usuarioFoto: user.usuarioFoto,
+        },
+      };
+    } catch (error) {
+      if (error instanceof UnauthorizedException) {
+        throw error;
+      }
+      throw new UnauthorizedException('Error al iniciar sesión');
+    }
+  }
+
   async register(registerDto: RegisterDto) {
     try {
       // Validar que el email no exista

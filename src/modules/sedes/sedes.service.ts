@@ -123,54 +123,71 @@ export class SedesService {
   async findAll(user?: any): Promise<Sede[]> {
     const allSedes = await this.sedesRepository.find({ relations: ['bodegas'] });
 
-    // SuperAdmin ve todo
-    if (user?.usuarioRol?.rolTipo === 'superadmin' || user?.role === 'superadmin') {
+    // SuperAdmin y Gerencia ven todo
+    if (
+      user?.usuarioRol?.rolTipo === 'superadmin' ||
+      user?.role === 'superadmin' ||
+      user?.usuarioRol?.rolTipo === 'gerencia' ||
+      user?.role === 'gerencia'
+    ) {
       return allSedes;
     }
 
-    // Admin ve solo sedes de su centro operativo (sede asignada)
+    // Centro operativo: por columna usuarioSede o por relación sede (p. ej. usuario cargado con findOneForAuth)
+    const sedeId = user?.usuarioSede ?? user?.sede?.sedeId;
+    if (sedeId != null && sedeId > 0) {
+      const filtradas = allSedes.filter((sede) => sede.sedeId === sedeId);
+      if (filtradas.length > 0) return filtradas;
+    }
+
+    // Admin sin sede asignada: solo ve su centro; si no tiene asignado, lista vacía
     if (user?.usuarioRol?.rolTipo === 'admin' || user?.role === 'admin') {
-      if (user.usuarioSede) {
-        return allSedes.filter((sede) => sede.sedeId === user.usuarioSede);
-      }
       return [];
     }
 
-    // Administrador (Centro Operativo) - solo lectura, ve todas las sedes
-    if (user?.usuarioRol?.rolTipo === 'administrador' || user?.role === 'administrador') {
-      return allSedes;
+    // Administrador de Internas y de Redes: solo su sede
+    if (
+      user?.usuarioRol?.rolTipo === 'admin-internas' ||
+      user?.role === 'admin-internas' ||
+      user?.usuarioRol?.rolTipo === 'admin-redes' ||
+      user?.role === 'admin-redes'
+    ) {
+      return [];
     }
 
-    // Almacenista ve solo su sede asignada
+    // Almacenista: solo su sede
     if (user?.usuarioRol?.rolTipo === 'almacenista' || user?.role === 'almacenista') {
-      if (user.usuarioSede) {
-        return allSedes.filter((sede) => sede.sedeId === user.usuarioSede);
-      }
       return [];
     }
 
-    // Técnico y Soldador ven solo su sede asignada
+    // Técnico y Soldador sin sede: no ven sedes
     if (
       user?.usuarioRol?.rolTipo === 'tecnico' ||
       user?.role === 'tecnico' ||
       user?.usuarioRol?.rolTipo === 'soldador' ||
       user?.role === 'soldador'
     ) {
-      if (user.usuarioSede) {
-        return allSedes.filter((sede) => sede.sedeId === user.usuarioSede);
-      }
       return [];
     }
 
+    // Usuario autenticado que no encajó en ninguna regla: no exponer todas las sedes
+    if (user) {
+      return [];
+    }
     return allSedes;
   }
 
-  async findOne(id: number): Promise<Sede> {
+  async findOne(id: number, user?: any): Promise<Sede> {
     const sede = await this.sedesRepository.findOne({
       where: { sedeId: id },
       relations: ['bodegas', 'usuarios'],
     });
     if (!sede) {
+      throw new NotFoundException(`Sede with ID ${id} not found`);
+    }
+    // Cualquier usuario con centro asignado solo puede ver su propia sede (por ID)
+    const userSedeId = user?.usuarioSede ?? user?.sede?.sedeId;
+    if (userSedeId != null && userSedeId > 0 && sede.sedeId !== userSedeId) {
       throw new NotFoundException(`Sede with ID ${id} not found`);
     }
     return sede;
@@ -179,18 +196,11 @@ export class SedesService {
   async update(id: number, updateSedeDto: UpdateSedeDto, user?: any): Promise<Sede> {
     const sede = await this.findOne(id);
 
-    // Validar permisos
+    // Validar permisos: solo superadmin y gerencia pueden editar/desactivar sedes
     if (user) {
       const rolTipo = user.usuarioRol?.rolTipo || user.role;
-
-      // Solo superadmin y admin pueden editar sedes
-      if (rolTipo !== 'superadmin' && rolTipo !== 'admin') {
+      if (rolTipo !== 'superadmin' && rolTipo !== 'gerencia') {
         throw new BadRequestException('No tienes permisos para editar sedes');
-      }
-
-      // Admin solo puede editar su propia sede
-      if (rolTipo === 'admin' && sede.sedeId !== user.usuarioSede) {
-        throw new BadRequestException('No tienes permisos para editar otras sedes');
       }
     }
 
@@ -217,10 +227,10 @@ export class SedesService {
   async remove(id: number, user?: any): Promise<void> {
     const sede = await this.findOne(id);
 
-    // Validar permisos - solo superadmin puede eliminar
+    // Validar permisos - solo superadmin y gerencia pueden eliminar
     if (user) {
       const rolTipo = user.usuarioRol?.rolTipo || user.role;
-      if (rolTipo !== 'superadmin') {
+      if (rolTipo !== 'superadmin' && rolTipo !== 'gerencia') {
         throw new BadRequestException('No tienes permisos para eliminar sedes');
       }
     }

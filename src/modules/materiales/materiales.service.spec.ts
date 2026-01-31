@@ -1,11 +1,11 @@
 import { Test, TestingModule } from '@nestjs/testing';
 import { getRepositoryToken } from '@nestjs/typeorm';
-import { Repository } from 'typeorm';
 import { NotFoundException } from '@nestjs/common';
 import { MaterialesService } from './materiales.service';
 import { Material } from './material.entity';
 import { MaterialBodega } from './material-bodega.entity';
 import { InventariosService } from '../inventarios/inventarios.service';
+import { BodegasService } from '../bodegas/bodegas.service';
 import { InventarioTecnicoService } from '../inventario-tecnico/inventario-tecnico.service';
 import { NumerosMedidorService } from '../numeros-medidor/numeros-medidor.service';
 import { AuditoriaInventarioService } from '../auditoria-inventario/auditoria-inventario.service';
@@ -36,6 +36,7 @@ describe('MaterialesService', () => {
   };
 
   const mockInventariosService = {};
+  const mockBodegasService = {};
   const mockInventarioTecnicoService = {
     findByMaterial: jest.fn().mockResolvedValue([]),
   };
@@ -57,6 +58,10 @@ describe('MaterialesService', () => {
         {
           provide: InventariosService,
           useValue: mockInventariosService,
+        },
+        {
+          provide: BodegasService,
+          useValue: mockBodegasService,
         },
         {
           provide: InventarioTecnicoService,

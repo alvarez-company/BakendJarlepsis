@@ -18,12 +18,18 @@ export class TiposInstalacionService {
   async findAll(user?: any): Promise<TipoInstalacion[]> {
     const allTipos = await this.tiposInstalacionRepository.find();
 
-    // SuperAdmin y Admin ven todos los tipos
+    // SuperAdmin, Admin, Administrador de Internas y de Redes ven todos los tipos (admin-internas/admin-redes filtran por bodega en otros módulos)
     if (
       user?.usuarioRol?.rolTipo === 'superadmin' ||
       user?.role === 'superadmin' ||
+      user?.usuarioRol?.rolTipo === 'gerencia' ||
+      user?.role === 'gerencia' ||
       user?.usuarioRol?.rolTipo === 'admin' ||
-      user?.role === 'admin'
+      user?.role === 'admin' ||
+      user?.usuarioRol?.rolTipo === 'admin-internas' ||
+      user?.role === 'admin-internas' ||
+      user?.usuarioRol?.rolTipo === 'admin-redes' ||
+      user?.role === 'admin-redes'
     ) {
       return allTipos;
     }

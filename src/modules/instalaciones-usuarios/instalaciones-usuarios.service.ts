@@ -102,7 +102,7 @@ export class InstalacionesUsuariosService {
 
     // Validar que no haya usuarios activos duplicados
     const usuariosActivosIds = asignacionesActivas.map((a) => a.usuarioId);
-    const usuariosDuplicados = nuevosUsuariosIds.filter((id) => usuariosActivosIds.includes(id));
+    const _usuariosDuplicados = nuevosUsuariosIds.filter((id) => usuariosActivosIds.includes(id));
     // Si hay usuarios que ya están activos, solo actualizar su rol si es necesario
 
     // Desactivar asignaciones que ya no están en la lista (solo las activas)

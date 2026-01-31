@@ -15,7 +15,7 @@ export class PaisesController {
   constructor(private readonly paisesService: PaisesService) {}
 
   @Post()
-  @Roles('superadmin')
+  @Roles('superadmin', 'gerencia')
   @ApiOperation({ summary: 'Create a new país' })
   create(@Body() createPaisDto: CreatePaisDto) {
     return this.paisesService.create(createPaisDto);
@@ -36,14 +36,14 @@ export class PaisesController {
   }
 
   @Patch(':id')
-  @Roles('superadmin')
+  @Roles('superadmin', 'gerencia')
   @ApiOperation({ summary: 'Update a país' })
   update(@Param('id') id: string, @Body() updatePaisDto: UpdatePaisDto) {
     return this.paisesService.update(+id, updatePaisDto);
   }
 
   @Delete(':id')
-  @Roles('superadmin')
+  @Roles('superadmin', 'gerencia')
   @ApiOperation({ summary: 'Delete a país' })
   remove(@Param('id') id: string) {
     return this.paisesService.remove(+id);

@@ -22,10 +22,11 @@ import { RolesGuard } from '../../common/guards/roles.guard';
 import { Roles } from '../../common/decorators/roles.decorator';
 import { ExportacionService } from '../exportacion/exportacion.service';
 import { PaginationDto } from '../../common/dto/pagination.dto';
+import { ImpersonationGuard } from '../auth/guards/impersonation.guard';
 
 @ApiTags('asignaciones-tecnicos')
 @Controller('asignaciones-tecnicos')
-@UseGuards(JwtAuthGuard, RolesGuard)
+@UseGuards(JwtAuthGuard, ImpersonationGuard, RolesGuard)
 @ApiBearerAuth()
 export class AsignacionesTecnicosController {
   constructor(
@@ -34,21 +35,45 @@ export class AsignacionesTecnicosController {
   ) {}
 
   @Post()
-  @Roles('superadmin', 'admin', 'almacenista', 'bodega-internas', 'bodega-redes')
+  @Roles(
+    'superadmin',
+    'admin',
+    'admin-internas',
+    'admin-redes',
+    'almacenista',
+    'bodega-internas',
+    'bodega-redes',
+  )
   @ApiOperation({ summary: 'Crear una nueva asignación' })
   create(@Body() createDto: CreateAsignacionTecnicoDto, @Request() req) {
     return this.service.create(createDto, req.user);
   }
 
   @Get()
-  @Roles('superadmin', 'admin', 'administrador', 'almacenista', 'bodega-internas', 'bodega-redes')
+  @Roles(
+    'superadmin',
+    'admin',
+    'admin-internas',
+    'admin-redes',
+    'almacenista',
+    'bodega-internas',
+    'bodega-redes',
+  )
   @ApiOperation({ summary: 'Obtener todas las asignaciones' })
-  findAll(@Query() paginationDto?: PaginationDto) {
-    return this.service.findAll(paginationDto);
+  findAll(@Query() paginationDto?: PaginationDto, @Request() req?: any) {
+    return this.service.findAll(paginationDto, req?.user);
   }
 
   @Get(':id')
-  @Roles('superadmin', 'admin', 'administrador', 'almacenista', 'bodega-internas', 'bodega-redes')
+  @Roles(
+    'superadmin',
+    'admin',
+    'admin-internas',
+    'admin-redes',
+    'almacenista',
+    'bodega-internas',
+    'bodega-redes',
+  )
   @ApiOperation({ summary: 'Obtener una asignación por ID' })
   findOne(@Param('id') id: string) {
     return this.service.findOne(+id);
@@ -58,43 +83,44 @@ export class AsignacionesTecnicosController {
   @Roles(
     'superadmin',
     'admin',
-    'administrador',
+    'admin-internas',
+    'admin-redes',
     'almacenista',
     'bodega-internas',
     'bodega-redes',
     'tecnico',
   )
   @ApiOperation({ summary: 'Obtener asignaciones de un técnico' })
-  findByUsuario(@Param('usuarioId') usuarioId: string) {
-    return this.service.findByUsuario(+usuarioId);
+  findByUsuario(@Param('usuarioId') usuarioId: string, @Request() req) {
+    return this.service.findByUsuario(+usuarioId, req.user);
   }
 
   @Put(':id')
   @Roles('superadmin', 'admin', 'almacenista', 'bodega-internas', 'bodega-redes')
   @ApiOperation({ summary: 'Actualizar una asignación' })
-  update(@Param('id') id: string, @Body() updateDto: UpdateAsignacionTecnicoDto) {
-    return this.service.update(+id, updateDto);
+  update(@Param('id') id: string, @Body() updateDto: UpdateAsignacionTecnicoDto, @Request() req) {
+    return this.service.update(+id, updateDto, req.user);
   }
 
   @Patch(':id/aprobar')
   @Roles('superadmin', 'admin', 'almacenista')
   @ApiOperation({ summary: 'Aprobar una asignación' })
-  aprobar(@Param('id') id: string) {
-    return this.service.aprobar(+id);
+  aprobar(@Param('id') id: string, @Request() req) {
+    return this.service.aprobar(+id, req.user);
   }
 
   @Patch(':id/rechazar')
   @Roles('superadmin', 'admin', 'almacenista')
   @ApiOperation({ summary: 'Rechazar una asignación' })
-  rechazar(@Param('id') id: string) {
-    return this.service.rechazar(+id);
+  rechazar(@Param('id') id: string, @Request() req) {
+    return this.service.rechazar(+id, req.user);
   }
 
   @Delete(':id')
   @Roles('superadmin', 'admin', 'almacenista', 'bodega-internas', 'bodega-redes')
   @ApiOperation({ summary: 'Eliminar una asignación' })
   remove(@Param('id') id: string, @Request() req) {
-    return this.service.remove(+id, req.user.usuarioId);
+    return this.service.remove(+id, req.user.usuarioId, req.user);
   }
 
   @Get('export/excel')
@@ -103,11 +129,12 @@ export class AsignacionesTecnicosController {
   @ApiQuery({ name: 'dateEnd', required: false, type: String })
   async exportToExcel(
     @Res() res: Response,
+    @Request() req,
     @Query('dateStart') dateStart?: string,
     @Query('dateEnd') dateEnd?: string,
   ) {
     try {
-      const resultado = await this.service.findAll({ page: 1, limit: 10000 });
+      const resultado = await this.service.findAll({ page: 1, limit: 10000 }, req?.user);
       const asignaciones = resultado.data;
 
       let filteredData = asignaciones;
@@ -172,11 +199,12 @@ export class AsignacionesTecnicosController {
   @ApiQuery({ name: 'dateEnd', required: false, type: String })
   async exportToPdf(
     @Res() res: Response,
+    @Request() req,
     @Query('dateStart') dateStart?: string,
     @Query('dateEnd') dateEnd?: string,
   ) {
     try {
-      const resultado = await this.service.findAll({ page: 1, limit: 10000 });
+      const resultado = await this.service.findAll({ page: 1, limit: 10000 }, req?.user);
       const asignaciones = resultado.data;
 
       let filteredData = asignaciones;

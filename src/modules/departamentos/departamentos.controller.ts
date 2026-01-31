@@ -15,7 +15,7 @@ export class DepartamentosController {
   constructor(private readonly departamentosService: DepartamentosService) {}
 
   @Post()
-  @Roles('superadmin')
+  @Roles('superadmin', 'gerencia')
   @ApiOperation({ summary: 'Create a new departamento' })
   create(@Body() createDepartamentoDto: CreateDepartamentoDto) {
     return this.departamentosService.create(createDepartamentoDto);
@@ -36,14 +36,14 @@ export class DepartamentosController {
   }
 
   @Patch(':id')
-  @Roles('superadmin')
+  @Roles('superadmin', 'gerencia')
   @ApiOperation({ summary: 'Update a departamento' })
   update(@Param('id') id: string, @Body() updateDepartamentoDto: UpdateDepartamentoDto) {
     return this.departamentosService.update(+id, updateDepartamentoDto);
   }
 
   @Delete(':id')
-  @Roles('superadmin')
+  @Roles('superadmin', 'gerencia')
   @ApiOperation({ summary: 'Delete a departamento' })
   remove(@Param('id') id: string) {
     return this.departamentosService.remove(+id);

@@ -87,9 +87,9 @@ describe('RolesGuard', () => {
       expect(guard.canActivate(context)).toBe(false);
     });
 
-    it('should handle administrador role correctly', () => {
-      const user = { usuarioRol: { rolTipo: 'administrador' } };
-      const context = createMockExecutionContext(user, ['administrador', 'superadmin']);
+    it('should handle admin (Administrador centro operativo) role correctly', () => {
+      const user = { usuarioRol: { rolTipo: 'admin' } };
+      const context = createMockExecutionContext(user, ['admin', 'superadmin']);
       expect(guard.canActivate(context)).toBe(true);
     });
 

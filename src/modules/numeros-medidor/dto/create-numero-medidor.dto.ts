@@ -1,4 +1,5 @@
-import { IsString, IsNumber, IsOptional, IsEnum, IsArray } from 'class-validator';
+import { IsString, IsNumber, IsOptional, IsEnum, IsArray, ValidateNested } from 'class-validator';
+import { Type } from 'class-transformer';
 import { EstadoNumeroMedidor } from '../numero-medidor.entity';
 
 export class CreateNumeroMedidorDto {
@@ -27,6 +28,10 @@ export class CreateNumeroMedidorDto {
   @IsOptional()
   @IsNumber()
   instalacionId?: number;
+
+  @IsOptional()
+  @IsNumber()
+  bodegaId?: number;
 
   @IsOptional()
   @IsString()
@@ -59,8 +64,21 @@ export class UpdateNumeroMedidorDto {
   instalacionId?: number;
 
   @IsOptional()
+  @IsNumber()
+  bodegaId?: number;
+
+  @IsOptional()
   @IsString()
   observaciones?: string;
+}
+
+export class ItemAsignarNumeroMedidorDto {
+  @IsString()
+  numeroMedidor: string;
+
+  @IsOptional()
+  @IsNumber()
+  bodegaId?: number; // Si no se envía, el medidor queda en el centro operativo
 }
 
 export class AsignarNumerosMedidorDto {
@@ -68,8 +86,9 @@ export class AsignarNumerosMedidorDto {
   materialId: number;
 
   @IsArray()
-  @IsString({ each: true })
-  numerosMedidor: string[]; // Array de números de medidor a asignar
+  @ValidateNested({ each: true })
+  @Type(() => ItemAsignarNumeroMedidorDto)
+  items: ItemAsignarNumeroMedidorDto[]; // Array de { numeroMedidor, bodegaId? }
 
   @IsOptional()
   @IsNumber()
@@ -78,4 +97,12 @@ export class AsignarNumerosMedidorDto {
   @IsOptional()
   @IsNumber()
   instalacionId?: number; // Instalación donde se usan
+}
+
+// Body para POST materiales/:id/asignar-numeros-medidor
+export class AsignarNumerosMedidorBodyDto {
+  @IsArray()
+  @ValidateNested({ each: true })
+  @Type(() => ItemAsignarNumeroMedidorDto)
+  items: ItemAsignarNumeroMedidorDto[];
 }

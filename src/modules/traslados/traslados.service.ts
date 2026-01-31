@@ -18,7 +18,6 @@ import { TipoMovimiento } from '../movimientos/movimiento-inventario.entity';
 import { AuditoriaService } from '../auditoria/auditoria.service';
 import { TipoEntidad } from '../auditoria/auditoria.entity';
 import { NumerosMedidorService } from '../numeros-medidor/numeros-medidor.service';
-import { EstadoNumeroMedidor } from '../numeros-medidor/numero-medidor.entity';
 
 @Injectable()
 export class TrasladosService {
@@ -104,6 +103,7 @@ export class TrasladosService {
 
   async findAll(
     paginationDto?: any,
+    user?: any,
   ): Promise<{ data: Traslado[]; total: number; page: number; limit: number }> {
     try {
       const page = paginationDto?.page || 1;
@@ -119,6 +119,26 @@ export class TrasladosService {
         .orderBy('traslado.fechaCreacion', 'DESC')
         .skip(skip)
         .take(limit);
+
+      const rolTipo = user?.usuarioRol?.rolTipo || user?.role;
+      const rolesConFiltroBodega = [
+        'admin',
+        'admin-internas',
+        'admin-redes',
+        'bodega-internas',
+        'bodega-redes',
+      ];
+      if (user && rolesConFiltroBodega.includes(rolTipo)) {
+        const bodegasPermitidas = await this.bodegasService.findAll(user);
+        const bodegaIds = bodegasPermitidas.map((b) => b.bodegaId);
+        if (bodegaIds.length > 0) {
+          queryBuilder
+            .andWhere('traslado.bodegaOrigenId IN (:...bodegaIds)', { bodegaIds })
+            .andWhere('traslado.bodegaDestinoId IN (:...bodegaIds)', { bodegaIds });
+        } else {
+          queryBuilder.andWhere('1 = 0');
+        }
+      }
 
       const [data, total] = await queryBuilder.getManyAndCount();
 
@@ -163,6 +183,26 @@ export class TrasladosService {
         // Incluir trasladoCodigo en el select (si la columna existe en BD, funcionará; si no, el error se manejará)
         queryBuilder.addSelect('traslado.trasladoCodigo', 'traslado_trasladoCodigo');
 
+        const rolTipoCatch = user?.usuarioRol?.rolTipo || user?.role;
+        const rolesConFiltroCatch = [
+          'admin',
+          'admin-internas',
+          'admin-redes',
+          'bodega-internas',
+          'bodega-redes',
+        ];
+        if (user && rolesConFiltroCatch.includes(rolTipoCatch)) {
+          const bodegasCatch = await this.bodegasService.findAll(user);
+          const idsCatch = bodegasCatch.map((b) => b.bodegaId);
+          if (idsCatch.length > 0) {
+            queryBuilder
+              .andWhere('traslado.bodegaOrigenId IN (:...idsCatch)', { idsCatch })
+              .andWhere('traslado.bodegaDestinoId IN (:...idsCatch)', { idsCatch });
+          } else {
+            queryBuilder.andWhere('1 = 0');
+          }
+        }
+
         try {
           const [data, total] = await queryBuilder.getManyAndCount();
           return {
@@ -195,6 +235,19 @@ export class TrasladosService {
               .orderBy('traslado.fechaCreacion', 'DESC')
               .skip(skip)
               .take(limit);
+            const rolTipoFb = user?.usuarioRol?.rolTipo || user?.role;
+            const rolesFb = ['admin', 'admin-internas', 'admin-redes', 'bodega-internas', 'bodega-redes'];
+            if (user && rolesFb.includes(rolTipoFb)) {
+              const bodegasFb = await this.bodegasService.findAll(user);
+              const idsFb = bodegasFb.map((b) => b.bodegaId);
+              if (idsFb.length > 0) {
+                queryBuilderFallback
+                  .andWhere('traslado.bodegaOrigenId IN (:...idsFb)', { idsFb })
+                  .andWhere('traslado.bodegaDestinoId IN (:...idsFb)', { idsFb });
+              } else {
+                queryBuilderFallback.andWhere('1 = 0');
+              }
+            }
             const [data, total] = await queryBuilderFallback.getManyAndCount();
             return {
               data,
@@ -210,7 +263,7 @@ export class TrasladosService {
     }
   }
 
-  async findOne(id: number): Promise<Traslado> {
+  async findOne(id: number, user?: any): Promise<Traslado> {
     try {
       const traslado = await this.trasladosRepository.findOne({
         where: { trasladoId: id },
@@ -218,6 +271,23 @@ export class TrasladosService {
       });
       if (!traslado) {
         throw new NotFoundException(`Traslado con ID ${id} no encontrado`);
+      }
+      const rolTipo = user?.usuarioRol?.rolTipo || user?.role;
+      const rolesConFiltroBodega = [
+        'admin',
+        'admin-internas',
+        'admin-redes',
+        'bodega-internas',
+        'bodega-redes',
+      ];
+      if (user && rolesConFiltroBodega.includes(rolTipo)) {
+        const bodegasPermitidas = await this.bodegasService.findAll(user);
+        const bodegaIds = new Set(bodegasPermitidas.map((b) => b.bodegaId));
+        const permitido =
+          bodegaIds.has(traslado.bodegaOrigenId) && bodegaIds.has(traslado.bodegaDestinoId);
+        if (!permitido) {
+          throw new NotFoundException(`Traslado con ID ${id} no encontrado`);
+        }
       }
       return traslado;
     } catch (error: any) {
@@ -255,6 +325,24 @@ export class TrasladosService {
         const traslado = await queryBuilder.getOne();
         if (!traslado) {
           throw new NotFoundException(`Traslado con ID ${id} no encontrado`);
+        }
+        const rolTipoFallback = user?.usuarioRol?.rolTipo || user?.role;
+        const rolesConFiltroBodegaFallback = [
+          'admin',
+          'admin-internas',
+          'admin-redes',
+          'bodega-internas',
+          'bodega-redes',
+        ];
+        if (user && rolesConFiltroBodegaFallback.includes(rolTipoFallback)) {
+          const bodegasPermitidasFallback = await this.bodegasService.findAll(user);
+          const bodegaIdsFallback = new Set(bodegasPermitidasFallback.map((b) => b.bodegaId));
+          const permitidoFallback =
+            bodegaIdsFallback.has(traslado.bodegaOrigenId) &&
+            bodegaIdsFallback.has(traslado.bodegaDestinoId);
+          if (!permitidoFallback) {
+            throw new NotFoundException(`Traslado con ID ${id} no encontrado`);
+          }
         }
         return traslado;
       }

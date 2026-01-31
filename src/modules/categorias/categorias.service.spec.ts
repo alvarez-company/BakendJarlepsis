@@ -1,6 +1,5 @@
 import { Test, TestingModule } from '@nestjs/testing';
 import { getRepositoryToken } from '@nestjs/typeorm';
-import { NotFoundException } from '@nestjs/common';
 import { CategoriasService } from './categorias.service';
 import { Categoria } from './categoria.entity';
 import { HasMaterialsException } from '../../common/exceptions/business.exception';

@@ -41,7 +41,7 @@ export class ExportacionService {
   }
 
   async exportToExcel(config: ExportData): Promise<Buffer> {
-    const { columns, data, filename = 'export', companyInfo } = config;
+    const { columns, data, filename: _filename = 'export', companyInfo } = config;
     const company = { ...this.defaultCompanyInfo, ...companyInfo };
 
     // Crear workbook con ExcelJS
@@ -50,7 +50,7 @@ export class ExportacionService {
 
     // Agregar logo si existe
     const logoPath = this.getLogoPath();
-    let logoRowHeight = 0;
+    let _logoRowHeight = 0;
     let currentRow = 1;
 
     if (logoPath && fs.existsSync(logoPath)) {
@@ -68,7 +68,7 @@ export class ExportacionService {
 
         // Ajustar altura de la fila para el logo
         worksheet.getRow(1).height = 60;
-        logoRowHeight = 60;
+        _logoRowHeight = 60;
         currentRow = 2;
       } catch (error) {
         // Ignorar error al cargar logo
@@ -76,7 +76,7 @@ export class ExportacionService {
     }
 
     // Header con información de la empresa - diseño mejorado
-    const headerStartRow = currentRow;
+    const _headerStartRow = currentRow;
     const infoStartCol = logoPath ? 2 : 1;
 
     // Nombre de la empresa
@@ -373,7 +373,7 @@ export class ExportacionService {
         let xPosition = startX;
         const headerY = yPosition;
 
-        columns.forEach((col, index) => {
+        columns.forEach((col, _index) => {
           // Fondo del encabezado
           doc
             .rect(xPosition, headerY, columnWidth, 30)
@@ -406,7 +406,7 @@ export class ExportacionService {
           xPosition = startX;
           const rowY = yPosition;
 
-          columns.forEach((col, colIndex) => {
+          columns.forEach((col, _colIndex) => {
             const value = item[col.key];
             let cellValue = '';
 

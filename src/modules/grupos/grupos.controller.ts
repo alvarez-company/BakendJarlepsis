@@ -16,7 +16,6 @@ export class GruposController {
   @Roles(
     'superadmin',
     'admin',
-    'administrador',
     'almacenista',
     'tecnico',
     'soldador',
@@ -31,7 +30,6 @@ export class GruposController {
   @Roles(
     'superadmin',
     'admin',
-    'administrador',
     'almacenista',
     'tecnico',
     'soldador',
@@ -46,7 +44,6 @@ export class GruposController {
   @Roles(
     'superadmin',
     'admin',
-    'administrador',
     'almacenista',
     'tecnico',
     'soldador',
@@ -65,7 +62,6 @@ export class GruposController {
   @Roles(
     'superadmin',
     'admin',
-    'administrador',
     'almacenista',
     'tecnico',
     'soldador',
@@ -88,7 +84,6 @@ export class GruposController {
   @Roles(
     'superadmin',
     'admin',
-    'administrador',
     'almacenista',
     'tecnico',
     'soldador',
@@ -100,7 +95,7 @@ export class GruposController {
   }
 
   @Post('sincronizar')
-  @Roles('superadmin')
+  @Roles('superadmin', 'gerencia')
   @ApiOperation({ summary: 'Sincronizar usuarios con grupos existentes' })
   sincronizarGruposYUsuarios() {
     return this.service.sincronizarGruposYUsuarios();

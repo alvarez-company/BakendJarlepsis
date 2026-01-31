@@ -20,11 +20,12 @@ import { ExportacionService } from '../exportacion/exportacion.service';
 import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard';
 import { RolesGuard } from '../../common/guards/roles.guard';
 import { Roles } from '../../common/decorators/roles.decorator';
+import { ImpersonationGuard } from '../auth/guards/impersonation.guard';
 
 @ApiTags('clientes')
 @ApiBearerAuth()
 @Controller('clientes')
-@UseGuards(JwtAuthGuard, RolesGuard)
+@UseGuards(JwtAuthGuard, ImpersonationGuard, RolesGuard)
 export class ClientesController {
   constructor(
     private readonly clientesService: ClientesService,
@@ -32,7 +33,16 @@ export class ClientesController {
   ) {}
 
   @Post()
-  @Roles('superadmin', 'admin', 'tecnico', 'soldador', 'bodega-internas', 'bodega-redes')
+  @Roles(
+    'superadmin',
+    'admin',
+    'admin-internas',
+    'admin-redes',
+    'tecnico',
+    'soldador',
+    'bodega-internas',
+    'bodega-redes',
+  )
   @ApiOperation({ summary: 'Create a new cliente' })
   create(@Body() createClienteDto: CreateClienteDto, @Request() req) {
     return this.clientesService.create(createClienteDto, req.user.usuarioId);
@@ -42,7 +52,8 @@ export class ClientesController {
   @Roles(
     'superadmin',
     'admin',
-    'administrador',
+    'admin-internas',
+    'admin-redes',
     'almacenista',
     'tecnico',
     'soldador',
@@ -50,15 +61,16 @@ export class ClientesController {
     'bodega-redes',
   )
   @ApiOperation({ summary: 'Get all clientes' })
-  findAll() {
-    return this.clientesService.findAll();
+  findAll(@Request() req) {
+    return this.clientesService.findAll(req.user);
   }
 
   @Get(':id')
   @Roles(
     'superadmin',
     'admin',
-    'administrador',
+    'admin-internas',
+    'admin-redes',
     'almacenista',
     'tecnico',
     'soldador',
@@ -66,19 +78,28 @@ export class ClientesController {
     'bodega-redes',
   )
   @ApiOperation({ summary: 'Get a cliente by ID' })
-  findOne(@Param('id') id: string) {
-    return this.clientesService.findOne(+id);
+  findOne(@Param('id') id: string, @Request() req) {
+    return this.clientesService.findOne(+id, req.user);
   }
 
   @Patch(':id')
-  @Roles('superadmin', 'admin', 'tecnico', 'soldador', 'bodega-internas', 'bodega-redes')
+  @Roles(
+    'superadmin',
+    'admin',
+    'admin-internas',
+    'admin-redes',
+    'tecnico',
+    'soldador',
+    'bodega-internas',
+    'bodega-redes',
+  )
   @ApiOperation({ summary: 'Update a cliente' })
-  update(@Param('id') id: string, @Body() updateClienteDto: UpdateClienteDto) {
-    return this.clientesService.update(+id, updateClienteDto);
+  update(@Param('id') id: string, @Body() updateClienteDto: UpdateClienteDto, @Request() req) {
+    return this.clientesService.update(+id, updateClienteDto, req.user);
   }
 
   @Delete(':id')
-  @Roles('superadmin')
+  @Roles('superadmin', 'gerencia')
   @ApiOperation({ summary: 'Delete a cliente' })
   remove(@Param('id') id: string) {
     return this.clientesService.remove(+id);
@@ -88,7 +109,8 @@ export class ClientesController {
   @Roles(
     'superadmin',
     'admin',
-    'administrador',
+    'admin-internas',
+    'admin-redes',
     'almacenista',
     'tecnico',
     'soldador',
@@ -97,9 +119,9 @@ export class ClientesController {
   )
   @ApiOperation({ summary: 'Export clients to Excel' })
   @ApiQuery({ name: 'filters', required: false, type: String })
-  async exportToExcel(@Res() res: Response, @Query('filters') filters?: string) {
+  async exportToExcel(@Res() res: Response, @Request() req, @Query('filters') filters?: string) {
     try {
-      const clientes = await this.clientesService.findAll();
+      const clientes = await this.clientesService.findAll(req.user);
 
       let filteredData = clientes;
       if (filters) {
@@ -151,7 +173,8 @@ export class ClientesController {
   @Roles(
     'superadmin',
     'admin',
-    'administrador',
+    'admin-internas',
+    'admin-redes',
     'almacenista',
     'tecnico',
     'soldador',
@@ -160,9 +183,9 @@ export class ClientesController {
   )
   @ApiOperation({ summary: 'Export clients to PDF' })
   @ApiQuery({ name: 'filters', required: false, type: String })
-  async exportToPdf(@Res() res: Response, @Query('filters') filters?: string) {
+  async exportToPdf(@Res() res: Response, @Request() req, @Query('filters') filters?: string) {
     try {
-      const clientes = await this.clientesService.findAll();
+      const clientes = await this.clientesService.findAll(req.user);
 
       let filteredData = clientes;
       if (filters) {

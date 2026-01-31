@@ -12,10 +12,13 @@ import { AuditoriaInventarioModule } from '../auditoria-inventario/auditoria-inv
 import { ExportacionModule } from '../exportacion/exportacion.module';
 import { InventarioTecnicoModule } from '../inventario-tecnico/inventario-tecnico.module';
 import { NumerosMedidorModule } from '../numeros-medidor/numeros-medidor.module';
+import { BodegasModule } from '../bodegas/bodegas.module';
+import { AuthModule } from '../auth/auth.module';
 
 @Module({
   imports: [
     TypeOrmModule.forFeature([MovimientoInventario]),
+    forwardRef(() => BodegasModule),
     MaterialesModule,
     InventariosModule,
     ProveedoresModule,
@@ -25,6 +28,7 @@ import { NumerosMedidorModule } from '../numeros-medidor/numeros-medidor.module'
     ExportacionModule,
     forwardRef(() => InventarioTecnicoModule),
     forwardRef(() => NumerosMedidorModule),
+    forwardRef(() => AuthModule),
   ],
   controllers: [MovimientosController],
   providers: [MovimientosService],
