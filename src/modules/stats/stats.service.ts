@@ -243,7 +243,8 @@ export class StatsService {
         this.municipiosRepository.find(),
       ]);
 
-      // Filtrar por bodegas permitidas cuando el usuario tiene rol admin-internas, admin-redes, bodega-internas, bodega-redes
+      // Filtrar por centro operativo (sede): cuando el usuario tiene rol con filtro por bodega
+      // o cuando tiene usuarioSede (ej. admin/almacenista de un centro), el dashboard solo muestra datos de ese centro.
       let materialesFiltrados = materiales;
       let instalacionesFiltradas = instalaciones;
       let movimientosFiltrados = movimientos;
@@ -255,8 +256,17 @@ export class StatsService {
         'bodega-internas',
         'bodega-redes',
       ];
-      if (user && rolesConFiltroBodega.includes(rolTipo)) {
-        const bodegasPermitidas = await this.bodegasService.findAll(user);
+      const filtrarPorCentroOperativo =
+        user &&
+        (rolesConFiltroBodega.includes(rolTipo) || user.usuarioSede != null);
+
+      if (filtrarPorCentroOperativo) {
+        let bodegasPermitidas = await this.bodegasService.findAll(user);
+        if (user.usuarioSede != null) {
+          bodegasPermitidas = bodegasPermitidas.filter(
+            (b) => b.sedeId === user.usuarioSede,
+          );
+        }
         const bodegaIds = new Set(bodegasPermitidas.map((b) => b.bodegaId));
         instalacionesFiltradas = instalaciones.filter(
           (i: any) => i.bodegaId != null && bodegaIds.has(i.bodegaId),
@@ -435,10 +445,17 @@ export class StatsService {
         .map(([estado, cantidad]) => ({ estado, cantidad }))
         .filter((e) => e.cantidad > 0); // Solo incluir estados con instalaciones
 
-      // Calcular técnicos con más instalaciones
+      // Calcular técnicos con más instalaciones (solo instalaciones del centro cuando hay filtro por sede)
+      const instalacionIdsCentro = new Set(
+        instalacionesParaStats.map((i: any) => i.instalacionId),
+      );
       const tecnicosMap = new Map<number, { nombre: string; cantidad: number }>();
       instalacionesUsuarios.forEach((iu) => {
-        if (iu.usuario && iu.activo) {
+        if (
+          iu.usuario &&
+          iu.activo &&
+          (!filtrarPorCentroOperativo || instalacionIdsCentro.has(iu.instalacionId))
+        ) {
           const usuarioId = iu.usuario.usuarioId;
           const nombreCompleto =
             `${iu.usuario.usuarioNombre || ''} ${iu.usuario.usuarioApellido || ''}`.trim() ||
@@ -512,13 +529,24 @@ export class StatsService {
         });
       }
 
+      const totalClientesCentro =
+        filtrarPorCentroOperativo
+          ? new Set(
+              instalacionesParaStats.map((i: any) => i.clienteId).filter(Boolean),
+            ).size
+          : clientes.length;
+      const totalUsuariosCentro =
+        user?.usuarioSede != null
+          ? usuarios.filter((u: any) => u.usuarioSede === user.usuarioSede).length
+          : usuarios.length;
+
       const result = {
         totalMateriales: materialesParaStats.length,
         totalInstalaciones: instalacionesParaStats.length,
         totalMovimientos: movimientosParaStats.length,
         totalTraslados: trasladosParaStats.length,
-        totalClientes: clientes.length,
-        totalUsuarios: usuarios.length,
+        totalClientes: totalClientesCentro,
+        totalUsuarios: totalUsuariosCentro,
         materialesBajoStock,
         instalacionesPendientes,
         trasladosPendientes,

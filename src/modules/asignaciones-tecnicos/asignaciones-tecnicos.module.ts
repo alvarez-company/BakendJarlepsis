@@ -11,6 +11,7 @@ import { InventarioTecnicoModule } from '../inventario-tecnico/inventario-tecnic
 import { NumerosMedidorModule } from '../numeros-medidor/numeros-medidor.module';
 import { MaterialesModule } from '../materiales/materiales.module';
 import { AuditoriaModule } from '../auditoria/auditoria.module';
+import { AuthModule } from '../auth/auth.module';
 
 @Module({
   imports: [
@@ -23,6 +24,7 @@ import { AuditoriaModule } from '../auditoria/auditoria.module';
     forwardRef(() => MaterialesModule),
     AuditoriaModule,
     ExportacionModule,
+    forwardRef(() => AuthModule),
   ],
   controllers: [AsignacionesTecnicosController],
   providers: [AsignacionesTecnicosService],

@@ -182,54 +182,29 @@ export class MaterialesService {
         ],
       });
 
+      // Catálogo compartido: todos ven los mismos materiales. Stock y distribución (materialBodegas) solo del centro del usuario.
       let listToReturn = allMateriales;
 
-      // Admin-internas, admin-redes, bodega-internas, bodega-redes: solo materiales con presencia en bodegas permitidas
-      const rolTipo = user?.usuarioRol?.rolTipo || user?.role;
-      const rolesConFiltroBodega = [
-        'admin-internas',
-        'admin-redes',
-        'bodega-internas',
-        'bodega-redes',
-      ];
-      if (user && rolesConFiltroBodega.includes(rolTipo)) {
-        const bodegasPermitidas = await this.bodegasService.findAll(user);
-        const bodegaIds = new Set(bodegasPermitidas.map((b) => b.bodegaId));
-        listToReturn = allMateriales.filter((material) => {
-          const inventarioBodegaId = material.inventario?.bodegaId ?? null;
-          const enInventario = inventarioBodegaId != null && bodegaIds.has(inventarioBodegaId);
-          const enMaterialBodegas =
-            material.materialBodegas?.some(
-              (mb) => mb.bodegaId != null && bodegaIds.has(mb.bodegaId),
-            ) ?? false;
-          return enInventario || enMaterialBodegas;
-        });
-      }
-
-      // Si hay un usuario, calcular el stock por su centro operativo
+      // Si el usuario tiene centro operativo (sede), stock y materialBodegas solo de ese centro
       if (user?.usuarioSede) {
-        // Calcular stock para cada material de forma asíncrona
-        const materialesConStock = await Promise.all(
+        const sedeId = user.usuarioSede;
+        const materialesConStockYSede = await Promise.all(
           listToReturn.map(async (material) => {
-            // Calcular stock del material en el centro operativo del usuario
-            const stockEnCentroOperativo = await this.calculateStockBySede(
-              material,
-              user.usuarioSede,
+            const stockEnCentroOperativo = await this.calculateStockBySede(material, sedeId);
+            const materialBodegasCentro = (material.materialBodegas || []).filter(
+              (mb: any) => mb.bodega?.sedeId === sedeId,
             );
-
-            // Crear una copia del material con el stock ajustado
             return {
               ...material,
               materialStock: stockEnCentroOperativo,
-              // Mantener materialBodegas para referencia, pero el stock total ya está calculado
+              materialBodegas: materialBodegasCentro,
             };
           }),
         );
-
-        return materialesConStock;
+        return materialesConStockYSede;
       }
 
-      // Si no hay usuario o es superadmin/gerencia (sin sede), devolver todos los materiales con su stock total
+      // Superadmin/gerencia (sin sede): devolver todos los materiales con stock total y todas las bodegas
       return listToReturn;
     } catch (error) {
       console.error('Error al obtener materiales:', error);
@@ -288,24 +263,18 @@ export class MaterialesService {
     if (!material) {
       throw new NotFoundException(`Material con ID ${id} no encontrado`);
     }
-    const rolTipo = user?.usuarioRol?.rolTipo || user?.role;
-    const rolesConFiltroBodega = [
-      'admin-internas',
-      'admin-redes',
-      'bodega-internas',
-      'bodega-redes',
-    ];
-    if (user && rolesConFiltroBodega.includes(rolTipo)) {
-      const bodegasPermitidas = await this.bodegasService.findAll(user);
-      const bodegaIds = new Set(bodegasPermitidas.map((b) => b.bodegaId));
-      const inventarioBodegaId = material.inventario?.bodegaId ?? null;
-      const enInventario = inventarioBodegaId != null && bodegaIds.has(inventarioBodegaId);
-      const enMaterialBodegas =
-        material.materialBodegas?.some((mb) => mb.bodegaId != null && bodegaIds.has(mb.bodegaId)) ??
-        false;
-      if (!enInventario && !enMaterialBodegas) {
-        throw new NotFoundException(`Material con ID ${id} no encontrado`);
-      }
+    // Catálogo compartido: cualquier usuario puede ver cualquier material. Stock/distribución solo de su centro.
+    if (user?.usuarioSede) {
+      const sedeId = user.usuarioSede;
+      const materialBodegasCentro = (material.materialBodegas || []).filter(
+        (mb: any) => mb.bodega?.sedeId === sedeId,
+      );
+      const stockSede = await this.calculateStockBySede(material, sedeId);
+      return {
+        ...material,
+        materialBodegas: materialBodegasCentro,
+        materialStock: stockSede,
+      } as Material;
     }
     return material;
   }

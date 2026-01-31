@@ -78,7 +78,7 @@ export class SearchService {
       this.movimientosService.findAll(undefined, user),
       this.trasladosService.findAll(undefined, user),
       this.usersService.findAll(),
-      this.clientesService.findAll(),
+      this.clientesService.findAll(user),
       this.proyectosService.findAll(),
       this.bodegasService.findAll(user),
       this.sedesService.findAll(user),

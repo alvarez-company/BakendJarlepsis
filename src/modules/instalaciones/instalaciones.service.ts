@@ -245,6 +245,7 @@ export class InstalacionesService {
           i.instalacionId,
           i.identificadorUnico,
           i.instalacionCodigo,
+          i.instalacionTipo,
           i.tipoInstalacionId,
           i.clienteId,
           i.instalacionMedidorNumero,
@@ -430,6 +431,7 @@ export class InstalacionesService {
           instalacionId: row.instalacionId,
           identificadorUnico: row.identificadorUnico,
           instalacionCodigo: row.instalacionCodigo,
+          instalacionTipo: row.instalacionTipo ?? null,
           tipoInstalacionId: row.tipoInstalacionId,
           clienteId: row.clienteId,
           instalacionMedidorNumero: row.instalacionMedidorNumero,
@@ -470,25 +472,34 @@ export class InstalacionesService {
         return instalacion;
       });
 
-      // SuperAdmin ve todo
+      // SuperAdmin / desarrollador / Gerencia ven todo (rol sin distinguir mayúsculas)
+      const rolTipoListado = (user?.usuarioRol?.rolTipo ?? user?.role ?? '').toString().toLowerCase();
       if (
-        user?.usuarioRol?.rolTipo === 'superadmin' ||
-        user?.role === 'superadmin' ||
-        user?.usuarioRol?.rolTipo === 'gerencia' ||
-        user?.role === 'gerencia'
+        rolTipoListado === 'superadmin' ||
+        rolTipoListado === 'gerencia'
       ) {
         return allInstalaciones;
       }
 
-      // Admin (centro operativo) ve todas las instalaciones de su sede
+      // Admin (centro operativo) ve instalaciones de su sede y las sin bodega (recién creadas)
       if (user?.usuarioRol?.rolTipo === 'admin' || user?.role === 'admin') {
         if (user.usuarioSede) {
           return allInstalaciones.filter(
-            (inst) => inst.bodega?.sedeId === user.usuarioSede,
+            (inst) =>
+              !inst.bodegaId ||
+              inst.bodega?.sedeId === user.usuarioSede,
           );
         }
         return [];
       }
+
+      // Filtro por sede para admin-internas y admin-redes (solo su centro operativo)
+      const filterBySedeIfAdmin =
+        user?.usuarioSede &&
+        (user?.usuarioRol?.rolTipo === 'admin-internas' ||
+          user?.usuarioRol?.rolTipo === 'admin-redes' ||
+          user?.role === 'admin-internas' ||
+          user?.role === 'admin-redes');
 
       // Técnico ve solo sus instalaciones asignadas (solo asignaciones activas)
       if (user?.usuarioRol?.rolTipo === 'tecnico' || user?.role === 'tecnico') {
@@ -526,30 +537,42 @@ export class InstalacionesService {
         return allInstalaciones;
       }
 
-      // Bodega Internas y Admin Internas solo ven instalaciones de tipo "internas"
+      // Bodega Internas y Admin Internas solo ven instalaciones de tipo "internas" (y por sede si aplica)
       if (
         user?.usuarioRol?.rolTipo === 'bodega-internas' ||
         user?.role === 'bodega-internas' ||
         user?.usuarioRol?.rolTipo === 'admin-internas' ||
         user?.role === 'admin-internas'
       ) {
-        return allInstalaciones.filter((inst) => {
+        let list = allInstalaciones.filter((inst) => {
           const tipoNombre = inst.tipoInstalacion?.tipoInstalacionNombre?.toLowerCase() || '';
           return tipoNombre.includes('internas');
         });
+        if (filterBySedeIfAdmin) {
+          list = list.filter(
+            (inst) => !inst.bodegaId || inst.bodega?.sedeId === user.usuarioSede,
+          );
+        }
+        return list;
       }
 
-      // Bodega Redes y Admin Redes solo ven instalaciones de tipo "redes"
+      // Bodega Redes y Admin Redes solo ven instalaciones de tipo "redes" (y por sede si aplica)
       if (
         user?.usuarioRol?.rolTipo === 'bodega-redes' ||
         user?.role === 'bodega-redes' ||
         user?.usuarioRol?.rolTipo === 'admin-redes' ||
         user?.role === 'admin-redes'
       ) {
-        return allInstalaciones.filter((inst) => {
+        let list = allInstalaciones.filter((inst) => {
           const tipoNombre = inst.tipoInstalacion?.tipoInstalacionNombre?.toLowerCase() || '';
           return tipoNombre.includes('redes');
         });
+        if (filterBySedeIfAdmin) {
+          list = list.filter(
+            (inst) => !inst.bodegaId || inst.bodega?.sedeId === user.usuarioSede,
+          );
+        }
+        return list;
       }
 
       return allInstalaciones;
@@ -716,7 +739,7 @@ export class InstalacionesService {
     return rows;
   }
 
-  async findOne(id: number): Promise<Instalacion> {
+  async findOne(id: number, user?: any): Promise<Instalacion> {
     if (!id || isNaN(id)) {
       throw new NotFoundException(`ID de instalación inválido: ${id}`);
     }
@@ -845,6 +868,22 @@ export class InstalacionesService {
       }
     }
 
+    // Cargar bodega (necesario para restricción por sede y para respuesta)
+    let bodega = null;
+    if (row.bodegaId) {
+      try {
+        const bodegasRaw = await this.instalacionesRepository.query(
+          `SELECT bodegaId, bodegaNombre, bodegaDescripcion, bodegaUbicacion, 
+                  bodegaTelefono, bodegaCorreo, sedeId, bodegaEstado, bodegaTipo
+           FROM bodegas WHERE bodegaId = ?`,
+          [row.bodegaId],
+        );
+        if (bodegasRaw && bodegasRaw.length > 0) bodega = bodegasRaw[0];
+      } catch (error) {
+        console.error('Error al cargar bodega:', error);
+      }
+    }
+
     // Construir objeto Instalacion
     const instalacion: any = {
       instalacionId: row.instalacionId,
@@ -881,7 +920,20 @@ export class InstalacionesService {
       tipoInstalacion,
       usuariosAsignados,
       cliente,
+      bodega,
     };
+
+    // Restricción por centro operativo: admin / admin-internas / admin-redes solo ven instalaciones de su sede
+    const rolTipo = user?.usuarioRol?.rolTipo ?? user?.role ?? '';
+    const sedeRestricted =
+      (rolTipo === 'admin' || rolTipo === 'admin-internas' || rolTipo === 'admin-redes') &&
+      user?.usuarioSede;
+    if (sedeRestricted) {
+      const perteneceSede = !instalacion.bodegaId || (bodega && bodega.sedeId === user.usuarioSede);
+      if (!perteneceSede) {
+        throw new NotFoundException(`Instalación con ID ${id} no encontrada`);
+      }
+    }
 
     return instalacion;
   }
@@ -894,7 +946,7 @@ export class InstalacionesService {
   ): Promise<Instalacion> {
     const { usuariosAsignados, instalacionCodigo, instalacionTipo: dtoTipo, ...instalacionData } = updateInstalacionDto;
 
-    const instalacion = await this.findOne(id);
+    const instalacion = await this.findOne(id, user);
 
     // Si se envía instalacionTipo en el update, validar según el rol
     if (dtoTipo !== undefined && dtoTipo !== null) {
@@ -1084,11 +1136,11 @@ export class InstalacionesService {
     }
 
     // Recargar con relaciones
-    return this.findOne(id);
+    return this.findOne(id, user);
   }
 
   async remove(id: number, usuarioId: number, user?: any): Promise<void> {
-    const instalacion = await this.findOne(id);
+    const instalacion = await this.findOne(id, user);
 
     // Validar permisos
     if (user) {
@@ -1227,7 +1279,7 @@ export class InstalacionesService {
         throw new BadRequestException('No tienes permisos para cambiar el estado de instalaciones');
       }
     }
-    const instalacion = await this.findOne(instalacionId);
+    const instalacion = await this.findOne(instalacionId, user);
     const estadoAnterior = instalacion.estado;
 
     // Mapear estados legacy a los nuevos estados
@@ -1300,7 +1352,7 @@ export class InstalacionesService {
     const instalacionActualizada = await this.instalacionesRepository.save(instalacion);
 
     // Obtener información del cliente y usuarios asignados usando findOne que ya maneja SQL raw
-    const instalacionCompleta = await this.findOne(instalacionId);
+    const instalacionCompleta = await this.findOne(instalacionId, user);
 
     // Actualizar estado del cliente según el estado de la instalación
     if (instalacionCompleta.clienteId) {

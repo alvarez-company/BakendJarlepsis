@@ -20,11 +20,12 @@ import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard';
 import { RolesGuard } from '../../common/guards/roles.guard';
 import { Roles } from '../../common/decorators/roles.decorator';
 import { PaginationDto } from '../../common/dto/pagination.dto';
+import { ImpersonationGuard } from '../auth/guards/impersonation.guard';
 
 @ApiTags('movimientos')
 @ApiBearerAuth()
 @Controller('movimientos')
-@UseGuards(JwtAuthGuard, RolesGuard)
+@UseGuards(JwtAuthGuard, ImpersonationGuard, RolesGuard)
 export class MovimientosController {
   constructor(
     private readonly movimientosService: MovimientosService,
@@ -157,6 +158,7 @@ export class MovimientosController {
   @ApiQuery({ name: 'dateEnd', required: false, type: String })
   async exportToExcel(
     @Res() res: Response,
+    @Request() req,
     @Query('filters') filters?: string,
     @Query('instalacionId') instalacionId?: string,
     @Query('dateStart') dateStart?: string,
@@ -165,7 +167,7 @@ export class MovimientosController {
     try {
       const resultado = instalacionId
         ? await this.movimientosService.findByInstalacion(+instalacionId)
-        : await this.movimientosService.findAll();
+        : await this.movimientosService.findAll(undefined, req?.user);
       const movimientos = Array.isArray(resultado) ? resultado : resultado.data;
 
       let filteredData = movimientos;

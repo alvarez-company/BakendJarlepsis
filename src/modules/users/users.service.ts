@@ -308,12 +308,8 @@ export class UsersService {
     // El usuario SuperAdmin no se lista nunca (rol exclusivo del desarrollador, un solo usuario en el sistema)
     queryBuilder.andWhere('rol.rolTipo != :superadmin', { superadmin: 'superadmin' });
 
-    // Administrador solo ve usuarios de su centro operativo
-    const rolTipo = requestingUser?.usuarioRol?.rolTipo || requestingUser?.role;
-    if (
-      (rolTipo === 'admin' || rolTipo === 'admin-internas' || rolTipo === 'admin-redes') &&
-      requestingUser?.usuarioSede
-    ) {
+    // Usuarios no compartidos entre centros: quien tenga sede asignada solo ve usuarios de su centro operativo
+    if (requestingUser?.usuarioSede) {
       queryBuilder.andWhere('user.usuarioSede = :sedeId', {
         sedeId: requestingUser.usuarioSede,
       });
@@ -362,15 +358,9 @@ export class UsersService {
         throw new NotFoundException(`User with ID ${id} not found`);
       }
     }
-    // Administrador solo puede ver usuarios de su centro operativo
-    const rolTipo = requestingUser?.usuarioRol?.rolTipo || requestingUser?.role;
-    if (
-      (rolTipo === 'admin' || rolTipo === 'admin-internas' || rolTipo === 'admin-redes') &&
-      requestingUser?.usuarioSede != null
-    ) {
-      if (user.usuarioSede !== requestingUser.usuarioSede) {
-        throw new NotFoundException(`User with ID ${id} not found`);
-      }
+    // Usuarios no compartidos: quien tenga sede solo puede ver usuarios de su centro operativo
+    if (requestingUser?.usuarioSede != null && user.usuarioSede !== requestingUser.usuarioSede) {
+      throw new NotFoundException(`User with ID ${id} not found`);
     }
     return user;
   }

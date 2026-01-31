@@ -8,6 +8,7 @@ import {
   Delete,
   Query,
   UseGuards,
+  Request,
 } from '@nestjs/common';
 import { NumerosMedidorService } from './numeros-medidor.service';
 import { CreateNumeroMedidorDto, UpdateNumeroMedidorDto } from './dto/create-numero-medidor.dto';
@@ -26,24 +27,32 @@ export class NumerosMedidorController {
   }
 
   @Post('crear-multiples')
-  crearMultiples(@Body() body: { materialId: number; numerosMedidor: string[] }) {
-    return this.numerosMedidorService.crearMultiples(body.materialId, body.numerosMedidor);
+  crearMultiples(
+    @Body() body: { materialId: number; items: Array<{ numeroMedidor: string; bodegaId?: number }> },
+  ) {
+    const items = body.items ?? [];
+    return this.numerosMedidorService.crearMultiples(body.materialId, items);
   }
 
   @Get()
-  findAll(@Query('estado') estado?: EstadoNumeroMedidor, @Query() paginationDto?: PaginationDto) {
+  findAll(
+    @Query('estado') estado?: EstadoNumeroMedidor,
+    @Query() paginationDto?: PaginationDto,
+    @Request() req?: { user?: any },
+  ) {
     if (estado) {
-      return this.numerosMedidorService.findByEstado(estado);
+      return this.numerosMedidorService.findByEstado(estado, req?.user);
     }
-    return this.numerosMedidorService.findAll(paginationDto);
+    return this.numerosMedidorService.findAll(paginationDto, req?.user);
   }
 
   @Get('material/:materialId')
   findByMaterial(
     @Param('materialId') materialId: string,
     @Query('estado') estado?: EstadoNumeroMedidor,
+    @Request() req?: { user?: any },
   ) {
-    return this.numerosMedidorService.findByMaterial(+materialId, estado);
+    return this.numerosMedidorService.findByMaterial(+materialId, estado, req?.user);
   }
 
   @Get('usuario/:usuarioId')

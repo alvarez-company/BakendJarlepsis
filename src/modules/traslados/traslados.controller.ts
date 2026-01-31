@@ -21,11 +21,12 @@ import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard';
 import { RolesGuard } from '../../common/guards/roles.guard';
 import { Roles } from '../../common/decorators/roles.decorator';
 import { PaginationDto } from '../../common/dto/pagination.dto';
+import { ImpersonationGuard } from '../auth/guards/impersonation.guard';
 
 @ApiTags('traslados')
 @ApiBearerAuth()
 @Controller('traslados')
-@UseGuards(JwtAuthGuard, RolesGuard)
+@UseGuards(JwtAuthGuard, ImpersonationGuard, RolesGuard)
 export class TrasladosController {
   constructor(
     private readonly trasladosService: TrasladosService,

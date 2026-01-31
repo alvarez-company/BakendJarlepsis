@@ -16,16 +16,17 @@ import { UpdateSedeDto } from './dto/update-sede.dto';
 import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard';
 import { RolesGuard } from '../../common/guards/roles.guard';
 import { Roles } from '../../common/decorators/roles.decorator';
+import { ImpersonationGuard } from '../auth/guards/impersonation.guard';
 
 @ApiTags('sedes')
 @ApiBearerAuth()
 @Controller('sedes')
-@UseGuards(JwtAuthGuard, RolesGuard)
+@UseGuards(JwtAuthGuard, ImpersonationGuard, RolesGuard)
 export class SedesController {
   constructor(private readonly sedesService: SedesService) {}
 
   @Post()
-  @Roles('superadmin', 'admin')
+  @Roles('superadmin', 'gerencia')
   @ApiOperation({ summary: 'Create a new sede' })
   create(@Body() createSedeDto: CreateSedeDto) {
     return this.sedesService.create(createSedeDto);
@@ -46,7 +47,7 @@ export class SedesController {
   }
 
   @Patch(':id')
-  @Roles('superadmin', 'admin')
+  @Roles('superadmin', 'gerencia')
   @ApiOperation({ summary: 'Update a sede' })
   update(@Param('id') id: string, @Body() updateSedeDto: UpdateSedeDto, @Request() req) {
     return this.sedesService.update(+id, updateSedeDto, req.user);

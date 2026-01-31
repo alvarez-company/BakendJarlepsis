@@ -37,7 +37,15 @@ export class BodegasService {
     }
     if (user) {
       const rolTipo = user.usuarioRol?.rolTipo || user.role;
-      if (rolTipo === 'admin-internas') {
+      const sedeId = user.usuarioSede ?? user.sede?.sedeId;
+      if (rolTipo === 'admin') {
+        if (sedeId == null) {
+          throw new BadRequestException('Tu usuario no tiene centro operativo asignado. No puedes crear bodegas.');
+        }
+        if (createBodegaDto.sedeId !== sedeId) {
+          throw new BadRequestException('Solo puedes crear bodegas en tu centro operativo.');
+        }
+      } else if (rolTipo === 'admin-internas') {
         if (tipo !== 'internas') {
           throw new BadRequestException('Solo puedes crear bodegas de tipo internas.');
         }
@@ -170,9 +178,13 @@ export class BodegasService {
       return allBodegas;
     }
 
-    // Admin ve solo bodegas de su sede
+    // Admin ve solo bodegas de su centro operativo
     if (user?.usuarioRol?.rolTipo === 'admin' || user?.role === 'admin') {
-      return allBodegas.filter((bodega) => bodega.sedeId === user.usuarioSede);
+      const sedeId = user.usuarioSede ?? user.sede?.sedeId;
+      if (sedeId != null) {
+        return allBodegas.filter((bodega) => bodega.sedeId === sedeId);
+      }
+      return [];
     }
 
     // Administrador de Internas - solo bodegas tipo internas de su sede
@@ -231,6 +243,10 @@ export class BodegasService {
     }
     if (user) {
       const rolTipo = user.usuarioRol?.rolTipo || user.role;
+      const sedeId = user.usuarioSede ?? user.sede?.sedeId;
+      if (rolTipo === 'admin' && sedeId != null && bodega.sedeId !== sedeId) {
+        throw new NotFoundException(`Bodega with ID ${id} not found`);
+      }
       if (rolTipo === 'admin-internas') {
         if (bodega.sedeId !== user.usuarioSede || bodega.bodegaTipo !== 'internas') {
           throw new NotFoundException(`Bodega with ID ${id} not found`);
@@ -262,8 +278,9 @@ export class BodegasService {
         throw new BadRequestException('No tienes permisos para editar bodegas');
       }
 
-      // Admin solo puede editar bodegas de su sede
-      if (rolTipo === 'admin' && bodega.sedeId !== user.usuarioSede) {
+      // Admin solo puede editar bodegas de su centro operativo
+      const sedeId = user.usuarioSede ?? user.sede?.sedeId;
+      if (rolTipo === 'admin' && sedeId != null && bodega.sedeId !== sedeId) {
         throw new BadRequestException('No tienes permisos para editar bodegas de otras sedes');
       }
 

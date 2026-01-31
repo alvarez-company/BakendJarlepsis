@@ -123,6 +123,7 @@ export class AsignacionesTecnicosService {
 
   async findAll(
     paginationDto?: any,
+    user?: any,
   ): Promise<{ data: AsignacionTecnico[]; total: number; page: number; limit: number }> {
     const page = paginationDto?.page || 1;
     const limit = paginationDto?.limit || 10;
@@ -139,6 +140,15 @@ export class AsignacionesTecnicosService {
       .skip(skip)
       .take(limit);
 
+    // Admin / admin-internas / admin-redes: solo asignaciones de técnicos de su centro operativo
+    const rolTipo = user?.usuarioRol?.rolTipo ?? user?.role ?? '';
+    const sedeRestricted =
+      (rolTipo === 'admin' || rolTipo === 'admin-internas' || rolTipo === 'admin-redes') &&
+      user?.usuarioSede;
+    if (sedeRestricted) {
+      queryBuilder.andWhere('usuario.usuarioSede = :sedeId', { sedeId: user.usuarioSede });
+    }
+
     const [data, total] = await queryBuilder.getManyAndCount();
 
     return {
@@ -149,7 +159,7 @@ export class AsignacionesTecnicosService {
     };
   }
 
-  async findOne(id: number): Promise<AsignacionTecnico> {
+  async findOne(id: number, user?: any): Promise<AsignacionTecnico> {
     const asignacion = await this.asignacionesRepository.findOne({
       where: { asignacionTecnicoId: id },
       relations: [
@@ -165,10 +175,36 @@ export class AsignacionesTecnicosService {
       throw new NotFoundException(`Asignación con ID ${id} no encontrada`);
     }
 
+    // Admin / admin-internas / admin-redes: solo asignaciones de técnicos de su centro operativo
+    const rolTipo = user?.usuarioRol?.rolTipo ?? user?.role ?? '';
+    const sedeRestricted =
+      (rolTipo === 'admin' || rolTipo === 'admin-internas' || rolTipo === 'admin-redes') &&
+      user?.usuarioSede;
+    if (sedeRestricted) {
+      const tecnicoSede = asignacion.usuario?.usuarioSede ?? null;
+      if (tecnicoSede !== user.usuarioSede) {
+        throw new NotFoundException(`Asignación con ID ${id} no encontrada`);
+      }
+    }
+
     return asignacion;
   }
 
-  async findByUsuario(usuarioId: number): Promise<AsignacionTecnico[]> {
+  async findByUsuario(usuarioId: number, user?: any): Promise<AsignacionTecnico[]> {
+    // Admin / admin-internas / admin-redes: solo ver asignaciones de técnicos de su centro
+    const rolTipo = user?.usuarioRol?.rolTipo ?? user?.role ?? '';
+    const sedeRestricted =
+      (rolTipo === 'admin' || rolTipo === 'admin-internas' || rolTipo === 'admin-redes') &&
+      user?.usuarioSede;
+    if (sedeRestricted) {
+      const rows = await this.asignacionesRepository.query(
+        'SELECT usuarioSede FROM usuarios WHERE usuarioId = ?',
+        [usuarioId],
+      );
+      if (!rows?.length || rows[0].usuarioSede !== user.usuarioSede) {
+        return [];
+      }
+    }
     return this.asignacionesRepository.find({
       where: { usuarioId },
       relations: [
@@ -195,22 +231,22 @@ export class AsignacionesTecnicosService {
     });
   }
 
-  async update(id: number, updateDto: Partial<AsignacionTecnico>): Promise<AsignacionTecnico> {
-    const asignacion = await this.findOne(id);
+  async update(id: number, updateDto: Partial<AsignacionTecnico>, user?: any): Promise<AsignacionTecnico> {
+    const asignacion = await this.findOne(id, user);
     Object.assign(asignacion, updateDto);
     return await this.asignacionesRepository.save(asignacion);
   }
 
-  async aprobar(id: number): Promise<AsignacionTecnico> {
-    return this.update(id, { asignacionEstado: 'aprobada' });
+  async aprobar(id: number, user?: any): Promise<AsignacionTecnico> {
+    return this.update(id, { asignacionEstado: 'aprobada' }, user);
   }
 
-  async rechazar(id: number): Promise<AsignacionTecnico> {
-    return this.update(id, { asignacionEstado: 'rechazada' });
+  async rechazar(id: number, user?: any): Promise<AsignacionTecnico> {
+    return this.update(id, { asignacionEstado: 'rechazada' }, user);
   }
 
-  async remove(id: number, usuarioId: number): Promise<void> {
-    const asignacion = await this.findOne(id);
+  async remove(id: number, usuarioId: number, user?: any): Promise<void> {
+    const asignacion = await this.findOne(id, user);
 
     // Guardar datos completos para auditoría
     const datosEliminados = {

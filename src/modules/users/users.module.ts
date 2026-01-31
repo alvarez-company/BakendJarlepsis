@@ -3,6 +3,7 @@ import { TypeOrmModule } from '@nestjs/typeorm';
 import { UsersController } from './users.controller';
 import { UsersService } from './users.service';
 import { User } from './user.entity';
+import { AuthModule } from '../auth/auth.module';
 import { GruposModule } from '../grupos/grupos.module';
 import { UsuariosGruposModule } from '../usuarios-grupos/usuarios-grupos.module';
 import { InventarioTecnicoModule } from '../inventario-tecnico/inventario-tecnico.module';
@@ -14,6 +15,7 @@ import { RolesModule } from '../roles/roles.module';
 @Module({
   imports: [
     TypeOrmModule.forFeature([User]),
+    forwardRef(() => AuthModule),
     forwardRef(() => GruposModule),
     forwardRef(() => UsuariosGruposModule),
     forwardRef(() => InventarioTecnicoModule),

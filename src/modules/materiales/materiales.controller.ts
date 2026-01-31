@@ -105,10 +105,13 @@ export class MaterialesController {
   @Roles('superadmin', 'admin', 'almacenista')
   @ApiOperation({
     summary:
-      'Asignar números de medidor a un material. El material se marcará automáticamente como medidor si no lo está.',
+      'Asignar números de medidor a un material. Cada item puede incluir bodegaId; si no se asigna bodega, el medidor queda en el centro operativo.',
   })
-  async asignarNumerosMedidor(@Param('id') id: string, @Body() body: { numerosMedidor: string[] }) {
-    return this.numerosMedidorService.crearMultiples(+id, body.numerosMedidor);
+  async asignarNumerosMedidor(
+    @Param('id') id: string,
+    @Body() body: { items: Array<{ numeroMedidor: string; bodegaId?: number }> },
+  ) {
+    return this.numerosMedidorService.crearMultiples(+id, body.items ?? []);
   }
 
   @Delete(':id')

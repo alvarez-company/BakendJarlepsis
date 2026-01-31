@@ -22,11 +22,12 @@ import { ExportacionService } from '../exportacion/exportacion.service';
 import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard';
 import { RolesGuard } from '../../common/guards/roles.guard';
 import { Roles } from '../../common/decorators/roles.decorator';
+import { ImpersonationGuard } from '../auth/guards/impersonation.guard';
 
 @ApiTags('instalaciones')
 @ApiBearerAuth()
 @Controller('instalaciones')
-@UseGuards(JwtAuthGuard, RolesGuard)
+@UseGuards(JwtAuthGuard, ImpersonationGuard, RolesGuard)
 export class InstalacionesController {
   constructor(
     private readonly instalacionesService: InstalacionesService,
@@ -86,12 +87,12 @@ export class InstalacionesController {
     'bodega-redes',
   )
   @ApiOperation({ summary: 'Get an instalacion by ID' })
-  findOne(@Param('id') id: string) {
+  findOne(@Param('id') id: string, @Request() req) {
     const instalacionId = parseInt(id, 10);
     if (isNaN(instalacionId)) {
       throw new NotFoundException(`ID de instalación inválido: ${id}`);
     }
-    return this.instalacionesService.findOne(instalacionId);
+    return this.instalacionesService.findOne(instalacionId, req.user);
   }
 
   @Patch(':id')

@@ -427,19 +427,35 @@ export class MovimientosService {
               await this.numerosMedidorService.findByNumero(numeroMedidor);
 
             if (esEntrada) {
-              // ENTRADA: Solo crear números nuevos. Los números de medidor NUNCA se repiten, incluso si ya salieron o fueron instalados
+              // ENTRADA: crear números nuevos o actualizar existentes (ej. traslado: números que se mueven a bodega destino)
               if (!numeroMedidorEntity) {
-                // Crear nuevo número de medidor
+                // Crear nuevo número de medidor (entrada desde proveedor)
+                let bodegaIdEntrada: number | null = null;
+                if (createMovimientoDto.inventarioId) {
+                  const inv = await this.inventariosService.findOne(createMovimientoDto.inventarioId);
+                  if (inv?.bodegaId) bodegaIdEntrada = inv.bodegaId;
+                }
                 await this.numerosMedidorService.create({
                   materialId: materialIdFinal,
                   numeroMedidor: numeroMedidor,
                   estado: EstadoNumeroMedidor.DISPONIBLE,
+                  bodegaId: bodegaIdEntrada ?? undefined,
                 });
               } else {
-                // Si el número ya existe, lanzar error - los números de medidor nunca se repiten
-                throw new BadRequestException(
-                  `El número de medidor "${numeroMedidor}" ya existe en el sistema. Los números de medidor son únicos y nunca se repiten, incluso si ya salieron de inventario o fueron instalados.`,
-                );
+                // Número ya existe: actualizar ubicación (ej. traslado completado - asignar a bodega destino)
+                let bodegaIdDestino: number | null = null;
+                if (createMovimientoDto.inventarioId) {
+                  const inv = await this.inventariosService.findOne(createMovimientoDto.inventarioId);
+                  if (inv?.bodegaId) bodegaIdDestino = inv.bodegaId;
+                }
+                await this.numerosMedidorService.update(numeroMedidorEntity.numeroMedidorId, {
+                  estado: EstadoNumeroMedidor.DISPONIBLE,
+                  bodegaId: bodegaIdDestino ?? undefined,
+                  usuarioId: undefined,
+                  inventarioTecnicoId: undefined,
+                  instalacionId: undefined,
+                  instalacionMaterialId: undefined,
+                });
               }
             } else if (esSalida || esDevolucion) {
               // SALIDA/DEVOLUCIÓN: Cambiar estado según el destino
@@ -1119,6 +1135,14 @@ export class MovimientosService {
     }
 
     const rolTipo = user?.usuarioRol?.rolTipo || user?.role;
+    // Admin (centro operativo): solo movimientos de inventarios de bodegas de su sede
+    if (user && rolTipo === 'admin' && user.usuarioSede) {
+      const sedeIdBodega = movimiento.inventario?.bodega?.sedeId ?? null;
+      // Si el movimiento tiene bodega y no es de la sede del admin, denegar
+      if (sedeIdBodega != null && sedeIdBodega !== user.usuarioSede) {
+        throw new NotFoundException(`Movimiento con ID ${id} no encontrado`);
+      }
+    }
     const rolesConFiltroBodega = [
       'admin-internas',
       'admin-redes',

@@ -27,13 +27,12 @@ export class InventariosService {
       where: { inventarioEstado: true },
     });
     if (!user) return all;
+    // Inventario no compartido: solo del centro operativo del usuario
+    if (user.usuarioSede) {
+      return all.filter((inv) => inv.bodega?.sedeId === user.usuarioSede);
+    }
     const rolTipo = user.usuarioRol?.rolTipo || user.role;
-    const rolesConFiltroBodega = [
-      'admin-internas',
-      'admin-redes',
-      'bodega-internas',
-      'bodega-redes',
-    ];
+    const rolesConFiltroBodega = ['bodega-internas', 'bodega-redes'];
     if (!rolesConFiltroBodega.includes(rolTipo)) return all;
     const bodegasPermitidas = await this.bodegasService.findAll(user);
     const bodegaIds = new Set(bodegasPermitidas.map((b) => b.bodegaId));
@@ -49,13 +48,11 @@ export class InventariosService {
       throw new NotFoundException(`Inventario con ID ${id} no encontrado`);
     }
     if (user) {
+      if (user.usuarioSede && inventario.bodega?.sedeId !== user.usuarioSede) {
+        throw new NotFoundException(`Inventario con ID ${id} no encontrado`);
+      }
       const rolTipo = user.usuarioRol?.rolTipo || user.role;
-      const rolesConFiltroBodega = [
-        'admin-internas',
-        'admin-redes',
-        'bodega-internas',
-        'bodega-redes',
-      ];
+      const rolesConFiltroBodega = ['bodega-internas', 'bodega-redes'];
       if (rolesConFiltroBodega.includes(rolTipo)) {
         const bodegasPermitidas = await this.bodegasService.findAll(user);
         const permitido = bodegasPermitidas.some((b) => b.bodegaId === inventario.bodegaId);

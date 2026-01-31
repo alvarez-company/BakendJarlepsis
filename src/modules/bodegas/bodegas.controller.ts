@@ -16,11 +16,12 @@ import { UpdateBodegaDto } from './dto/update-bodega.dto';
 import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard';
 import { RolesGuard } from '../../common/guards/roles.guard';
 import { Roles } from '../../common/decorators/roles.decorator';
+import { ImpersonationGuard } from '../auth/guards/impersonation.guard';
 
 @ApiTags('bodegas')
 @ApiBearerAuth()
 @Controller('bodegas')
-@UseGuards(JwtAuthGuard, RolesGuard)
+@UseGuards(JwtAuthGuard, ImpersonationGuard, RolesGuard)
 export class BodegasController {
   constructor(private readonly bodegasService: BodegasService) {}
 

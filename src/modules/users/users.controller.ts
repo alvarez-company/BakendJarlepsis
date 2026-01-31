@@ -22,11 +22,12 @@ import { PaginationDto } from '../../common/dto/pagination.dto';
 import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard';
 import { RolesGuard } from '../../common/guards/roles.guard';
 import { Roles } from '../../common/decorators/roles.decorator';
+import { ImpersonationGuard } from '../auth/guards/impersonation.guard';
 
 @ApiTags('users')
 @ApiBearerAuth()
 @Controller('users')
-@UseGuards(JwtAuthGuard, RolesGuard)
+@UseGuards(JwtAuthGuard, ImpersonationGuard, RolesGuard)
 export class UsersController {
   constructor(private readonly usersService: UsersService) {}
 

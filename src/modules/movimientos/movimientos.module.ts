@@ -13,6 +13,7 @@ import { ExportacionModule } from '../exportacion/exportacion.module';
 import { InventarioTecnicoModule } from '../inventario-tecnico/inventario-tecnico.module';
 import { NumerosMedidorModule } from '../numeros-medidor/numeros-medidor.module';
 import { BodegasModule } from '../bodegas/bodegas.module';
+import { AuthModule } from '../auth/auth.module';
 
 @Module({
   imports: [
@@ -27,6 +28,7 @@ import { BodegasModule } from '../bodegas/bodegas.module';
     ExportacionModule,
     forwardRef(() => InventarioTecnicoModule),
     forwardRef(() => NumerosMedidorModule),
+    forwardRef(() => AuthModule),
   ],
   controllers: [MovimientosController],
   providers: [MovimientosService],
