@@ -27,7 +27,7 @@ export class Mensaje {
   mensajeRespuestaId: number; // ID del mensaje al que responde
 
   @Column({ type: 'json', nullable: true })
-  archivosAdjuntos: any; // URLs de archivos adjuntos
+  archivosAdjuntos: string[] | null; // URLs o data URLs (base64) de archivos adjuntos
 
   @Column({ default: false })
   mensajeEditado: boolean;
