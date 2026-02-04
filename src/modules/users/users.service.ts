@@ -56,7 +56,9 @@ export class UsersService {
     // Reglas:
     // - superadmin y gerencia: pueden crear cualquier rol excepto superadmin (el rol superadmin no se asigna por API)
     // - admin (centro operativo): SOLO pueden crear usuarios con roles: tecnico, soldador, almacenista, etc.
-    const rolObjetivoEntityForCreate = await this.rolesService.findOne(createUserDto.usuarioRolId).catch(() => null);
+    const rolObjetivoEntityForCreate = await this.rolesService
+      .findOne(createUserDto.usuarioRolId)
+      .catch(() => null);
     const rolObjetivoForCreate = (rolObjetivoEntityForCreate?.rolTipo || '').toLowerCase();
     if (rolObjetivoForCreate === 'superadmin') {
       throw new BadRequestException(
@@ -123,7 +125,9 @@ export class UsersService {
               : rolCreador === 'admin-internas'
                 ? 'Solo puedes crear: Técnico, Soldador, Almacenista y Bodega Internas (para tu centro operativo).'
                 : 'Solo puedes crear: Técnico, Soldador, Almacenista y Bodega Redes (para tu centro operativo).';
-          throw new BadRequestException(`No tienes permiso para crear usuarios con ese rol. ${msg}`);
+          throw new BadRequestException(
+            `No tienes permiso para crear usuarios con ese rol. ${msg}`,
+          );
         }
 
         const rolesRequierenSede = [
@@ -141,9 +145,7 @@ export class UsersService {
             createUserDto.usuarioSede != null &&
             createUserDto.usuarioSede !== creator.usuarioSede
           ) {
-            throw new BadRequestException(
-              'Solo puedes crear usuarios para tu centro operativo.',
-            );
+            throw new BadRequestException('Solo puedes crear usuarios para tu centro operativo.');
           }
           createUserDto.usuarioSede = creator.usuarioSede;
         } else if (rolesRequierenBodega.includes(rolObjetivo)) {
@@ -228,6 +230,19 @@ export class UsersService {
       userData.usuarioBodega = null;
     }
 
+    // Roles bodega-internas/bodega-redes: asegurar centro operativo desde la bodega si no se envió
+    const rolesRequierenBodegaCreate = ['bodega-internas', 'bodega-redes'];
+    if (
+      rolesRequierenBodegaCreate.includes(rolObjetivoForCreate) &&
+      userData.usuarioBodega &&
+      (userData.usuarioSede == null || userData.usuarioSede === 0)
+    ) {
+      const bodega = await this.bodegasService.findOne(userData.usuarioBodega);
+      if (bodega?.sedeId) {
+        userData.usuarioSede = bodega.sedeId;
+      }
+    }
+
     const user = this.usersRepository.create(userData);
     const savedUser = await this.usersRepository.save(user);
 
@@ -293,7 +308,12 @@ export class UsersService {
   async findAll(
     paginationDto?: PaginationDto,
     search?: string,
-    requestingUser?: { usuarioRol?: { rolTipo: string }; role?: string; usuarioSede?: number },
+    requestingUser?: {
+      usuarioId?: number;
+      usuarioRol?: { rolTipo: string };
+      role?: string;
+      usuarioSede?: number;
+    },
   ): Promise<{ data: User[]; total: number; page: number; limit: number }> {
     const page = paginationDto?.page || 1;
     const limit = paginationDto?.limit || 10;
@@ -305,8 +325,21 @@ export class UsersService {
       .leftJoinAndSelect('user.sede', 'sede')
       .leftJoinAndSelect('user.bodega', 'bodega');
 
-    // El usuario SuperAdmin no se lista nunca (rol exclusivo del desarrollador, un solo usuario en el sistema)
-    queryBuilder.andWhere('rol.rolTipo != :superadmin', { superadmin: 'superadmin' });
+    // Roles permitidos para aparecer en la lista de usuarios para chatear
+    const rolesPermitidos = [
+      'gerencia',
+      'admin',
+      'admin-internas',
+      'admin-redes',
+      'almacenista',
+      'bodega-internas',
+      'bodega-redes',
+      'tecnico',
+      'soldador',
+    ];
+
+    // Filtrar por roles permitidos
+    queryBuilder.andWhere('rol.rolTipo IN (:...rolesPermitidos)', { rolesPermitidos });
 
     // Usuarios no compartidos entre centros: quien tenga sede asignada solo ve usuarios de su centro operativo
     if (requestingUser?.usuarioSede) {
@@ -324,11 +357,81 @@ export class UsersService {
 
     queryBuilder.orderBy('user.fechaCreacion', 'DESC').skip(skip).take(limit);
 
-    const [data, total] = await queryBuilder.getManyAndCount();
+    const [data, _total] = await queryBuilder.getManyAndCount();
+
+    // Verificar si hay chats directos con usuarios del sistema (superadmin o usuario sistema) para incluirlos solo en ese caso
+    let usuariosSistema: User[] = [];
+    if (requestingUser?.usuarioId) {
+      try {
+        // Obtener todos los grupos del usuario actual
+        const gruposUsuario = await this.gruposService.obtenerMisGrupos(requestingUser.usuarioId);
+
+        // Buscar chats directos
+        const chatsDirectos = gruposUsuario.filter((g: any) => g.tipoGrupo === 'directo');
+
+        if (chatsDirectos.length > 0) {
+          // Obtener IDs de usuarios del sistema (superadmin y usuario sistema)
+          const superadmin = await this.usersRepository.findOne({
+            where: { usuarioRol: { rolTipo: 'superadmin' } },
+            relations: ['usuarioRol', 'sede', 'bodega'],
+          });
+
+          const usuarioSistema = await this.findByEmail('sistema@jarlepsis.com');
+
+          const usuariosSistemaIds: number[] = [];
+          if (superadmin) usuariosSistemaIds.push(superadmin.usuarioId);
+          if (usuarioSistema) usuariosSistemaIds.push(usuarioSistema.usuarioId);
+
+          // Verificar si alguno de los chats directos incluye a usuarios del sistema
+          const usuariosSistemaEncontrados = new Set<number>();
+
+          for (const chat of chatsDirectos) {
+            const usuariosEnChat = await this.usuariosGruposService.obtenerUsuariosGrupo(
+              chat.grupoId,
+            );
+            const usuariosIds = usuariosEnChat.map(
+              (ug: any) => ug.usuarioId || ug.usuario?.usuarioId,
+            );
+
+            // Verificar si el chat incluye al usuario actual y algún usuario del sistema
+            if (usuariosIds.includes(requestingUser.usuarioId)) {
+              for (const sistemaId of usuariosSistemaIds) {
+                if (usuariosIds.includes(sistemaId)) {
+                  usuariosSistemaEncontrados.add(sistemaId);
+                }
+              }
+            }
+          }
+
+          // Obtener los usuarios del sistema encontrados
+          if (usuariosSistemaEncontrados.size > 0) {
+            const usuariosParaIncluir: User[] = [];
+            if (superadmin && usuariosSistemaEncontrados.has(superadmin.usuarioId)) {
+              usuariosParaIncluir.push(superadmin);
+            }
+            if (usuarioSistema && usuariosSistemaEncontrados.has(usuarioSistema.usuarioId)) {
+              usuariosParaIncluir.push(usuarioSistema);
+            }
+            usuariosSistema = usuariosParaIncluir;
+          }
+        }
+      } catch (error) {
+        console.error(
+          '[UsersService] Error al verificar chats directos con usuarios del sistema:',
+          error,
+        );
+      }
+    }
+
+    // Combinar usuarios filtrados con usuarios del sistema si hay chat directo
+    const usuariosFinales = [
+      ...data,
+      ...usuariosSistema.filter((u) => !data.find((d) => d.usuarioId === u.usuarioId)),
+    ];
 
     return {
-      data,
-      total,
+      data: usuariosFinales,
+      total: usuariosFinales.length,
       page,
       limit,
     };
@@ -416,7 +519,9 @@ export class UsersService {
       updateUserDto.usuarioRolId !== user.usuarioRolId
     ) {
       if (requestingUserRole !== 'superadmin' && requestingUserRole !== 'gerencia') {
-        throw new BadRequestException('Solo SuperAdmin o Gerencia pueden cambiar roles de usuarios');
+        throw new BadRequestException(
+          'Solo SuperAdmin o Gerencia pueden cambiar roles de usuarios',
+        );
       }
       const newRoleForUpdate = await this.rolesService.findOne(updateUserDto.usuarioRolId);
       if (newRoleForUpdate?.rolTipo?.toLowerCase() === 'superadmin') {
@@ -497,10 +602,24 @@ export class UsersService {
 
     Object.assign(user, updateUserDto);
 
-    // El rol Administrador siempre debe tener centro operativo asignado
-    const rolesRequierenCentroOperativo = ['admin', 'admin-internas', 'admin-redes'];
     const rolEntity = await this.rolesService.findOne(user.usuarioRolId);
     const rolTipoStr = (rolEntity?.rolTipo ?? '').toString().toLowerCase();
+    const rolesRequierenBodegaUpdate = ['bodega-internas', 'bodega-redes'];
+
+    // Roles bodega-internas/bodega-redes: asegurar centro operativo desde la bodega si falta
+    if (
+      rolesRequierenBodegaUpdate.includes(rolTipoStr) &&
+      user.usuarioBodega &&
+      (user.usuarioSede == null || user.usuarioSede === 0)
+    ) {
+      const bodega = await this.bodegasService.findOne(user.usuarioBodega);
+      if (bodega?.sedeId) {
+        user.usuarioSede = bodega.sedeId;
+      }
+    }
+
+    // El rol Administrador siempre debe tener centro operativo asignado
+    const rolesRequierenCentroOperativo = ['admin', 'admin-internas', 'admin-redes'];
     if (rolesRequierenCentroOperativo.includes(rolTipoStr) && !user.usuarioSede) {
       throw new BadRequestException(
         'El rol Administrador debe tener un centro operativo (usuarioSede) asignado.',
@@ -546,27 +665,27 @@ export class UsersService {
     user.usuarioRolId = newRoleId;
 
     // Limpiar campos según el nuevo rol
-      // Roles que requieren centro operativo: admin, admin-internas, admin-redes, almacenista, tecnico, soldador
-      const rolesRequierenCentroOperativo = [
-        'admin',
-        'admin-internas',
-        'admin-redes',
-        'almacenista',
-        'tecnico',
-        'soldador',
-      ];
-      // Roles que requieren bodega: bodega-internas, bodega-redes
-      const rolesRequierenBodega = ['bodega-internas', 'bodega-redes'];
+    // Roles que requieren centro operativo: admin, admin-internas, admin-redes, almacenista, tecnico, soldador
+    const rolesRequierenCentroOperativo = [
+      'admin',
+      'admin-internas',
+      'admin-redes',
+      'almacenista',
+      'tecnico',
+      'soldador',
+    ];
+    // Roles que requieren bodega: bodega-internas, bodega-redes
+    const rolesRequierenBodega = ['bodega-internas', 'bodega-redes'];
 
-      if (rolTipo === 'superadmin' || rolTipo === 'gerencia') {
-        // SuperAdmin y Gerencia no necesitan centro operativo ni bodega
-        user.usuarioSede = null;
-        user.usuarioBodega = null;
-      } else if (rolesRequierenBodega.includes(rolTipo)) {
-        // Si el nuevo rol requiere bodega, limpiar centro operativo
-        user.usuarioSede = null;
-        // Mantener usuarioBodega si ya está asignado, de lo contrario se debe asignar en el frontend
-      } else if (rolesRequierenCentroOperativo.includes(rolTipo)) {
+    if (rolTipo === 'superadmin' || rolTipo === 'gerencia') {
+      // SuperAdmin y Gerencia no necesitan centro operativo ni bodega
+      user.usuarioSede = null;
+      user.usuarioBodega = null;
+    } else if (rolesRequierenBodega.includes(rolTipo)) {
+      // Si el nuevo rol requiere bodega, limpiar centro operativo
+      user.usuarioSede = null;
+      // Mantener usuarioBodega si ya está asignado, de lo contrario se debe asignar en el frontend
+    } else if (rolesRequierenCentroOperativo.includes(rolTipo)) {
       // Si el nuevo rol requiere centro operativo, limpiar bodega
       user.usuarioBodega = null;
       // Mantener usuarioSede si ya está asignado, de lo contrario se debe asignar en el frontend
@@ -676,9 +795,10 @@ export class UsersService {
     // Obtener el técnico
     const tecnico = await this.findOne(usuarioId);
 
-    // Verificar que sea un técnico
-    if (tecnico.usuarioRol?.rolTipo !== 'tecnico') {
-      throw new BadRequestException('El usuario no es un técnico');
+    // Verificar que sea un técnico o soldador
+    const rolTipo = tecnico.usuarioRol?.rolTipo;
+    if (rolTipo !== 'tecnico' && rolTipo !== 'soldador') {
+      throw new BadRequestException('El usuario no es un técnico ni un soldador');
     }
 
     // Verificar que tenga sede asignada

@@ -129,6 +129,7 @@ export class MaterialesController {
     'admin-redes',
     'almacenista',
     'tecnico',
+    'soldador',
     'bodega-internas',
     'bodega-redes',
   )
@@ -207,6 +208,7 @@ export class MaterialesController {
     'admin-redes',
     'almacenista',
     'tecnico',
+    'soldador',
     'bodega-internas',
     'bodega-redes',
   )

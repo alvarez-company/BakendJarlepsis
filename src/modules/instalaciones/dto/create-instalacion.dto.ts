@@ -8,7 +8,8 @@ export class CreateInstalacionDto {
 
   @ApiProperty({
     enum: ['internas', 'redes'],
-    description: 'Tipo de instalación: internas o redes. Obligatorio al crear. Admin elige; admin-internas solo internas; admin-redes solo redes.',
+    description:
+      'Tipo de instalación: internas o redes. Obligatorio al crear. Admin elige; admin-internas solo internas; admin-redes solo redes.',
   })
   @IsIn(['internas', 'redes'], { message: 'instalacionTipo debe ser "internas" o "redes"' })
   instalacionTipo: 'internas' | 'redes';
@@ -20,7 +21,8 @@ export class CreateInstalacionDto {
   @ApiProperty({
     example: 'INST-001',
     required: false,
-    description: 'Código de instalación (opcional; en instalaciones de redes no siempre hay código). Si se envía, debe ser único.',
+    description:
+      'Código de instalación (opcional; en instalaciones de redes no siempre hay código). Si se envía, debe ser único.',
   })
   @IsString()
   @IsOptional()

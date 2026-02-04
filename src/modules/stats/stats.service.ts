@@ -257,15 +257,12 @@ export class StatsService {
         'bodega-redes',
       ];
       const filtrarPorCentroOperativo =
-        user &&
-        (rolesConFiltroBodega.includes(rolTipo) || user.usuarioSede != null);
+        user && (rolesConFiltroBodega.includes(rolTipo) || user.usuarioSede != null);
 
       if (filtrarPorCentroOperativo) {
         let bodegasPermitidas = await this.bodegasService.findAll(user);
         if (user.usuarioSede != null) {
-          bodegasPermitidas = bodegasPermitidas.filter(
-            (b) => b.sedeId === user.usuarioSede,
-          );
+          bodegasPermitidas = bodegasPermitidas.filter((b) => b.sedeId === user.usuarioSede);
         }
         const bodegaIds = new Set(bodegasPermitidas.map((b) => b.bodegaId));
         instalacionesFiltradas = instalaciones.filter(
@@ -446,9 +443,7 @@ export class StatsService {
         .filter((e) => e.cantidad > 0); // Solo incluir estados con instalaciones
 
       // Calcular técnicos con más instalaciones (solo instalaciones del centro cuando hay filtro por sede)
-      const instalacionIdsCentro = new Set(
-        instalacionesParaStats.map((i: any) => i.instalacionId),
-      );
+      const instalacionIdsCentro = new Set(instalacionesParaStats.map((i: any) => i.instalacionId));
       const tecnicosMap = new Map<number, { nombre: string; cantidad: number }>();
       instalacionesUsuarios.forEach((iu) => {
         if (
@@ -529,12 +524,9 @@ export class StatsService {
         });
       }
 
-      const totalClientesCentro =
-        filtrarPorCentroOperativo
-          ? new Set(
-              instalacionesParaStats.map((i: any) => i.clienteId).filter(Boolean),
-            ).size
-          : clientes.length;
+      const totalClientesCentro = filtrarPorCentroOperativo
+        ? new Set(instalacionesParaStats.map((i: any) => i.clienteId).filter(Boolean)).size
+        : clientes.length;
       const totalUsuariosCentro =
         user?.usuarioSede != null
           ? usuarios.filter((u: any) => u.usuarioSede === user.usuarioSede).length

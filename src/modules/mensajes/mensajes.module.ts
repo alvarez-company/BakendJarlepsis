@@ -8,6 +8,7 @@ import { NotificacionesModule } from '../notificaciones/notificaciones.module';
 import { UsuariosGruposModule } from '../usuarios-grupos/usuarios-grupos.module';
 import { UsersModule } from '../users/users.module';
 import { GruposModule } from '../grupos/grupos.module';
+import { InstalacionesModule } from '../instalaciones/instalaciones.module';
 
 @Module({
   imports: [
@@ -17,6 +18,7 @@ import { GruposModule } from '../grupos/grupos.module';
     forwardRef(() => UsuariosGruposModule),
     forwardRef(() => UsersModule),
     forwardRef(() => GruposModule),
+    forwardRef(() => InstalacionesModule),
   ],
   controllers: [MensajesController],
   providers: [MensajesService],

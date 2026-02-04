@@ -29,6 +29,7 @@ import { InstalacionesMaterialesService } from '../instalaciones-materiales/inst
 import { InventarioTecnicoService } from '../inventario-tecnico/inventario-tecnico.service';
 import { UsersService } from '../users/users.service';
 import { NumerosMedidorService } from '../numeros-medidor/numeros-medidor.service';
+import { BodegasService } from '../bodegas/bodegas.service';
 
 @Injectable()
 export class InstalacionesService {
@@ -65,6 +66,8 @@ export class InstalacionesService {
     private usersService: UsersService,
     @Inject(forwardRef(() => NumerosMedidorService))
     private numerosMedidorService: NumerosMedidorService,
+    @Inject(forwardRef(() => BodegasService))
+    private bodegasService: BodegasService,
   ) {}
 
   private async generarIdentificadorUnico(): Promise<string> {
@@ -102,7 +105,12 @@ export class InstalacionesService {
     usuarioId: number,
     user?: any,
   ): Promise<Instalacion> {
-    const { usuariosAsignados, instalacionCodigo, instalacionTipo: dtoTipo, ...instalacionData } = createInstalacionDto;
+    const {
+      usuariosAsignados,
+      instalacionCodigo,
+      instalacionTipo: dtoTipo,
+      ...instalacionData
+    } = createInstalacionDto;
 
     // Validar instalacionTipo (internas | redes) según el rol del usuario
     const tipo = (dtoTipo || '').toLowerCase();
@@ -210,7 +218,8 @@ export class InstalacionesService {
 
     // Crear grupo de chat automáticamente (usar código o fallback a INST-{id})
     try {
-      const codigoGrupo = savedInstalacion.identificadorUnico || `INST-${savedInstalacion.instalacionId}`;
+      const codigoGrupo =
+        savedInstalacion.identificadorUnico || `INST-${savedInstalacion.instalacionId}`;
       await this.gruposService.crearGrupoInstalacion(savedInstalacion.instalacionId, codigoGrupo);
     } catch (error) {
       console.error(
@@ -239,8 +248,64 @@ export class InstalacionesService {
 
   async findAll(user?: any): Promise<Instalacion[]> {
     try {
+      // Filtrar por centro operativo (sede): usuarios con sede solo ven instalaciones de bodegas de su sede
+      const rolTipo = user?.usuarioRol?.rolTipo || user?.role || '';
+      const usuarioSede = user?.usuarioSede;
+      let whereClause = '';
+      const queryParams: any[] = [];
+
+      // SuperAdmin/Gerencia: sin filtro (ven todas las instalaciones)
+      if (usuarioSede != null) {
+        // Admin (centro operativo): solo instalaciones de bodegas de su sede
+        if (rolTipo === 'admin') {
+          whereClause = `
+            INNER JOIN bodegas b ON i.bodegaId = b.bodegaId
+            WHERE b.sedeId = ?
+          `;
+          queryParams.push(usuarioSede);
+        }
+        // Admin-internas: solo instalaciones de bodegas tipo internas de su sede
+        else if (rolTipo === 'admin-internas') {
+          whereClause = `
+            INNER JOIN bodegas b ON i.bodegaId = b.bodegaId
+            WHERE b.sedeId = ? AND b.bodegaTipo = 'internas'
+          `;
+          queryParams.push(usuarioSede);
+        }
+        // Admin-redes: solo instalaciones de bodegas tipo redes de su sede
+        else if (rolTipo === 'admin-redes') {
+          whereClause = `
+            INNER JOIN bodegas b ON i.bodegaId = b.bodegaId
+            WHERE b.sedeId = ? AND b.bodegaTipo = 'redes'
+          `;
+          queryParams.push(usuarioSede);
+        }
+        // Bodega-internas/redes: solo instalaciones de su bodega
+        else if (rolTipo === 'bodega-internas' || rolTipo === 'bodega-redes') {
+          whereClause = 'WHERE i.bodegaId = ?';
+          queryParams.push(user.usuarioBodega);
+        }
+        // Técnico/Soldador: solo instalaciones asignadas a ellos
+        else if (rolTipo === 'tecnico' || rolTipo === 'soldador') {
+          whereClause = `
+            INNER JOIN instalaciones_usuarios iu ON i.instalacionId = iu.instalacionId
+            WHERE iu.usuarioId = ? AND iu.activo = 1
+          `;
+          queryParams.push(user.usuarioId);
+        }
+        // Almacenista: instalaciones de bodegas de su sede
+        else if (rolTipo === 'almacenista') {
+          whereClause = `
+            INNER JOIN bodegas b ON i.bodegaId = b.bodegaId
+            WHERE b.sedeId = ?
+          `;
+          queryParams.push(usuarioSede);
+        }
+      }
+
       // Usar SQL raw para evitar completamente que TypeORM intente cargar relaciones automáticamente
-      const instalacionesRaw = await this.instalacionesRepository.query(`
+      const instalacionesRaw = await this.instalacionesRepository.query(
+        `
         SELECT 
           i.instalacionId,
           i.identificadorUnico,
@@ -263,6 +328,7 @@ export class InstalacionesService {
           i.instalacionProyectos,
           i.instalacionObservaciones,
           i.observacionesTecnico,
+          i.instalacionAnexos,
           i.estado,
           i.estadoInstalacionId,
           i.usuarioRegistra,
@@ -270,7 +336,10 @@ export class InstalacionesService {
           i.fechaCreacion,
           i.fechaActualizacion
         FROM instalaciones i
-      `);
+        ${whereClause}
+      `,
+        queryParams,
+      );
 
       // Cargar tipoInstalacion, usuariosAsignados y sus relaciones por separado
       const instalacionIds = instalacionesRaw.map((row: any) => row.instalacionId);
@@ -455,6 +524,16 @@ export class InstalacionesService {
               : row.instalacionProyectos,
           instalacionObservaciones: row.instalacionObservaciones,
           observacionesTecnico: row.observacionesTecnico,
+          instalacionAnexos:
+            typeof row.instalacionAnexos === 'string'
+              ? (() => {
+                  try {
+                    return JSON.parse(row.instalacionAnexos);
+                  } catch {
+                    return null;
+                  }
+                })()
+              : row.instalacionAnexos,
           estado: row.estado,
           estadoInstalacionId: row.estadoInstalacionId,
           usuarioRegistra: row.usuarioRegistra,
@@ -473,11 +552,10 @@ export class InstalacionesService {
       });
 
       // SuperAdmin / desarrollador / Gerencia ven todo (rol sin distinguir mayúsculas)
-      const rolTipoListado = (user?.usuarioRol?.rolTipo ?? user?.role ?? '').toString().toLowerCase();
-      if (
-        rolTipoListado === 'superadmin' ||
-        rolTipoListado === 'gerencia'
-      ) {
+      const rolTipoListado = (user?.usuarioRol?.rolTipo ?? user?.role ?? '')
+        .toString()
+        .toLowerCase();
+      if (rolTipoListado === 'superadmin' || rolTipoListado === 'gerencia') {
         return allInstalaciones;
       }
 
@@ -485,9 +563,7 @@ export class InstalacionesService {
       if (user?.usuarioRol?.rolTipo === 'admin' || user?.role === 'admin') {
         if (user.usuarioSede) {
           return allInstalaciones.filter(
-            (inst) =>
-              !inst.bodegaId ||
-              inst.bodega?.sedeId === user.usuarioSede,
+            (inst) => !inst.bodegaId || inst.bodega?.sedeId === user.usuarioSede,
           );
         }
         return [];
@@ -501,24 +577,9 @@ export class InstalacionesService {
           user?.role === 'admin-internas' ||
           user?.role === 'admin-redes');
 
-      // Técnico ve solo sus instalaciones asignadas (solo asignaciones activas)
-      if (user?.usuarioRol?.rolTipo === 'tecnico' || user?.role === 'tecnico') {
-        return allInstalaciones.filter((inst) => {
-          // Verificar si el técnico está asignado activamente a esta instalación
-          if (inst.usuariosAsignados && Array.isArray(inst.usuariosAsignados)) {
-            return inst.usuariosAsignados.some((ua: any) => {
-              const usuarioId = ua.usuarioId || ua.usuario?.usuarioId;
-              const activo = ua.activo !== undefined ? ua.activo : true;
-              return usuarioId === user.usuarioId && activo === true;
-            });
-          }
-          // No mostrar instalaciones que el técnico registró pero no tiene asignadas activamente
-          return false;
-        });
-      }
-
-      // Soldador ve solo sus instalaciones asignadas (solo asignaciones activas)
-      if (user?.usuarioRol?.rolTipo === 'soldador' || user?.role === 'soldador') {
+      // Técnico o soldador ven solo sus instalaciones asignadas (solo asignaciones activas)
+      const rolUsuario = user?.usuarioRol?.rolTipo ?? user?.role;
+      if (rolUsuario === 'tecnico' || rolUsuario === 'soldador') {
         return allInstalaciones.filter((inst) => {
           if (inst.usuariosAsignados && Array.isArray(inst.usuariosAsignados)) {
             return inst.usuariosAsignados.some((ua: any) => {
@@ -527,7 +588,6 @@ export class InstalacionesService {
               return usuarioId === user.usuarioId && activo === true;
             });
           }
-          // No mostrar instalaciones que el soldador registró pero no tiene asignadas activamente
           return false;
         });
       }
@@ -549,9 +609,7 @@ export class InstalacionesService {
           return tipoNombre.includes('internas');
         });
         if (filterBySedeIfAdmin) {
-          list = list.filter(
-            (inst) => !inst.bodegaId || inst.bodega?.sedeId === user.usuarioSede,
-          );
+          list = list.filter((inst) => !inst.bodegaId || inst.bodega?.sedeId === user.usuarioSede);
         }
         return list;
       }
@@ -568,9 +626,7 @@ export class InstalacionesService {
           return tipoNombre.includes('redes');
         });
         if (filterBySedeIfAdmin) {
-          list = list.filter(
-            (inst) => !inst.bodegaId || inst.bodega?.sedeId === user.usuarioSede,
-          );
+          list = list.filter((inst) => !inst.bodegaId || inst.bodega?.sedeId === user.usuarioSede);
         }
         return list;
       }
@@ -643,7 +699,7 @@ export class InstalacionesService {
     );
 
     const instalacionMaterialIds = imRows.map((r: any) => r.instalacionMaterialId).filter(Boolean);
-    let numerosByIm: Map<number, string> = new Map();
+    const numerosByIm: Map<number, string> = new Map();
     if (instalacionMaterialIds.length > 0) {
       const nmPlaceholders = instalacionMaterialIds.map(() => '?').join(',');
       const nmRows = await this.instalacionesRepository.query(
@@ -664,9 +720,16 @@ export class InstalacionesService {
       if (!inst) continue;
 
       const fechaCert =
-        inst.fechaCertificacion || inst.fechaConstruccion || inst.instalacionFecha || inst.fechaCreacion;
+        inst.fechaCertificacion ||
+        inst.fechaConstruccion ||
+        inst.instalacionFecha ||
+        inst.fechaCreacion;
       const certificacion = fechaCert
-        ? new Date(fechaCert).toLocaleDateString('es-CO', { day: '2-digit', month: '2-digit', year: 'numeric' })
+        ? new Date(fechaCert).toLocaleDateString('es-CO', {
+            day: '2-digit',
+            month: '2-digit',
+            year: 'numeric',
+          })
         : '';
 
       const codigoUsuario =
@@ -695,7 +758,8 @@ export class InstalacionesService {
 
       const tecnicoNombre =
         inst.usuariosAsignados?.[0]?.usuario &&
-        (inst.usuariosAsignados[0].usuario.usuarioNombre || inst.usuariosAsignados[0].usuario.usuarioApellido)
+        (inst.usuariosAsignados[0].usuario.usuarioNombre ||
+          inst.usuariosAsignados[0].usuario.usuarioApellido)
           ? `${inst.usuariosAsignados[0].usuario.usuarioNombre || ''} ${inst.usuariosAsignados[0].usuario.usuarioApellido || ''}`.trim()
           : '';
       const iniciales = tecnicoNombre
@@ -712,9 +776,7 @@ export class InstalacionesService {
       const total = cantidad * precio;
 
       const numMedidor =
-        numerosByIm.get(im.instalacionMaterialId) ||
-        inst.instalacionMedidorNumero ||
-        '';
+        numerosByIm.get(im.instalacionMaterialId) || inst.instalacionMedidorNumero || '';
 
       rows.push({
         certificacion,
@@ -767,6 +829,7 @@ export class InstalacionesService {
         i.instalacionProyectos,
         i.instalacionObservaciones,
         i.observacionesTecnico,
+        i.instalacionAnexos,
         i.estado,
         i.usuarioRegistra,
           i.bodegaId,
@@ -911,6 +974,16 @@ export class InstalacionesService {
           : row.instalacionProyectos,
       instalacionObservaciones: row.instalacionObservaciones,
       observacionesTecnico: row.observacionesTecnico,
+      instalacionAnexos:
+        typeof row.instalacionAnexos === 'string'
+          ? (() => {
+              try {
+                return JSON.parse(row.instalacionAnexos);
+              } catch {
+                return null;
+              }
+            })()
+          : row.instalacionAnexos,
       estado: row.estado,
       usuarioRegistra: row.usuarioRegistra,
       bodegaId: row.bodegaId,
@@ -944,7 +1017,12 @@ export class InstalacionesService {
     usuarioId?: number,
     user?: any,
   ): Promise<Instalacion> {
-    const { usuariosAsignados, instalacionCodigo, instalacionTipo: dtoTipo, ...instalacionData } = updateInstalacionDto;
+    const {
+      usuariosAsignados,
+      instalacionCodigo,
+      instalacionTipo: dtoTipo,
+      ...instalacionData
+    } = updateInstalacionDto;
 
     const instalacion = await this.findOne(id, user);
 
@@ -982,9 +1060,10 @@ export class InstalacionesService {
       }
 
       // Usar instalacionTipo si existe; si no, fallback al nombre del tipo de instalación (legacy)
-      const tipoInstalacion = (instalacion as any).instalacionTipo?.toLowerCase()
-        || instalacion.tipoInstalacion?.tipoInstalacionNombre?.toLowerCase()
-        || '';
+      const tipoInstalacion =
+        (instalacion as any).instalacionTipo?.toLowerCase() ||
+        instalacion.tipoInstalacion?.tipoInstalacionNombre?.toLowerCase() ||
+        '';
 
       // Bodega Internas y Admin Internas solo pueden editar instalaciones de tipo "internas"
       if (rolTipo === 'bodega-internas' || rolTipo === 'admin-internas') {
@@ -1029,7 +1108,9 @@ export class InstalacionesService {
       if (!codigoTrimmed) {
         instalacion.identificadorUnico = null;
         instalacion.instalacionCodigo = null;
-      } else if (codigoTrimmed !== (instalacion.identificadorUnico ?? instalacion.instalacionCodigo)) {
+      } else if (
+        codigoTrimmed !== (instalacion.identificadorUnico ?? instalacion.instalacionCodigo)
+      ) {
         const instalacionExistente = await this.instalacionesRepository
           .createQueryBuilder('instalacion')
           .where('instalacion.instalacionId != :id', { id })
@@ -1266,6 +1347,42 @@ export class InstalacionesService {
     await this.instalacionesRepository.remove(instalacion);
   }
 
+  /**
+   * Agrega URLs de fotos/archivos del chat como anexos de la instalación.
+   * Se llama cuando se suben fotos en el chat del grupo de la instalación.
+   */
+  async agregarAnexos(instalacionId: number, urls: string[]): Promise<void> {
+    if (!urls?.length) return;
+    const instalacion = await this.instalacionesRepository.findOne({
+      where: { instalacionId },
+    });
+    if (!instalacion) return;
+    const actuales: string[] = Array.isArray(instalacion.instalacionAnexos)
+      ? [...instalacion.instalacionAnexos]
+      : [];
+    const nuevos = urls.filter((u) => u && !actuales.includes(u));
+    if (nuevos.length === 0) return;
+    instalacion.instalacionAnexos = [...actuales, ...nuevos];
+    await this.instalacionesRepository.save(instalacion);
+  }
+
+  /**
+   * Elimina un anexo (URL) de la lista de anexos de la instalación.
+   */
+  async eliminarAnexo(instalacionId: number, url: string): Promise<void> {
+    const instalacion = await this.instalacionesRepository.findOne({
+      where: { instalacionId },
+    });
+    if (!instalacion) {
+      throw new NotFoundException('Instalación no encontrada');
+    }
+    const actuales: string[] = Array.isArray(instalacion.instalacionAnexos)
+      ? [...instalacion.instalacionAnexos]
+      : [];
+    instalacion.instalacionAnexos = actuales.filter((u) => u !== url);
+    await this.instalacionesRepository.save(instalacion);
+  }
+
   async actualizarEstado(
     instalacionId: number,
     nuevoEstado: EstadoInstalacion,
@@ -1406,11 +1523,13 @@ export class InstalacionesService {
 
     // Obtener información del usuario que está cambiando el estado
     const usuarioQueCambia = await this.usersService.findOne(usuarioId);
-    const esTecnico = usuarioQueCambia?.usuarioRol?.rolTipo === 'tecnico';
+    const esTecnicoOSoldador =
+      usuarioQueCambia?.usuarioRol?.rolTipo === 'tecnico' ||
+      usuarioQueCambia?.usuarioRol?.rolTipo === 'soldador';
 
-    // Si un técnico cambia el estado, notificar a supervisores y admins
+    // Si un técnico o soldador cambia el estado, notificar a supervisores y admins
     let supervisoresIds: number[] = [];
-    if (esTecnico) {
+    if (esTecnicoOSoldador) {
       try {
         const todosUsuarios = await this.usersService.findAll({ page: 1, limit: 1000 });
         supervisoresIds = todosUsuarios.data
@@ -1642,8 +1761,8 @@ export class InstalacionesService {
           );
         }
 
-        // Si un técnico cambió el estado, notificar a supervisores/admins
-        if (esTecnico && supervisoresIds.length > 0) {
+        // Si un técnico o soldador cambió el estado, notificar a supervisores/admins
+        if (esTecnicoOSoldador && supervisoresIds.length > 0) {
           for (const supervisorId of supervisoresIds) {
             await this.notificacionesService.crearNotificacion(
               supervisorId,
@@ -1708,8 +1827,8 @@ export class InstalacionesService {
           );
         }
 
-        // Si un técnico cambió el estado, notificar a supervisores/admins
-        if (esTecnico && supervisoresIds.length > 0) {
+        // Si un técnico o soldador cambió el estado, notificar a supervisores/admins
+        if (esTecnicoOSoldador && supervisoresIds.length > 0) {
           for (const supervisorId of supervisoresIds) {
             await this.notificacionesService.crearNotificacion(
               supervisorId,
@@ -1778,8 +1897,8 @@ export class InstalacionesService {
           );
         }
 
-        // Si un técnico cambió el estado, notificar a supervisores/admins
-        if (esTecnico && supervisoresIds.length > 0) {
+        // Si un técnico o soldador cambió el estado, notificar a supervisores/admins
+        if (esTecnicoOSoldador && supervisoresIds.length > 0) {
           for (const supervisorId of supervisoresIds) {
             await this.notificacionesService.crearNotificacion(
               supervisorId,
@@ -1821,6 +1940,43 @@ export class InstalacionesService {
         } catch (error) {
           console.error(
             `[InstalacionesService] Error al enviar mensaje para instalación ${instalacionId}:`,
+            error,
+          );
+        }
+
+        // Una sola bodega por sede para todas las instalaciones en novedad: obtener o crear la
+        // "Bodega de instalaciones" del centro operativo (solo estructura para reportes).
+        // NO se crean movimientos (ENTRADA) aquí para no afectar el stock: los materiales ya fueron
+        // descontados del técnico al registrarse en la instalación (instalaciones-materiales).
+        // Para saber dónde están los materiales, consultar instalaciones_materiales de las
+        // instalaciones con estado NOVEDAD (no el inventario de esta bodega).
+        try {
+          let sedeId: number | null =
+            instalacionCompleta.bodegaId != null
+              ? ((await this.bodegasService.findOne(instalacionCompleta.bodegaId))?.sedeId ?? null)
+              : null;
+          if (sedeId == null && usuarioId != null) {
+            const usuario = await this.usersService.findOne(usuarioId).catch(() => null);
+            if (usuario?.usuarioSede != null) sedeId = usuario.usuarioSede;
+          }
+          if (sedeId != null) {
+            const bodegaInstalaciones =
+              await this.bodegasService.findOrCreateBodegaInstalaciones(sedeId);
+            const inventario = await this.inventariosService.findByBodega(
+              bodegaInstalaciones.bodegaId,
+            );
+            if (!inventario) {
+              await this.inventariosService.create({
+                bodegaId: bodegaInstalaciones.bodegaId,
+                inventarioNombre: 'Inventario bodega instalaciones',
+                inventarioDescripcion:
+                  'Materiales de instalaciones con novedad (ubicación vía instalaciones_materiales)',
+              });
+            }
+          }
+        } catch (error) {
+          console.error(
+            `[InstalacionesService] Error al crear bodega de instalaciones para sede (instalación ${instalacionId}):`,
             error,
           );
         }
@@ -2178,12 +2334,11 @@ export class InstalacionesService {
         return;
       }
 
-      // Buscar el técnico asignado
+      // Buscar el técnico o soldador asignado (para descontar de su inventario)
       const tecnicoAsignado = instalacion.usuariosAsignados.find((u: any) => {
         const usuario = u.usuario || u;
-        return (
-          usuario && (usuario.usuarioRol?.rolTipo === 'tecnico' || usuario.rolTipo === 'tecnico')
-        );
+        const rol = usuario?.usuarioRol?.rolTipo ?? usuario?.rolTipo;
+        return usuario && (rol === 'tecnico' || rol === 'soldador');
       });
 
       if (!tecnicoAsignado) {

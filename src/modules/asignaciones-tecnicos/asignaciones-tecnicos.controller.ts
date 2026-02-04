@@ -89,8 +89,9 @@ export class AsignacionesTecnicosController {
     'bodega-internas',
     'bodega-redes',
     'tecnico',
+    'soldador',
   )
-  @ApiOperation({ summary: 'Obtener asignaciones de un técnico' })
+  @ApiOperation({ summary: 'Obtener asignaciones de un técnico o soldador' })
   findByUsuario(@Param('usuarioId') usuarioId: string, @Request() req) {
     return this.service.findByUsuario(+usuarioId, req.user);
   }

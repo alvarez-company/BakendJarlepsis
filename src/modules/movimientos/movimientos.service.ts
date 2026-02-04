@@ -432,7 +432,9 @@ export class MovimientosService {
                 // Crear nuevo número de medidor (entrada desde proveedor)
                 let bodegaIdEntrada: number | null = null;
                 if (createMovimientoDto.inventarioId) {
-                  const inv = await this.inventariosService.findOne(createMovimientoDto.inventarioId);
+                  const inv = await this.inventariosService.findOne(
+                    createMovimientoDto.inventarioId,
+                  );
                   if (inv?.bodegaId) bodegaIdEntrada = inv.bodegaId;
                 }
                 await this.numerosMedidorService.create({
@@ -445,7 +447,9 @@ export class MovimientosService {
                 // Número ya existe: actualizar ubicación (ej. traslado completado - asignar a bodega destino)
                 let bodegaIdDestino: number | null = null;
                 if (createMovimientoDto.inventarioId) {
-                  const inv = await this.inventariosService.findOne(createMovimientoDto.inventarioId);
+                  const inv = await this.inventariosService.findOne(
+                    createMovimientoDto.inventarioId,
+                  );
                   if (inv?.bodegaId) bodegaIdDestino = inv.bodegaId;
                 }
                 await this.numerosMedidorService.update(numeroMedidorEntity.numeroMedidorId, {

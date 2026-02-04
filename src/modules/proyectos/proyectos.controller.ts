@@ -40,8 +40,8 @@ export class ProyectosController {
     'bodega-internas',
     'bodega-redes',
   )
-  findAll() {
-    return this.service.findAll();
+  findAll(@Request() req) {
+    return this.service.findAll(req.user);
   }
 
   @Get(':id')

@@ -153,13 +153,7 @@ export class InstalacionesController {
   }
 
   @Get('export/metrogas/excel')
-  @Roles(
-    'superadmin',
-    'gerencia',
-    'admin',
-    'admin-internas',
-    'admin-redes',
-  )
+  @Roles('superadmin', 'gerencia', 'admin', 'admin-internas', 'admin-redes')
   @ApiOperation({ summary: 'Export Reporte Metrogas to Excel (by date range)' })
   @ApiQuery({ name: 'dateStart', required: false, type: String })
   @ApiQuery({ name: 'dateEnd', required: false, type: String })
@@ -205,18 +199,14 @@ export class InstalacionesController {
       res.setHeader('Content-Disposition', 'attachment; filename="reporte-metrogas.xlsx"');
       res.send(buffer);
     } catch (error) {
-      res.status(500).json({ message: 'Error al exportar Reporte Metrogas', error: error?.message });
+      res
+        .status(500)
+        .json({ message: 'Error al exportar Reporte Metrogas', error: error?.message });
     }
   }
 
   @Get('export/metrogas/pdf')
-  @Roles(
-    'superadmin',
-    'gerencia',
-    'admin',
-    'admin-internas',
-    'admin-redes',
-  )
+  @Roles('superadmin', 'gerencia', 'admin', 'admin-internas', 'admin-redes')
   @ApiOperation({ summary: 'Export Reporte Metrogas to PDF (by date range)' })
   @ApiQuery({ name: 'dateStart', required: false, type: String })
   @ApiQuery({ name: 'dateEnd', required: false, type: String })
@@ -259,7 +249,9 @@ export class InstalacionesController {
       res.setHeader('Content-Disposition', 'attachment; filename="reporte-metrogas.pdf"');
       res.send(buffer);
     } catch (error) {
-      res.status(500).json({ message: 'Error al exportar Reporte Metrogas', error: error?.message });
+      res
+        .status(500)
+        .json({ message: 'Error al exportar Reporte Metrogas', error: error?.message });
     }
   }
 
@@ -632,5 +624,17 @@ export class InstalacionesController {
     } catch (error) {
       res.status(500).json({ message: 'Error al exportar a PDF', error: error.message });
     }
+  }
+
+  @Delete(':id/anexos')
+  @Roles('superadmin', 'admin', 'admin-internas', 'admin-redes')
+  @ApiOperation({ summary: 'Eliminar un anexo de la instalación' })
+  async eliminarAnexo(@Param('id') id: string, @Body() body: { url: string }) {
+    const instalacionId = parseInt(id, 10);
+    if (isNaN(instalacionId)) {
+      throw new NotFoundException(`ID de instalación inválido: ${id}`);
+    }
+    await this.instalacionesService.eliminarAnexo(instalacionId, body.url);
+    return { message: 'Anexo eliminado correctamente' };
   }
 }

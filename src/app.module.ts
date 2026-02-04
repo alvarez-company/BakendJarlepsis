@@ -47,6 +47,7 @@ import { HealthModule } from './modules/health/health.module';
 import { NumerosMedidorModule } from './modules/numeros-medidor/numeros-medidor.module';
 import { SearchModule } from './modules/search/search.module';
 import { AuditoriaInventarioModule } from './modules/auditoria-inventario/auditoria-inventario.module';
+import { UploadModule } from './modules/upload/upload.module';
 
 @Module({
   imports: [
@@ -138,6 +139,7 @@ import { AuditoriaInventarioModule } from './modules/auditoria-inventario/audito
     NumerosMedidorModule,
     SearchModule,
     AuditoriaInventarioModule,
+    UploadModule,
   ],
 })
 export class AppModule {}

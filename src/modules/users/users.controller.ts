@@ -124,13 +124,24 @@ export class UsersController {
 
   @Post(':id/change-role')
   @Roles('superadmin', 'gerencia')
-  @ApiOperation({ summary: 'Change user role (SuperAdmin o Gerencia). No se puede asignar rol Super Administrador.' })
+  @ApiOperation({
+    summary:
+      'Change user role (SuperAdmin o Gerencia). No se puede asignar rol Super Administrador.',
+  })
   changeRole(@Param('id') id: string, @Body() changeRoleDto: ChangeRoleDto) {
     return this.usersService.changeRole(+id, changeRoleDto.usuarioRolId);
   }
 
   @Patch(':id')
-  @Roles('superadmin', 'gerencia', 'admin', 'admin-internas', 'admin-redes', 'bodega-internas', 'bodega-redes')
+  @Roles(
+    'superadmin',
+    'gerencia',
+    'admin',
+    'admin-internas',
+    'admin-redes',
+    'bodega-internas',
+    'bodega-redes',
+  )
   @ApiOperation({ summary: 'Update a user' })
   update(@Param('id') id: string, @Body() updateUserDto: UpdateUserDto, @Request() req) {
     const rolTipo = req.user.usuarioRol?.rolTipo || req.user.role;

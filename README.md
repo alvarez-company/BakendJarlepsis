@@ -1,280 +1,193 @@
-# Sistema de Inventario - Backend
+# BakendJarlepsis – Backend del Sistema de Inventario
 
-Backend robusto desarrollado con NestJS, MySQL y Docker para gestión de inventario.
+Backend desarrollado con **NestJS**, **MySQL** y **Docker** para el sistema de gestión de inventario y centros operativos Jarlepsis.
 
 ## 📦 Repositorio
 
-**Repositorio**: [https://github.com/alvarez-company/BakendJarlepsis.git](https://github.com/alvarez-company/BakendJarlepsis.git)
+**Repositorio**: [https://github.com/alvarez-company/BakendJarlepsis](https://github.com/alvarez-company/BakendJarlepsis)
 
 ## 🎯 Características
 
 - 🔐 **Autenticación JWT** con Passport
-- 👥 **Sistema de Roles**: SuperAdmin, Admin, Técnico
-- 🏢 **Gestión Jerárquica**: Sedes → Oficinas → Bodegas
+- 👥 **Sistema de roles**: SuperAdmin, Gerencia, Admin, Admin Internas/Redes, Almacenista, Bodega Internas/Redes, Técnico, Soldador
+- 🏢 **Jerarquía**: Sedes (centros operativos) → Bodegas
 - 🗄️ **MySQL** con TypeORM
-- 🐳 **Dockerizado** completamente
-- 📝 **Swagger** para documentación de API
-- 🔒 **Seguridad** con Helmet y Rate Limiting
-- 📊 **Logging** con Winston
-- ✅ **Validación** de datos con class-validator
+- 🐳 **Docker** para base de datos y opcionalmente para el backend
+- 📝 **Swagger** en `/api/docs`
+- 🔒 **Seguridad**: Helmet, rate limiting, validación con class-validator
+- 💬 **Chat y notificaciones** en tiempo real (WebSockets)
+- 📊 **Estadísticas**, reportes y búsqueda global
 
-## 🏗️ Arquitectura del Sistema
+## 🏗️ Arquitectura
 
-### Jerarquía Organizacional
+### Jerarquía organizacional
 
 ```
-Sede (por departamento)
- └── Oficina (por ciudad y municipio)
-      └── Bodega (asignada a oficina)
+Sede (centro operativo)
+ └── Bodega (internas, redes o instalaciones)
 ```
 
-### Roles de Usuario
+### Roles de usuario
 
-1. **SuperAdmin**: Puede iniciar sesión y cambiarse a cualquier rol
-2. **Admin**: Todos los permisos excepto cambiar roles
-3. **Técnico**: Solo acceso a aplicación móvil (no web)
+| Rol | Descripción |
+|-----|-------------|
+| **SuperAdmin** | Acceso total; puede cambiar de rol y gestionar todo el sistema |
+| **Gerencia** | Gestión global; crea usuarios de cualquier rol y asigna centros/bodegas |
+| **Admin** | Administrador de centro operativo; gestiona su sede y bodegas |
+| **Admin Internas / Admin Redes** | Admin restringido a bodegas de tipo internas o redes de su sede |
+| **Almacenista** | Gestión de inventario en su centro operativo |
+| **Bodega Internas / Bodega Redes** | Usuario asignado a una bodega concreta (internas o redes) |
+| **Técnico** | Acceso a instalaciones asignadas y miniapp móvil |
+| **Soldador** | Rol operativo en el sistema |
 
-### Estructura de Usuarios
+## 🚀 Inicio rápido
 
-Los usuarios tienen los siguientes campos:
-- usuarioId
-- usuarioRolId
-- usuarioSede
-- usuarioBodega
-- usuarioOficina
-- usuarioNombre
-- usuarioApellido
-- usuarioCorreo
-- usuarioTelefono
-- usuarioDocumento
-- usuarioContrasena
-- usuarioCreador
-- usuarioEstado
-- fechaCreacion
-- fechaActualizacion
-
-## 🚀 Inicio Rápido
-
-### Con Docker (Recomendado)
+### Con Docker (recomendado para base de datos)
 
 ```bash
-cd backend
+cd BakendJarlepsis
 cp env.example .env
-docker-compose up -d
-```
-
-El backend estará disponible en `http://localhost:3000`
-
-### Desarrollo Local
-
-```bash
-cd backend
+# Editar .env si es necesario (puerto MySQL 3307 por defecto)
+docker-compose up -d mysql
 npm install
-cp env.example .env
+npm run migration:run
+npm run seed
 npm run start:dev
 ```
 
-### ⚠️ Crear Primer Usuario
+El API quedará en `http://localhost:4100` (puerto por defecto en `env.example`).
 
-**IMPORTANTE**: El registro público está deshabilitado. Debes crear el primer SuperAdmin así:
+### Desarrollo local (sin Docker)
+
+```bash
+cd BakendJarlepsis
+npm install
+cp env.example .env
+# Configurar .env con tu MySQL local
+npm run migration:run
+npm run seed
+npm run start:dev
+```
+
+### Crear el primer usuario (SuperAdmin)
+
+El registro público está deshabilitado. Para tener el primer SuperAdmin:
 
 1. Ejecutar migraciones: `npm run migration:run`
-2. Ejecutar el seed completo (roles, datos, superadmin): `npm run seed`  
-   O solo crear/actualizar el superadmin: `npm run seed:superadmin`
-3. Login con el SuperAdmin (por defecto: admin@jarlepsis.com / Admin123)
-4. Crear el resto de usuarios desde la API  
-   Ver `documents/SEED_Y_RESET.md` y opción SQL directa: `src/migrations/full_seed.sql`
+2. Ejecutar seed completo (roles + superadmin): `npm run seed`  
+   O solo superadmin: `npm run seed:superadmin`
+3. Iniciar sesión con el SuperAdmin (por defecto: `admin@jarlepsis.com` / `Admin123`)
+4. Crear el resto de usuarios desde el frontend o la API
 
-## 📝 Variables de Entorno
+Documentación detallada: `documents/SEED_Y_RESET.md`
+
+## 📝 Variables de entorno
+
+Copia `env.example` a `.env` y ajusta los valores:
 
 ```env
 NODE_ENV=development
-PORT=3000
+PORT=4100
 
-# MySQL
-DB_HOST=localhost
-DB_PORT=3306
+# MySQL (con Docker: host 127.0.0.1, puerto 3307)
+DB_HOST=127.0.0.1
+DB_PORT=3307
 DB_USERNAME=root
 DB_PASSWORD=root
-DB_NAME=inventario_db
+DB_NAME=jarlepsisdev
 
 # JWT
-JWT_SECRET=your-super-secret-jwt-key
+JWT_SECRET=tu-clave-secreta-segura
 JWT_EXPIRES_IN=24h
 
-# Frontend
-FRONTEND_URL=http://localhost:3000
+# URLs de frontend y miniapp (CORS y redirecciones)
+FRONTEND_URL=http://localhost:4173
+MINIAPP_URL=http://localhost:4174
+
+# Usuario admin para seed (opcional)
+ADMIN_EMAIL=admin@jarlepsis.com
+ADMIN_PASSWORD=Admin123
+ADMIN_NOMBRE=Super
+ADMIN_APELLIDO=Admin
+ADMIN_DOCUMENTO=9999999999
 ```
 
-## 📊 Endpoints Principales
+## 📊 API y documentación
 
-### Autenticación
-- `POST /api/v1/auth/register` - Registrar usuario
-- `POST /api/v1/auth/login` - Iniciar sesión
+- **Swagger (OpenAPI)**: con el servidor en marcha, `http://localhost:4100/api/docs`
+- **Rutas principales**: ver `documents/API_ROUTES.md`
+- **Resumen de roles y permisos**: `documents/ROLES_SUMMARY.md`
 
-### Usuarios
-- `GET /api/v1/users` - Listar usuarios
-- `GET /api/v1/users/:id` - Obtener usuario
-- `POST /api/v1/users` - Crear usuario
-- `PATCH /api/v1/users/:id` - Actualizar usuario
-- `POST /api/v1/users/:id/change-role` - Cambiar rol (SuperAdmin)
-- `DELETE /api/v1/users/:id` - Eliminar usuario
+Prefijo base: `/api/v1` (auth, users, roles, sedes, bodegas, materiales, movimientos, inventarios, instalaciones, mensajes, chat, notificaciones, traslados, stats, etc.).
 
-### Roles
-- `GET /api/v1/roles` - Listar roles
-- `POST /api/v1/roles` - Crear rol
-- `PATCH /api/v1/roles/:id` - Actualizar rol
-- `DELETE /api/v1/roles/:id` - Eliminar rol
-
-### Sedes
-- `GET /api/v1/sedes` - Listar sedes
-- `POST /api/v1/sedes` - Crear sede
-- `PATCH /api/v1/sedes/:id` - Actualizar sede
-- `DELETE /api/v1/sedes/:id` - Eliminar sede
-
-### Oficinas
-- `GET /api/v1/oficinas` - Listar oficinas
-- `POST /api/v1/oficinas` - Crear oficina
-- `PATCH /api/v1/oficinas/:id` - Actualizar oficina
-- `DELETE /api/v1/oficinas/:id` - Eliminar oficina
-
-### Bodegas
-- `GET /api/v1/bodegas` - Listar bodegas
-- `POST /api/v1/bodegas` - Crear bodega
-- `PATCH /api/v1/bodegas/:id` - Actualizar bodega
-- `DELETE /api/v1/bodegas/:id` - Eliminar bodega
-
-## 📚 Documentación API
-
-Una vez que el servidor esté corriendo, accede a Swagger:
-```
-http://localhost:3000/api/docs
-```
-
-## 🔐 Roles y Permisos
-
-### SuperAdmin
-- Puede cambiar su rol al de cualquier usuario
-- Acceso completo a todas las funcionalidades
-- Puede eliminar usuarios, roles, sedes, oficinas y bodegas
-
-### Admin
-- Acceso a todas las funcionalidades CRUD
-- No puede cambiar roles de usuarios
-- Puede crear y actualizar sedes, oficinas y bodegas
-
-### Técnico
-- Solo acceso a aplicación móvil
-- Sin acceso a la plataforma web
-- Gestiona inventario desde dispositivos móviles
-
-## 🛠️ Tecnologías
-
-- **NestJS** 10.x
-- **TypeORM**
-- **MySQL** 8.0
-- **Passport** + JWT
-- **Bcrypt**
-- **Helmet**
-- **Winston**
-- **Swagger**
-- **Docker**
-
-## 📦 Scripts Disponibles
-
-```bash
-npm run start          # Inicia servidor
-npm run start:dev      # Desarrollo con hot-reload
-npm run start:prod     # Producción
-npm run build          # Compila proyecto
-npm run test           # Ejecuta tests
-npm run lint           # Analiza código
-npm run format         # Formatea código
-```
-
-## 🔄 Migraciones
-
-```bash
-# Crear migración
-npm run migration:generate -- -n NombreMigracion
-
-# Ejecutar migraciones
-npm run migration:run
-
-# Revertir migración
-npm run migration:revert
-```
-
-## 🐳 Docker
-
-### Iniciar servicios
-```bash
-docker-compose up -d
-```
-
-### Ver logs
-```bash
-docker-compose logs -f backend
-```
-
-### Detener servicios
-```bash
-docker-compose down
-```
-
-## 📁 Estructura del Proyecto
+## 📁 Estructura del proyecto
 
 ```
-backend/
+BakendJarlepsis/
 ├── src/
-│   ├── main.ts                 # Punto de entrada
-│   ├── app.module.ts           # Módulo raíz
-│   ├── config/                 # Configuraciones
-│   ├── common/                 # Código compartido
-│   └── modules/                # Módulos de negocio
-│       ├── auth/              # Autenticación
-│       ├── users/             # Usuarios
-│       ├── roles/             # Roles
-│       ├── sedes/             # Sedes
-│       ├── oficinas/          # Oficinas
-│       └── bodegas/           # Bodegas
+│   ├── main.ts
+│   ├── app.module.ts
+│   ├── config/           # TypeORM, etc.
+│   ├── common/           # Guards, decoradores, DTOs compartidos
+│   └── modules/         # Módulos de negocio
+│       ├── auth/
+│       ├── users/
+│       ├── roles/
+│       ├── sedes/
+│       ├── bodegas/
+│       ├── materiales/
+│       ├── movimientos/
+│       ├── inventarios/
+│       ├── instalaciones/
+│       ├── mensajes/
+│       ├── chat/
+│       ├── notificaciones/
+│       ├── traslados/
+│       ├── stats/
+│       └── ...
+├── documents/            # Documentación (API, Docker, roles, seed)
+├── scripts/              # Seed, migraciones, reset DB
 ├── Dockerfile
 ├── docker-compose.yml
 └── package.json
 ```
 
+## 🛠️ Scripts útiles
+
+```bash
+npm run start          # Servidor producción
+npm run start:dev      # Desarrollo con recarga
+npm run build          # Compilar
+npm run lint           # Linter
+npm run format         # Formatear con Prettier
+npm run migration:run  # Ejecutar migraciones
+npm run migration:revert
+npm run seed           # Seed completo
+npm run seed:superadmin
+npm run db:reset       # Reset DB (pide confirmación)
+npm run docker:db:up    # Levantar solo MySQL con Docker
+```
+
+## 🐳 Docker
+
+- **Solo base de datos**: `docker-compose up -d mysql` (puerto 3307 en host por defecto).
+- Documentación: `documents/README-DOCKER.md`, `documents/DOCKER.md`.
+
 ## 🔒 Seguridad
 
-- JWT tokens con expiración
-- Bcrypt para contraseñas (10 rounds)
-- Guards para protección de rutas
-- Helmet para headers de seguridad
-- Rate limiting
-- CORS configurado
-- Validación de entrada
+- JWT con expiración configurable
+- Contraseñas con bcrypt
+- Guards por rol en rutas sensibles
+- Helmet, rate limiting, CORS y validación de entrada
 
-## 🔄 GitFlow
+## 📚 Documentación adicional
 
-Este proyecto utiliza **GitFlow** como metodología de gestión de ramas. Para más información sobre cómo trabajar con GitFlow, consulta:
-
-📖 [Guía de GitFlow](./GITFLOW.md)
-
-### Ramas Principales
-- **`main`**: Código de producción
-- **`develop`**: Código de desarrollo
-
-### Flujo de Trabajo
-1. Crear rama `feature/*` desde `develop` para nuevas funcionalidades
-2. Crear rama `release/*` desde `develop` para preparar releases
-3. Crear rama `hotfix/*` desde `main` para correcciones urgentes
-
-## 📞 Soporte
-
-Para más información, consulta:
-- Documentación Swagger: `/api/docs`
-- Logs: `logs/` directory
-- [Guía de GitFlow](./GITFLOW.md)
+- `documents/SEED_Y_RESET.md` – Seed y reset de base de datos
+- `documents/API_ROUTES.md` – Rutas del API
+- `documents/ROLES_SUMMARY.md` – Roles y permisos
+- `documents/README-DOCKER.md` – Uso de Docker
+- `SECURITY.md` – Política de seguridad
 
 ---
 
-**Desarrollado con NestJS** 🚀
+**Desarrollado con NestJS**

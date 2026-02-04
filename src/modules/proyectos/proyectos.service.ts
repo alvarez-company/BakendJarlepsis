@@ -51,7 +51,134 @@ export class ProyectosService {
     return proyecto;
   }
 
-  async findAll(): Promise<Proyecto[]> {
+  async findAll(user?: any): Promise<Proyecto[]> {
+    // Filtrar por centro operativo: solo proyectos que pertenecen a instalaciones de bodegas de la sede del usuario
+    const rolTipo = user?.usuarioRol?.rolTipo || user?.role || '';
+    const usuarioSede = user?.usuarioSede;
+
+    if (usuarioSede != null) {
+      // Obtener bodegas de la sede según el rol
+      let bodegaIds: number[] = [];
+      if (rolTipo === 'admin') {
+        // Admin: todas las bodegas de su sede
+        const bodegasSede = await this.proyectosRepository.manager.query(
+          `SELECT bodegaId FROM bodegas WHERE sedeId = ?`,
+          [usuarioSede],
+        );
+        bodegaIds = bodegasSede.map((b: any) => b.bodegaId);
+      } else if (rolTipo === 'admin-internas') {
+        // Admin-internas: solo bodegas tipo internas de su sede
+        const bodegasSede = await this.proyectosRepository.manager.query(
+          `SELECT bodegaId FROM bodegas WHERE sedeId = ? AND bodegaTipo = 'internas'`,
+          [usuarioSede],
+        );
+        bodegaIds = bodegasSede.map((b: any) => b.bodegaId);
+      } else if (rolTipo === 'admin-redes') {
+        // Admin-redes: solo bodegas tipo redes de su sede
+        const bodegasSede = await this.proyectosRepository.manager.query(
+          `SELECT bodegaId FROM bodegas WHERE sedeId = ? AND bodegaTipo = 'redes'`,
+          [usuarioSede],
+        );
+        bodegaIds = bodegasSede.map((b: any) => b.bodegaId);
+      } else if (rolTipo === 'bodega-internas' || rolTipo === 'bodega-redes') {
+        // Bodega: solo su bodega
+        bodegaIds = user.usuarioBodega ? [user.usuarioBodega] : [];
+      } else if (rolTipo === 'tecnico' || rolTipo === 'soldador') {
+        // Técnico/Soldador: solo proyectos de instalaciones asignadas a ellos
+        const instalacionesRaw = await this.proyectosRepository.manager.query(
+          `SELECT instalacionProyectos FROM instalaciones i
+             INNER JOIN instalaciones_usuarios iu ON i.instalacionId = iu.instalacionId
+             WHERE iu.usuarioId = ? AND iu.activo = 1 AND i.instalacionProyectos IS NOT NULL`,
+          [user.usuarioId],
+        );
+
+        const proyectoIdsSet = new Set<number>();
+        instalacionesRaw.forEach((row: any) => {
+          if (row.instalacionProyectos) {
+            try {
+              const proyectos =
+                typeof row.instalacionProyectos === 'string'
+                  ? JSON.parse(row.instalacionProyectos)
+                  : row.instalacionProyectos;
+              if (Array.isArray(proyectos)) {
+                proyectos.forEach((p: any) => {
+                  const proyectoId = typeof p === 'object' ? p.proyectoId || p.id : p;
+                  if (proyectoId) proyectoIdsSet.add(Number(proyectoId));
+                });
+              } else if (typeof proyectos === 'object' && proyectos.proyectoId) {
+                proyectoIdsSet.add(Number(proyectos.proyectoId));
+              }
+            } catch (e) {
+              // Ignorar errores de parsing JSON
+            }
+          }
+        });
+
+        const proyectoIds = Array.from(proyectoIdsSet);
+        if (proyectoIds.length > 0) {
+          return this.proyectosRepository
+            .createQueryBuilder('proyecto')
+            .leftJoinAndSelect('proyecto.items', 'items')
+            .where('proyecto.proyectoId IN (:...ids)', { ids: proyectoIds })
+            .getMany();
+        }
+        return [];
+      } else if (rolTipo === 'almacenista') {
+        // Almacenista: todas las bodegas de su sede
+        const bodegasSede = await this.proyectosRepository.manager.query(
+          `SELECT bodegaId FROM bodegas WHERE sedeId = ?`,
+          [usuarioSede],
+        );
+        bodegaIds = bodegasSede.map((b: any) => b.bodegaId);
+      }
+
+      // Obtener proyectos que pertenecen a instalaciones de esas bodegas
+      // instalacionProyectos es un JSON que puede contener objetos con proyectoId o arrays
+      if (bodegaIds.length > 0) {
+        const placeholders = bodegaIds.map(() => '?').join(',');
+        // Obtener todas las instalaciones de esas bodegas y extraer proyectoIds de instalacionProyectos
+        const instalacionesRaw = await this.proyectosRepository.manager.query(
+          `SELECT instalacionProyectos FROM instalaciones WHERE bodegaId IN (${placeholders}) AND instalacionProyectos IS NOT NULL`,
+          bodegaIds,
+        );
+
+        // Extraer proyectoIds únicos del JSON instalacionProyectos
+        const proyectoIdsSet = new Set<number>();
+        instalacionesRaw.forEach((row: any) => {
+          if (row.instalacionProyectos) {
+            try {
+              const proyectos =
+                typeof row.instalacionProyectos === 'string'
+                  ? JSON.parse(row.instalacionProyectos)
+                  : row.instalacionProyectos;
+              if (Array.isArray(proyectos)) {
+                proyectos.forEach((p: any) => {
+                  const proyectoId = typeof p === 'object' ? p.proyectoId || p.id : p;
+                  if (proyectoId) proyectoIdsSet.add(Number(proyectoId));
+                });
+              } else if (typeof proyectos === 'object' && proyectos.proyectoId) {
+                proyectoIdsSet.add(Number(proyectos.proyectoId));
+              }
+            } catch (e) {
+              // Ignorar errores de parsing JSON
+            }
+          }
+        });
+
+        const proyectoIds = Array.from(proyectoIdsSet);
+        if (proyectoIds.length > 0) {
+          return this.proyectosRepository
+            .createQueryBuilder('proyecto')
+            .leftJoinAndSelect('proyecto.items', 'items')
+            .where('proyecto.proyectoId IN (:...ids)', { ids: proyectoIds })
+            .getMany();
+        }
+        return [];
+      }
+      return [];
+    }
+
+    // SuperAdmin/Gerencia: todos los proyectos
     return this.proyectosRepository.find({ relations: ['items'] });
   }
 
