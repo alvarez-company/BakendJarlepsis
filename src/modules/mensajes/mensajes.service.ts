@@ -7,6 +7,8 @@ import { NotificacionesService } from '../notificaciones/notificaciones.service'
 import { UsuariosGruposService } from '../usuarios-grupos/usuarios-grupos.service';
 import { UsersService } from '../users/users.service';
 import { GruposService } from '../grupos/grupos.service';
+import { InstalacionesService } from '../instalaciones/instalaciones.service';
+import { TipoGrupo } from '../grupos/grupo.entity';
 
 @Injectable()
 export class MensajesService {
@@ -23,6 +25,8 @@ export class MensajesService {
     private usersService: UsersService,
     @Inject(forwardRef(() => GruposService))
     private gruposService: GruposService,
+    @Inject(forwardRef(() => InstalacionesService))
+    private instalacionesService: InstalacionesService,
   ) {}
 
   async enviarMensaje(
@@ -30,9 +34,10 @@ export class MensajesService {
     usuarioId: number,
     texto: string,
     mensajeRespuestaId?: number,
+    archivosAdjuntos?: string[] | { url: string }[],
   ): Promise<Mensaje> {
-    // Validar que el usuario esté activo
-    const usuario = await this.usersService.findOne(usuarioId);
+    // Validar que el usuario esté activo (findOneForAuth evita filtros de visibilidad)
+    const usuario = await this.usersService.findOneForAuth(usuarioId);
     if (!usuario || !usuario.usuarioEstado) {
       throw new BadRequestException(
         'No puedes enviar mensajes. Tu cuenta está bloqueada o inactiva.',
@@ -44,11 +49,31 @@ export class MensajesService {
     if (!grupo.grupoActivo) {
       throw new BadRequestException('Este chat ha sido cerrado y ya no permite nuevos mensajes.');
     }
+    const tieneTexto = typeof texto === 'string' && texto.trim().length > 0;
+    const tieneAdjuntos = archivosAdjuntos && archivosAdjuntos.length > 0;
+    if (!tieneTexto && !tieneAdjuntos) {
+      throw new BadRequestException('El mensaje debe tener texto o al menos una imagen.');
+    }
+    // Aceptar URLs (legacy) o data URLs (base64) para no almacenar archivos en el servidor
+    const MAX_BASE64_PER_ITEM = 4 * 1024 * 1024; // 4MB por adjunto
+    const adjuntos =
+      archivosAdjuntos && archivosAdjuntos.length > 0
+        ? archivosAdjuntos.map((a) => {
+            const str = typeof a === 'string' ? a : (a as { url: string }).url;
+            if (str.startsWith('data:') && str.length > MAX_BASE64_PER_ITEM) {
+              throw new BadRequestException(
+                'Una o más imágenes superan el tamaño máximo permitido (4MB). Comprime la imagen antes de enviar.',
+              );
+            }
+            return str;
+          })
+        : null;
     const mensaje = this.mensajesRepository.create({
       grupoId,
       usuarioId,
-      mensajeTexto: texto,
+      mensajeTexto: texto || '',
       mensajeRespuestaId,
+      archivosAdjuntos: adjuntos,
     });
 
     const mensajeGuardado = await this.mensajesRepository.save(mensaje);
@@ -75,6 +100,28 @@ export class MensajesService {
         mensajeGuardado.mensajeId,
         `${mensajeConRelaciones.usuario?.usuarioNombre} ${mensajeConRelaciones.usuario?.usuarioApellido}`,
       );
+    }
+
+    // Si el chat es de una instalación y el mensaje tiene adjuntos (solo URLs de servidor, no base64), registrarlos como anexos
+    const adjuntosUrls = adjuntos?.filter((a) => typeof a === 'string' && !a.startsWith('data:'));
+    if (adjuntosUrls && adjuntosUrls.length > 0) {
+      const grupoInstalacion =
+        mensajeConRelaciones.grupo ??
+        (await this.gruposService.obtenerGrupoPorId(grupoId).catch(() => null));
+      if (
+        grupoInstalacion &&
+        grupoInstalacion.tipoGrupo === TipoGrupo.INSTALACION &&
+        grupoInstalacion.entidadId != null
+      ) {
+        try {
+          await this.instalacionesService.agregarAnexos(grupoInstalacion.entidadId, adjuntosUrls);
+        } catch (error) {
+          console.error(
+            `[MensajesService] Error al registrar anexos en instalación ${grupoInstalacion.entidadId}:`,
+            error,
+          );
+        }
+      }
     }
 
     return mensajeConRelaciones;

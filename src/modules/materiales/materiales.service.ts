@@ -183,7 +183,7 @@ export class MaterialesService {
       });
 
       // Catálogo compartido: todos ven los mismos materiales. Stock y distribución (materialBodegas) solo del centro del usuario.
-      let listToReturn = allMateriales;
+      const listToReturn = allMateriales;
 
       // Si el usuario tiene centro operativo (sede), stock y materialBodegas solo de ese centro
       if (user?.usuarioSede) {

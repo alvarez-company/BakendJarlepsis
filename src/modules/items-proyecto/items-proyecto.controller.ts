@@ -30,7 +30,7 @@ export class ItemsProyectoController {
   }
 
   @Get()
-  @Roles('superadmin', 'admin', 'tecnico')
+  @Roles('superadmin', 'admin', 'tecnico', 'soldador')
   findAll(@Query('proyectoId') proyectoId?: string) {
     if (proyectoId) {
       return this.service.findByProyecto(+proyectoId);
@@ -39,7 +39,7 @@ export class ItemsProyectoController {
   }
 
   @Get(':id')
-  @Roles('superadmin', 'admin', 'tecnico')
+  @Roles('superadmin', 'admin', 'tecnico', 'soldador')
   findOne(@Param('id') id: string) {
     return this.service.findOne(+id);
   }

@@ -133,7 +133,8 @@ export class InstalacionesMaterialesService {
             const usuario = u.usuario || u;
             return (
               usuario &&
-              (usuario.usuarioRol?.rolTipo === 'tecnico' || usuario.rolTipo === 'tecnico')
+              ((usuario.usuarioRol?.rolTipo ?? usuario.rolTipo) === 'tecnico' ||
+                (usuario.usuarioRol?.rolTipo ?? usuario.rolTipo) === 'soldador')
             );
           });
 
@@ -315,7 +316,8 @@ export class InstalacionesMaterialesService {
             const usuario = u.usuario || u;
             return (
               usuario &&
-              (usuario.usuarioRol?.rolTipo === 'tecnico' || usuario.rolTipo === 'tecnico')
+              ((usuario.usuarioRol?.rolTipo ?? usuario.rolTipo) === 'tecnico' ||
+                (usuario.usuarioRol?.rolTipo ?? usuario.rolTipo) === 'soldador')
             );
           });
 
@@ -419,7 +421,8 @@ export class InstalacionesMaterialesService {
             const usuario = u.usuario || u;
             return (
               usuario &&
-              (usuario.usuarioRol?.rolTipo === 'tecnico' || usuario.rolTipo === 'tecnico')
+              ((usuario.usuarioRol?.rolTipo ?? usuario.rolTipo) === 'tecnico' ||
+                (usuario.usuarioRol?.rolTipo ?? usuario.rolTipo) === 'soldador')
             );
           });
 
@@ -567,7 +570,9 @@ export class InstalacionesMaterialesService {
       const tecnicoAsignado = instalacion.usuariosAsignados.find((u: any) => {
         const usuario = u.usuario || u;
         return (
-          usuario && (usuario.usuarioRol?.rolTipo === 'tecnico' || usuario.rolTipo === 'tecnico')
+          usuario &&
+          ((usuario.usuarioRol?.rolTipo ?? usuario.rolTipo) === 'tecnico' ||
+            (usuario.usuarioRol?.rolTipo ?? usuario.rolTipo) === 'soldador')
         );
       });
 
@@ -630,7 +635,9 @@ export class InstalacionesMaterialesService {
       const tecnicoAsignado = instalacion.usuariosAsignados.find((u: any) => {
         const usuario = u.usuario || u;
         return (
-          usuario && (usuario.usuarioRol?.rolTipo === 'tecnico' || usuario.rolTipo === 'tecnico')
+          usuario &&
+          ((usuario.usuarioRol?.rolTipo ?? usuario.rolTipo) === 'tecnico' ||
+            (usuario.usuarioRol?.rolTipo ?? usuario.rolTipo) === 'soldador')
         );
       });
 

@@ -231,7 +231,11 @@ export class AsignacionesTecnicosService {
     });
   }
 
-  async update(id: number, updateDto: Partial<AsignacionTecnico>, user?: any): Promise<AsignacionTecnico> {
+  async update(
+    id: number,
+    updateDto: Partial<AsignacionTecnico>,
+    user?: any,
+  ): Promise<AsignacionTecnico> {
     const asignacion = await this.findOne(id, user);
     Object.assign(asignacion, updateDto);
     return await this.asignacionesRepository.save(asignacion);

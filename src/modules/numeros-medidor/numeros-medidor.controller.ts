@@ -14,10 +14,26 @@ import { NumerosMedidorService } from './numeros-medidor.service';
 import { CreateNumeroMedidorDto, UpdateNumeroMedidorDto } from './dto/create-numero-medidor.dto';
 import { EstadoNumeroMedidor } from './numero-medidor.entity';
 import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard';
+import { RolesGuard } from '../../common/guards/roles.guard';
+import { Roles } from '../../common/decorators/roles.decorator';
 import { PaginationDto } from '../../common/dto/pagination.dto';
 
+const ROLES_NUMEROS_MEDIDOR = [
+  'superadmin',
+  'gerencia',
+  'admin',
+  'admin-internas',
+  'admin-redes',
+  'almacenista',
+  'tecnico',
+  'soldador',
+  'bodega-internas',
+  'bodega-redes',
+] as const;
+
 @Controller('numeros-medidor')
-@UseGuards(JwtAuthGuard)
+@UseGuards(JwtAuthGuard, RolesGuard)
+@Roles(...ROLES_NUMEROS_MEDIDOR)
 export class NumerosMedidorController {
   constructor(private readonly numerosMedidorService: NumerosMedidorService) {}
 
@@ -28,7 +44,11 @@ export class NumerosMedidorController {
 
   @Post('crear-multiples')
   crearMultiples(
-    @Body() body: { materialId: number; items: Array<{ numeroMedidor: string; bodegaId?: number }> },
+    @Body()
+    body: {
+      materialId: number;
+      items: Array<{ numeroMedidor: string; bodegaId?: number }>;
+    },
   ) {
     const items = body.items ?? [];
     return this.numerosMedidorService.crearMultiples(body.materialId, items);

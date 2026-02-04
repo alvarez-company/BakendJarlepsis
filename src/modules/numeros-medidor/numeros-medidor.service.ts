@@ -112,12 +112,13 @@ export class NumerosMedidorService {
     return resultados;
   }
 
-  /** Filtra números de medidor por centro operativo (sede): bodega del centro o técnicos del centro */
+  /** Filtra números de medidor por centro operativo (sede): bodega del centro, técnicos del centro, o disponibles sin bodega (asignables desde el centro) */
   private filterBySede(numeros: NumeroMedidor[], sedeId: number): NumeroMedidor[] {
     return numeros.filter((n: any) => {
       if (n.bodega?.sedeId === sedeId) return true;
       if (n.usuario?.usuarioSede === sedeId) return true;
-      if (!n.bodegaId && !n.usuarioId) return false; // sin bodega ni técnico: no mostrar a otros centros
+      // Números disponibles sin bodega ni técnico: visibles para el centro (se pueden asignar desde cualquier bodega del centro)
+      if (!n.bodegaId && !n.usuarioId) return true;
       return false;
     });
   }
@@ -169,7 +170,14 @@ export class NumerosMedidorService {
 
     let numeros = await this.numerosMedidorRepository.find({
       where,
-      relations: ['material', 'usuario', 'inventarioTecnico', 'instalacionMaterial', 'bodega', 'bodega.sede'],
+      relations: [
+        'material',
+        'usuario',
+        'inventarioTecnico',
+        'instalacionMaterial',
+        'bodega',
+        'bodega.sede',
+      ],
     });
     if (user?.usuarioSede) {
       numeros = this.filterBySede(numeros, user.usuarioSede);

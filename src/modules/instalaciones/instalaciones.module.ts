@@ -20,10 +20,12 @@ import { InventarioTecnicoModule } from '../inventario-tecnico/inventario-tecnic
 import { UsersModule } from '../users/users.module';
 import { NumerosMedidorModule } from '../numeros-medidor/numeros-medidor.module';
 import { AuthModule } from '../auth/auth.module';
+import { BodegasModule } from '../bodegas/bodegas.module';
 
 @Module({
   imports: [
     TypeOrmModule.forFeature([Instalacion, Cliente]),
+    forwardRef(() => BodegasModule),
     forwardRef(() => ChatModule),
     forwardRef(() => NotificacionesModule),
     forwardRef(() => InstalacionesUsuariosModule),

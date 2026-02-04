@@ -12,7 +12,9 @@ export class AddBodegaIdToNumerosMedidor1769790400000 implements MigrationInterf
     const hasBodegaId = table?.columns.some((c) => c.name === 'bodegaId');
     if (!hasBodegaId) {
       await queryRunner.query(`ALTER TABLE \`numeros_medidor\` ADD COLUMN \`bodegaId\` INT NULL`);
-      await queryRunner.query(`CREATE INDEX \`IDX_numeros_medidor_bodega\` ON \`numeros_medidor\` (\`bodegaId\`)`);
+      await queryRunner.query(
+        `CREATE INDEX \`IDX_numeros_medidor_bodega\` ON \`numeros_medidor\` (\`bodegaId\`)`,
+      );
       await queryRunner.query(`
         ALTER TABLE \`numeros_medidor\`
         ADD CONSTRAINT \`FK_numeros_medidor_bodega\`
@@ -22,7 +24,9 @@ export class AddBodegaIdToNumerosMedidor1769790400000 implements MigrationInterf
   }
 
   public async down(queryRunner: QueryRunner): Promise<void> {
-    await queryRunner.query(`ALTER TABLE \`numeros_medidor\` DROP FOREIGN KEY \`FK_numeros_medidor_bodega\``);
+    await queryRunner.query(
+      `ALTER TABLE \`numeros_medidor\` DROP FOREIGN KEY \`FK_numeros_medidor_bodega\``,
+    );
     await queryRunner.query(`DROP INDEX \`IDX_numeros_medidor_bodega\` ON \`numeros_medidor\``);
     await queryRunner.query(`ALTER TABLE \`numeros_medidor\` DROP COLUMN \`bodegaId\``);
   }

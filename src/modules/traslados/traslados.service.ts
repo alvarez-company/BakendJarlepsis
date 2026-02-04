@@ -236,7 +236,13 @@ export class TrasladosService {
               .skip(skip)
               .take(limit);
             const rolTipoFb = user?.usuarioRol?.rolTipo || user?.role;
-            const rolesFb = ['admin', 'admin-internas', 'admin-redes', 'bodega-internas', 'bodega-redes'];
+            const rolesFb = [
+              'admin',
+              'admin-internas',
+              'admin-redes',
+              'bodega-internas',
+              'bodega-redes',
+            ];
             if (user && rolesFb.includes(rolTipoFb)) {
               const bodegasFb = await this.bodegasService.findAll(user);
               const idsFb = bodegasFb.map((b) => b.bodegaId);

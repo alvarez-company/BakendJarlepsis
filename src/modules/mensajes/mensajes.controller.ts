@@ -15,7 +15,10 @@ export class MensajesController {
   @Post('enviar')
   @Roles(
     'superadmin',
+    'gerencia',
     'admin',
+    'admin-internas',
+    'admin-redes',
     'almacenista',
     'tecnico',
     'soldador',
@@ -24,20 +27,30 @@ export class MensajesController {
   )
   enviarMensaje(
     @Request() req,
-    @Body() body: { grupoId: number; texto: string; mensajeRespuestaId?: number },
+    @Body()
+    body: {
+      grupoId: number;
+      texto: string;
+      mensajeRespuestaId?: number;
+      archivosAdjuntos?: string[] | { url: string }[];
+    },
   ) {
     return this.service.enviarMensaje(
       body.grupoId,
       req.user.usuarioId,
       body.texto,
       body.mensajeRespuestaId,
+      body.archivosAdjuntos,
     );
   }
 
   @Get('grupo/:grupoId')
   @Roles(
     'superadmin',
+    'gerencia',
     'admin',
+    'admin-internas',
+    'admin-redes',
     'almacenista',
     'tecnico',
     'soldador',
@@ -55,7 +68,10 @@ export class MensajesController {
   @Post(':mensajeId/editar')
   @Roles(
     'superadmin',
+    'gerencia',
     'admin',
+    'admin-internas',
+    'admin-redes',
     'almacenista',
     'tecnico',
     'soldador',
@@ -73,7 +89,10 @@ export class MensajesController {
   @Post(':mensajeId/eliminar')
   @Roles(
     'superadmin',
+    'gerencia',
     'admin',
+    'admin-internas',
+    'admin-redes',
     'almacenista',
     'tecnico',
     'soldador',

@@ -91,6 +91,10 @@ export class Instalacion {
   @Column({ type: 'text', nullable: true })
   observacionesTecnico: string; // Observaciones específicas del técnico
 
+  /** URLs de fotos/archivos subidos en el chat de la instalación (anexos). */
+  @Column({ type: 'json', nullable: true })
+  instalacionAnexos: string[] | null;
+
   @Column({
     type: 'enum',
     enum: EstadoInstalacion,

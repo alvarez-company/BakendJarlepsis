@@ -66,16 +66,18 @@ export class InstalacionesUsuariosService {
         relations: ['usuarioRol'],
       });
 
-      const usuariosNoTecnicos = usuariosEntities.filter(
-        (u) => !u.usuarioRol || u.usuarioRol.rolTipo !== 'tecnico',
+      const usuariosNoTecnicosNiSoldadores = usuariosEntities.filter(
+        (u) =>
+          !u.usuarioRol ||
+          (u.usuarioRol.rolTipo !== 'tecnico' && u.usuarioRol.rolTipo !== 'soldador'),
       );
 
-      if (usuariosNoTecnicos.length > 0) {
-        const nombresNoTecnicos = usuariosNoTecnicos
+      if (usuariosNoTecnicosNiSoldadores.length > 0) {
+        const nombres = usuariosNoTecnicosNiSoldadores
           .map((u) => `${u.usuarioNombre} ${u.usuarioApellido}`)
           .join(', ');
         throw new BadRequestException(
-          `Solo se pueden asignar técnicos a las instalaciones. Los siguientes usuarios no son técnicos: ${nombresNoTecnicos}`,
+          `Solo se pueden asignar técnicos o soldadores a las instalaciones. Los siguientes usuarios no tienen ese rol: ${nombres}`,
         );
       }
     }

@@ -19,13 +19,13 @@ export class TiposProyectoController {
   }
 
   @Get()
-  @Roles('superadmin', 'admin', 'tecnico')
+  @Roles('superadmin', 'admin', 'tecnico', 'soldador')
   findAll() {
     return this.service.findAll();
   }
 
   @Get(':id')
-  @Roles('superadmin', 'admin', 'tecnico')
+  @Roles('superadmin', 'admin', 'tecnico', 'soldador')
   findOne(@Param('id') id: string) {
     return this.service.findOne(+id);
   }

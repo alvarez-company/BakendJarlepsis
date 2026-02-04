@@ -62,22 +62,151 @@ export class ClientesService {
 
   async findAll(user?: any): Promise<Cliente[]> {
     try {
-      // Cargar clientes directamente usando find() - TypeORM manejará automáticamente los campos de la entidad
-      let clientes = await this.clientesRepository.find({
-        select: [
-          'clienteId',
-          'nombreUsuario',
-          'clienteTelefono',
-          'clienteDireccion',
-          'clienteBarrio',
-          'municipioId',
-          'cantidadInstalaciones',
-          'clienteEstado',
-          'usuarioRegistra',
-          'fechaCreacion',
-          'fechaActualizacion',
-        ],
-      });
+      // Filtrar por centro operativo: solo clientes que tienen instalaciones en bodegas de la sede del usuario
+      const rolTipo = user?.usuarioRol?.rolTipo || user?.role || '';
+      const usuarioSede = user?.usuarioSede;
+      let clientes: Cliente[] = [];
+
+      if (usuarioSede != null) {
+        // Obtener bodegas de la sede según el rol
+        let bodegaIds: number[] = [];
+        if (rolTipo === 'admin') {
+          // Admin: todas las bodegas de su sede
+          const bodegasSede = await this.clientesRepository.manager.query(
+            `SELECT bodegaId FROM bodegas WHERE sedeId = ?`,
+            [usuarioSede],
+          );
+          bodegaIds = bodegasSede.map((b: any) => b.bodegaId);
+        } else if (rolTipo === 'admin-internas') {
+          // Admin-internas: solo bodegas tipo internas de su sede
+          const bodegasSede = await this.clientesRepository.manager.query(
+            `SELECT bodegaId FROM bodegas WHERE sedeId = ? AND bodegaTipo = 'internas'`,
+            [usuarioSede],
+          );
+          bodegaIds = bodegasSede.map((b: any) => b.bodegaId);
+        } else if (rolTipo === 'admin-redes') {
+          // Admin-redes: solo bodegas tipo redes de su sede
+          const bodegasSede = await this.clientesRepository.manager.query(
+            `SELECT bodegaId FROM bodegas WHERE sedeId = ? AND bodegaTipo = 'redes'`,
+            [usuarioSede],
+          );
+          bodegaIds = bodegasSede.map((b: any) => b.bodegaId);
+        } else if (rolTipo === 'bodega-internas' || rolTipo === 'bodega-redes') {
+          // Bodega: solo su bodega
+          bodegaIds = user.usuarioBodega ? [user.usuarioBodega] : [];
+        } else if (rolTipo === 'tecnico' || rolTipo === 'soldador') {
+          // Técnico/Soldador: solo clientes de instalaciones asignadas a ellos
+          const clienteIdsRaw = await this.clientesRepository.manager.query(
+            `SELECT DISTINCT i.clienteId 
+             FROM instalaciones i
+             INNER JOIN instalaciones_usuarios iu ON i.instalacionId = iu.instalacionId
+             WHERE iu.usuarioId = ? AND iu.activo = 1`,
+            [user.usuarioId],
+          );
+          const clienteIds = clienteIdsRaw.map((c: any) => c.clienteId);
+          if (clienteIds.length > 0) {
+            const placeholdersClientes = clienteIds.map(() => '?').join(',');
+            clientes = await this.clientesRepository
+              .createQueryBuilder('cliente')
+              .select([
+                'cliente.clienteId',
+                'cliente.nombreUsuario',
+                'cliente.clienteTelefono',
+                'cliente.clienteDireccion',
+                'cliente.clienteBarrio',
+                'cliente.municipioId',
+                'cliente.cantidadInstalaciones',
+                'cliente.clienteEstado',
+                'cliente.usuarioRegistra',
+                'cliente.fechaCreacion',
+                'cliente.fechaActualizacion',
+              ])
+              .where(`cliente.clienteId IN (${placeholdersClientes})`, clienteIds)
+              .getMany();
+          } else {
+            clientes = [];
+          }
+          // Saltar el resto del código y retornar directamente
+          for (const cliente of clientes) {
+            try {
+              const resultado = await this.clientesRepository.query(
+                `SELECT COUNT(*) as cantidad FROM instalaciones WHERE clienteId = ? AND estado = 'finalizada'`,
+                [cliente.clienteId],
+              );
+              const cantidadFinalizadas = resultado[0]?.cantidad || 0;
+              if (cliente.cantidadInstalaciones !== cantidadFinalizadas) {
+                await this.clientesRepository
+                  .createQueryBuilder()
+                  .update(Cliente)
+                  .set({ cantidadInstalaciones: cantidadFinalizadas })
+                  .where('clienteId = :id', { id: cliente.clienteId })
+                  .execute();
+                cliente.cantidadInstalaciones = cantidadFinalizadas;
+              }
+            } catch (error) {
+              console.error(
+                `Error al recalcular cantidadInstalaciones para cliente ${cliente.clienteId}:`,
+                error,
+              );
+            }
+          }
+          return clientes;
+        } else if (rolTipo === 'almacenista') {
+          // Almacenista: todas las bodegas de su sede
+          const bodegasSede = await this.clientesRepository.manager.query(
+            `SELECT bodegaId FROM bodegas WHERE sedeId = ?`,
+            [usuarioSede],
+          );
+          bodegaIds = bodegasSede.map((b: any) => b.bodegaId);
+        }
+
+        // Obtener clientes que tienen instalaciones en esas bodegas
+        if (bodegaIds.length > 0) {
+          const placeholders = bodegaIds.map(() => '?').join(',');
+          const clienteIdsRaw = await this.clientesRepository.query(
+            `SELECT DISTINCT clienteId FROM instalaciones WHERE bodegaId IN (${placeholders})`,
+            bodegaIds,
+          );
+          const clienteIds = clienteIdsRaw.map((c: any) => c.clienteId);
+          if (clienteIds.length > 0) {
+            const placeholdersClientes = clienteIds.map(() => '?').join(',');
+            clientes = await this.clientesRepository
+              .createQueryBuilder('cliente')
+              .select([
+                'cliente.clienteId',
+                'cliente.nombreUsuario',
+                'cliente.clienteTelefono',
+                'cliente.clienteDireccion',
+                'cliente.clienteBarrio',
+                'cliente.municipioId',
+                'cliente.cantidadInstalaciones',
+                'cliente.clienteEstado',
+                'cliente.usuarioRegistra',
+                'cliente.fechaCreacion',
+                'cliente.fechaActualizacion',
+              ])
+              .where(`cliente.clienteId IN (${placeholdersClientes})`, clienteIds)
+              .getMany();
+          }
+        }
+      } else {
+        // SuperAdmin/Gerencia: todos los clientes
+        clientes = await this.clientesRepository.find({
+          select: [
+            'clienteId',
+            'nombreUsuario',
+            'clienteTelefono',
+            'clienteDireccion',
+            'clienteBarrio',
+            'municipioId',
+            'cantidadInstalaciones',
+            'clienteEstado',
+            'usuarioRegistra',
+            'fechaCreacion',
+            'fechaActualizacion',
+          ],
+        });
+      }
 
       // Recalcular cantidadInstalaciones para cada cliente (solo finalizadas)
       // y obtener información de instalación asignada
@@ -126,22 +255,6 @@ export class ClientesService {
             error,
           );
         }
-      }
-
-      // Restricción por centro operativo: admin / admin-internas / admin-redes solo ven clientes con al menos una instalación en bodega de su sede
-      const rolTipo = (user?.usuarioRol?.rolTipo ?? user?.role ?? '').toString().toLowerCase();
-      const sedeRestricted =
-        (rolTipo === 'admin' || rolTipo === 'admin-internas' || rolTipo === 'admin-redes') &&
-        user?.usuarioSede;
-      if (sedeRestricted) {
-        const rows = await this.clientesRepository.query(
-          `SELECT DISTINCT i.clienteId FROM instalaciones i
-           INNER JOIN bodegas b ON i.bodegaId = b.bodegaId
-           WHERE b.sedeId = ?`,
-          [user.usuarioSede],
-        );
-        const allowedClienteIds = new Set((rows || []).map((r: any) => r.clienteId));
-        clientes = clientes.filter((c) => allowedClienteIds.has(c.clienteId));
       }
 
       return clientes;

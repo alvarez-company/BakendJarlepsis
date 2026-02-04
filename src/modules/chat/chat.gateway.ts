@@ -102,7 +102,7 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect {
     const roomName = `grupo_${data.grupoId}`;
 
     await client.join(roomName);
-    this.logger.log(`Usuario ${userId} se unió al grupo ${data.grupoId}`);
+    this.logger.debug(`Usuario ${userId} se unió al grupo ${data.grupoId}`);
 
     return {
       event: 'grupo_unido',
@@ -119,7 +119,7 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect {
     const roomName = `grupo_${data.grupoId}`;
 
     await client.leave(roomName);
-    this.logger.log(`Usuario ${userId} salió del grupo ${data.grupoId}`);
+    this.logger.debug(`Usuario ${userId} salió del grupo ${data.grupoId}`);
 
     return {
       event: 'grupo_abandonado',
@@ -130,7 +130,7 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect {
   // Métodos públicos para emitir eventos desde otros servicios
   emitirMensajeNuevo(grupoId: number, mensaje: any) {
     this.server.to(`grupo_${grupoId}`).emit('mensaje_nuevo', mensaje);
-    this.logger.log(`Mensaje nuevo emitido al grupo ${grupoId}`);
+    this.logger.debug(`Mensaje nuevo emitido al grupo ${grupoId}`);
   }
 
   emitirReaccionMensaje(grupoId: number, reaccion: any) {
@@ -141,11 +141,9 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect {
     const socketId = this.users.get(usuarioId);
     if (socketId) {
       this.server.to(socketId).emit('notificacion_nueva', notificacion);
-      this.logger.log(`Notificación enviada al usuario ${usuarioId} (socket: ${socketId})`);
+      this.logger.debug(`Notificación enviada al usuario ${usuarioId}`);
     } else {
-      this.logger.warn(
-        `Usuario ${usuarioId} no está conectado, notificación guardada pero no emitida`,
-      );
+      this.logger.debug(`Usuario ${usuarioId} no conectado (notificación guardada en BD)`);
     }
   }
 
@@ -180,7 +178,7 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect {
     const socketId = this.users.get(usuarioId);
     if (socketId) {
       this.server.to(socketId).emit('notificaciones_leidas');
-      this.logger.log(`Evento notificaciones_leidas enviado al usuario ${usuarioId}`);
+      this.logger.debug(`Evento notificaciones_leidas enviado al usuario ${usuarioId}`);
     }
   }
 
@@ -205,6 +203,6 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect {
 
   emitirMensajeSistema(grupoId: number, mensaje: any) {
     this.server.to(`grupo_${grupoId}`).emit('mensaje_nuevo', mensaje);
-    this.logger.log(`Mensaje del sistema emitido al grupo ${grupoId}`);
+    this.logger.debug(`Mensaje del sistema emitido al grupo ${grupoId}`);
   }
 }

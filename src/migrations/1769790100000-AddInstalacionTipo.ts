@@ -17,8 +17,6 @@ export class AddInstalacionTipo1769790100000 implements MigrationInterface {
   }
 
   public async down(queryRunner: QueryRunner): Promise<void> {
-    await queryRunner.query(
-      `ALTER TABLE \`instalaciones\` DROP COLUMN \`instalacionTipo\``,
-    );
+    await queryRunner.query(`ALTER TABLE \`instalaciones\` DROP COLUMN \`instalacionTipo\``);
   }
 }

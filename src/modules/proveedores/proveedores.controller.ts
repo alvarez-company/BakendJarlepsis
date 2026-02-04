@@ -22,14 +22,14 @@ export class ProveedoresController {
   }
 
   @Get()
-  @Roles('superadmin', 'admin', 'tecnico')
+  @Roles('superadmin', 'admin', 'tecnico', 'soldador')
   @ApiOperation({ summary: 'Get all proveedores' })
   findAll() {
     return this.proveedoresService.findAll();
   }
 
   @Get(':id')
-  @Roles('superadmin', 'admin', 'tecnico')
+  @Roles('superadmin', 'admin', 'tecnico', 'soldador')
   @ApiOperation({ summary: 'Get a proveedor by ID' })
   findOne(@Param('id') id: string) {
     return this.proveedoresService.findOne(+id);

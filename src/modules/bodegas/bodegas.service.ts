@@ -28,6 +28,29 @@ export class BodegasService {
     private rolesService: RolesService,
   ) {}
 
+  /**
+   * Obtiene o crea la única bodega de instalaciones por centro operativo (sede).
+   * Es una sola bodega por sede, compartida por todas las instalaciones que queden en estado NOVEDAD.
+   * Se usa cuando alguna instalación pasa a "novedad" para tener la estructura de bodega/inventario.
+   * No se crean movimientos (entradas) aquí: el stock no debe verse afectado; los materiales ya fueron
+   * descontados del técnico. Para saber dónde están los materiales, consultar instalaciones_materiales
+   * de las instalaciones con estado NOVEDAD.
+   */
+  async findOrCreateBodegaInstalaciones(sedeId: number): Promise<Bodega> {
+    const existing = await this.bodegasRepository.findOne({
+      where: { sedeId, bodegaTipo: 'instalaciones' },
+    });
+    if (existing) return existing;
+    const bodega = this.bodegasRepository.create({
+      bodegaNombre: 'Bodega de instalaciones',
+      bodegaDescripcion: 'Materiales de instalaciones con novedad técnica',
+      bodegaTipo: 'instalaciones',
+      sedeId,
+      bodegaEstado: true,
+    });
+    return this.bodegasRepository.save(bodega);
+  }
+
   async create(createBodegaDto: CreateBodegaDto, user?: any): Promise<Bodega> {
     const tipo = (createBodegaDto.bodegaTipo || '').toLowerCase();
     if (tipo !== 'internas' && tipo !== 'redes') {
@@ -40,7 +63,9 @@ export class BodegasService {
       const sedeId = user.usuarioSede ?? user.sede?.sedeId;
       if (rolTipo === 'admin') {
         if (sedeId == null) {
-          throw new BadRequestException('Tu usuario no tiene centro operativo asignado. No puedes crear bodegas.');
+          throw new BadRequestException(
+            'Tu usuario no tiene centro operativo asignado. No puedes crear bodegas.',
+          );
         }
         if (createBodegaDto.sedeId !== sedeId) {
           throw new BadRequestException('Solo puedes crear bodegas en tu centro operativo.');
@@ -187,17 +212,21 @@ export class BodegasService {
       return [];
     }
 
-    // Administrador de Internas - solo bodegas tipo internas de su sede
+    // Administrador de Internas - bodegas tipo internas y bodega de instalaciones de su sede
     if (user?.usuarioRol?.rolTipo === 'admin-internas' || user?.role === 'admin-internas') {
       return allBodegas.filter(
-        (bodega) => bodega.sedeId === user.usuarioSede && bodega.bodegaTipo === 'internas',
+        (bodega) =>
+          bodega.sedeId === user.usuarioSede &&
+          (bodega.bodegaTipo === 'internas' || bodega.bodegaTipo === 'instalaciones'),
       );
     }
 
-    // Administrador de Redes - solo bodegas tipo redes de su sede
+    // Administrador de Redes - bodegas tipo redes y bodega de instalaciones de su sede
     if (user?.usuarioRol?.rolTipo === 'admin-redes' || user?.role === 'admin-redes') {
       return allBodegas.filter(
-        (bodega) => bodega.sedeId === user.usuarioSede && bodega.bodegaTipo === 'redes',
+        (bodega) =>
+          bodega.sedeId === user.usuarioSede &&
+          (bodega.bodegaTipo === 'redes' || bodega.bodegaTipo === 'instalaciones'),
       );
     }
 

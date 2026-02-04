@@ -245,7 +245,9 @@ describe('InstalacionesService - Permisos', () => {
       mockUsersService.findOne.mockResolvedValue(user);
       jest.spyOn(service, 'findOne').mockResolvedValue(mockInstalacion as any);
 
-      await expect(service.update(1, { instalacionCodigo: 'INST-002' }, 1, user)).resolves.toBeDefined();
+      await expect(
+        service.update(1, { instalacionCodigo: 'INST-002' }, 1, user),
+      ).resolves.toBeDefined();
     });
   });
 

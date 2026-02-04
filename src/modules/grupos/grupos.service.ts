@@ -210,11 +210,10 @@ export class GruposService {
       }
 
       // Si no existe, crear uno nuevo
-      // Validar que ambos usuarios existan
+      // Validar que ambos usuarios existan (findOneForAuth evita filtros de visibilidad, p. ej. usuario sistema)
       let usuario1, usuario2;
       try {
-        usuario1 = await this.usersService.findOne(usuarioId1);
-        // Validar que el usuario esté activo
+        usuario1 = await this.usersService.findOneForAuth(usuarioId1);
         if (!usuario1 || !usuario1.usuarioEstado) {
           throw new BadRequestException(
             `No se puede crear un chat con un usuario bloqueado o inactivo`,
@@ -222,18 +221,12 @@ export class GruposService {
         }
       } catch (error) {
         console.error(`[GruposService] Error al buscar usuario ${usuarioId1}:`, error);
-        if (error instanceof NotFoundException) {
-          throw new NotFoundException(`Usuario con ID ${usuarioId1} no encontrado`);
-        }
-        if (error instanceof BadRequestException) {
-          throw error;
-        }
-        throw error;
+        if (error instanceof BadRequestException) throw error;
+        throw new NotFoundException(`Usuario con ID ${usuarioId1} no encontrado`);
       }
 
       try {
-        usuario2 = await this.usersService.findOne(usuarioId2);
-        // Validar que el usuario esté activo
+        usuario2 = await this.usersService.findOneForAuth(usuarioId2);
         if (!usuario2 || !usuario2.usuarioEstado) {
           throw new BadRequestException(
             `No se puede crear un chat con un usuario bloqueado o inactivo`,
@@ -241,13 +234,8 @@ export class GruposService {
         }
       } catch (error) {
         console.error(`[GruposService] Error al buscar usuario ${usuarioId2}:`, error);
-        if (error instanceof NotFoundException) {
-          throw new NotFoundException(`Usuario con ID ${usuarioId2} no encontrado`);
-        }
-        if (error instanceof BadRequestException) {
-          throw error;
-        }
-        throw error;
+        if (error instanceof BadRequestException) throw error;
+        throw new NotFoundException(`Usuario con ID ${usuarioId2} no encontrado`);
       }
 
       const nombreUsuario1 =
@@ -330,12 +318,14 @@ export class GruposService {
 
   async obtenerMisGrupos(usuarioId: number): Promise<Grupo[]> {
     try {
-      // Obtener el usuario para verificar si es superadmin y sus asignaciones
-      const usuario = await this.usersService.findOne(usuarioId);
-      const esSuperadmin = usuario?.usuarioRol?.rolTipo === 'superadmin';
+      // Obtener el usuario para verificar su rol y asignaciones (findOneForAuth evita filtros de visibilidad)
+      const usuario = await this.usersService.findOneForAuth(usuarioId);
+      const rolTipo = usuario?.usuarioRol?.rolTipo?.toLowerCase() ?? '';
+      const esGerencia = rolTipo === 'gerencia';
+      const esSuperadmin = rolTipo === 'superadmin';
 
-      // Si es superadmin, retornar todos los grupos activos
-      if (esSuperadmin) {
+      // Solo gerencia puede ver todos los chats (superadmin también por compatibilidad)
+      if (esGerencia || esSuperadmin) {
         const todosLosGrupos = await this.gruposRepository.find({
           where: { grupoActivo: true },
           order: { fechaCreacion: 'DESC' },
@@ -343,7 +333,7 @@ export class GruposService {
         return todosLosGrupos;
       }
 
-      // Si no es superadmin, filtrar grupos según asignaciones
+      // Si no es gerencia, filtrar grupos según asignaciones
       const gruposAsignados = await this.gruposRepository
         .createQueryBuilder('grupo')
         .innerJoin('grupo.usuariosGrupo', 'usuarioGrupo')
@@ -353,7 +343,7 @@ export class GruposService {
         .getMany();
 
       // Filtrar grupos según las asignaciones del usuario
-      const gruposFiltrados = gruposAsignados.filter((grupo) => {
+      const gruposFiltradosIniciales = gruposAsignados.filter((grupo) => {
         // Siempre incluir grupo general y chats directos
         if (grupo.tipoGrupo === TipoGrupo.GENERAL || grupo.tipoGrupo === TipoGrupo.DIRECTO) {
           return true;
@@ -368,15 +358,127 @@ export class GruposService {
           return usuario?.usuarioBodega === grupo.entidadId;
         }
 
-        // Para instalaciones: verificar que el usuario esté asignado a esa instalación
+        // Para instalaciones: se verifica después de manera asíncrona
         if (grupo.tipoGrupo === TipoGrupo.INSTALACION && grupo.entidadId) {
-          // Verificar si el usuario está asignado a esta instalación
-          // Esto se verifica por la relación UsuarioGrupo, así que si llegó aquí, está asignado
+          // Se procesará después de manera asíncrona
           return true;
         }
 
         return false;
       });
+
+      // Filtrar grupos de instalaciones de manera asíncrona
+      const gruposInstalaciones = gruposFiltradosIniciales.filter(
+        (g) => g.tipoGrupo === TipoGrupo.INSTALACION && g.entidadId,
+      );
+      const otrosGrupos = gruposFiltradosIniciales.filter(
+        (g) => g.tipoGrupo !== TipoGrupo.INSTALACION || !g.entidadId,
+      );
+
+      // Verificar instalaciones de manera asíncrona
+      const instalacionesValidas = await Promise.all(
+        gruposInstalaciones.map(async (grupo) => {
+          try {
+            // Obtener información de la instalación (sin duplicados por usuarios asignados)
+            const instalacionInfo = await this.gruposRepository.query(
+              `SELECT DISTINCT i.instalacionId, i.instalacionTipo, b.sedeId
+               FROM instalaciones i
+               LEFT JOIN bodegas b ON i.bodegaId = b.bodegaId
+               WHERE i.instalacionId = ?`,
+              [grupo.entidadId],
+            );
+
+            if (instalacionInfo.length === 0) {
+              // Si no encontramos la instalación, pero el usuario está en el grupo, incluirlo
+              // (puede ser una instalación eliminada o con problemas de datos)
+              return grupo;
+            }
+
+            const instalacion = instalacionInfo[0];
+            const instalacionSedeId = instalacion.sedeId;
+            const instalacionTipo = instalacion.instalacionTipo?.toLowerCase();
+
+            // Para técnicos y soldadores: si están en el grupo, siempre mostrar la instalación
+            // (ya están asignados, por eso están en el grupo)
+            if (rolTipo === 'tecnico' || rolTipo === 'soldador') {
+              return grupo;
+            }
+
+            // Verificar que la instalación pertenezca al centro operativo del usuario
+            // Solo si el usuario tiene sede asignada y la instalación tiene sede
+            if (
+              usuario?.usuarioSede &&
+              instalacionSedeId &&
+              instalacionSedeId !== usuario.usuarioSede
+            ) {
+              // Excepción: si es gerencia, puede ver todas las instalaciones
+              if (rolTipo !== 'gerencia') {
+                return null;
+              }
+            }
+
+            // Filtrar por tipo de instalación según el rol
+            // Admin-internas solo ve instalaciones de tipo internas
+            if (rolTipo === 'admin-internas' && instalacionTipo && instalacionTipo !== 'internas') {
+              return null;
+            }
+
+            // Admin-redes solo ve instalaciones de tipo redes
+            if (rolTipo === 'admin-redes' && instalacionTipo && instalacionTipo !== 'redes') {
+              return null;
+            }
+
+            // Si llegamos aquí, el usuario está en el grupo y cumple los filtros
+            return grupo;
+          } catch (error) {
+            console.error(
+              `[GruposService] Error al verificar instalación ${grupo.entidadId}:`,
+              error,
+            );
+            // En caso de error, incluir el grupo para no perderlo (fallback seguro)
+            return grupo;
+          }
+        }),
+      );
+
+      // Combinar grupos válidos
+      const gruposFiltrados = [...otrosGrupos, ...instalacionesValidas.filter((g) => g !== null)];
+
+      // Asegurar que todos los chats directos del usuario estén incluidos (por si alguno se filtró)
+      const idsDirectosActuales = new Set(
+        gruposFiltrados.filter((g) => g.tipoGrupo === TipoGrupo.DIRECTO).map((g) => g.grupoId),
+      );
+      const directosFaltantes = gruposAsignados.filter(
+        (g) => g.tipoGrupo === TipoGrupo.DIRECTO && !idsDirectosActuales.has(g.grupoId),
+      );
+      if (directosFaltantes.length > 0) {
+        gruposFiltrados.push(...directosFaltantes);
+      }
+
+      // Consulta explícita de chats directos: siempre incluir todos donde el usuario está en usuarios_grupos
+      const directosRaw = await this.gruposRepository.query(
+        `SELECT g.grupoId, g.grupoNombre, g.grupoDescripcion, g.tipoGrupo, g.entidadId, g.grupoActivo, g.fechaCreacion, g.fechaActualizacion
+         FROM grupos g
+         INNER JOIN usuarios_grupos ug ON g.grupoId = ug.grupoId AND ug.activo = 1
+         WHERE g.grupoActivo = 1 AND g.tipoGrupo = 'directo' AND ug.usuarioId = ?`,
+        [usuarioId],
+      );
+      const idsEnFiltrados = new Set(gruposFiltrados.map((g) => g.grupoId));
+      for (const row of directosRaw) {
+        if (!idsEnFiltrados.has(row.grupoId)) {
+          idsEnFiltrados.add(row.grupoId);
+          gruposFiltrados.push({
+            grupoId: row.grupoId,
+            grupoNombre: row.grupoNombre,
+            grupoDescripcion: row.grupoDescripcion,
+            tipoGrupo: TipoGrupo.DIRECTO,
+            entidadId: row.entidadId,
+            grupoActivo: row.grupoActivo,
+            fechaCreacion: row.fechaCreacion,
+            fechaActualizacion: row.fechaActualizacion,
+          } as Grupo);
+        }
+      }
 
       // Ordenar por fecha de creación descendente
       gruposFiltrados.sort(
@@ -402,8 +504,24 @@ export class GruposService {
         );
         const noLeidas = notificaciones.filter((n) => !n.leida).length;
 
+        // Para chats directos, incluir el ID del otro participante para que el frontend pueda emparejar
+        let otroUsuarioId: number | null = null;
+        if (grupo.tipoGrupo === TipoGrupo.DIRECTO) {
+          const usuariosEnGrupo = await this.usuariosGruposService.obtenerUsuariosGrupo(
+            grupo.grupoId,
+          );
+          const ids = usuariosEnGrupo
+            .map((ug: any) => ug.usuarioId ?? ug.usuario?.usuarioId)
+            .filter(Boolean);
+          otroUsuarioId = ids.find((id: number) => id !== usuarioId) ?? null;
+        }
+
         return {
           ...grupo,
+          // Asegurar tipoGrupo como string para que el frontend siempre lo reconozca
+          tipoGrupo:
+            grupo.tipoGrupo === TipoGrupo.DIRECTO ? 'directo' : (grupo.tipoGrupo as string),
+          otroUsuarioId,
           ultimoMensaje: ultimoMensaje
             ? {
                 mensajeId: ultimoMensaje.mensajeId,

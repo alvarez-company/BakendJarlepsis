@@ -29,7 +29,10 @@ export class GruposController {
   @Get('mis-grupos')
   @Roles(
     'superadmin',
+    'gerencia',
     'admin',
+    'admin-internas',
+    'admin-redes',
     'almacenista',
     'tecnico',
     'soldador',
@@ -61,7 +64,10 @@ export class GruposController {
   @Get('directo/:usuarioId')
   @Roles(
     'superadmin',
+    'gerencia',
     'admin',
+    'admin-internas',
+    'admin-redes',
     'almacenista',
     'tecnico',
     'soldador',

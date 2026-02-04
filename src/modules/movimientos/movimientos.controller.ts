@@ -366,6 +366,7 @@ export class MovimientosController {
     'admin-redes',
     'almacenista',
     'tecnico',
+    'soldador',
     'bodega-internas',
     'bodega-redes',
   )

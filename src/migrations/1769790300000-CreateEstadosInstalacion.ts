@@ -22,9 +22,7 @@ export class CreateEstadosInstalacion1769790300000 implements MigrationInterface
       ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
     `);
 
-    const count = await queryRunner.query(
-      `SELECT COUNT(*) AS c FROM \`estados_instalacion\``
-    );
+    const count = await queryRunner.query(`SELECT COUNT(*) AS c FROM \`estados_instalacion\``);
     const hasRows = Number(count?.[0]?.c ?? 0) > 0;
     if (!hasRows) {
       await queryRunner.query(`
