@@ -62,7 +62,6 @@ export class ClientesService {
 
   async findAll(user?: any): Promise<Cliente[]> {
     try {
-      // Filtrar por centro operativo: solo clientes que tienen instalaciones en bodegas de la sede del usuario
       const rolTipo = user?.usuarioRol?.rolTipo || user?.role || '';
       const usuarioSede = user?.usuarioSede;
       let clientes: Cliente[] = [];
@@ -70,7 +69,7 @@ export class ClientesService {
       if (usuarioSede != null) {
         // Obtener bodegas de la sede según el rol
         let bodegaIds: number[] = [];
-        if (rolTipo === 'admin') {
+        if (rolTipo === 'admin' || rolTipo === 'almacenista') {
           // Admin: todas las bodegas de su sede
           const bodegasSede = await this.clientesRepository.manager.query(
             `SELECT bodegaId FROM bodegas WHERE sedeId = ?`,
@@ -151,13 +150,6 @@ export class ClientesService {
             }
           }
           return clientes;
-        } else if (rolTipo === 'almacenista') {
-          // Almacenista: todas las bodegas de su sede
-          const bodegasSede = await this.clientesRepository.manager.query(
-            `SELECT bodegaId FROM bodegas WHERE sedeId = ?`,
-            [usuarioSede],
-          );
-          bodegaIds = bodegasSede.map((b: any) => b.bodegaId);
         }
 
         // Obtener clientes que tienen instalaciones en esas bodegas

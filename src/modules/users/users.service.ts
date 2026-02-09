@@ -437,6 +437,59 @@ export class UsersService {
     };
   }
 
+  /**
+   * Lista técnicos (y soldadores) del mismo centro operativo (sede).
+   * Usado por almacenista para ver técnicos de su sede y acceder a su inventario (solo lectura).
+   */
+  async findTecnicosBySede(
+    sedeId: number,
+    paginationDto?: PaginationDto,
+    search?: string,
+  ): Promise<{ data: User[]; total: number; page: number; limit: number }> {
+    const page = paginationDto?.page || 1;
+    const limit = paginationDto?.limit || 10;
+    const skip = (page - 1) * limit;
+
+    const queryBuilder = this.usersRepository
+      .createQueryBuilder('user')
+      .leftJoinAndSelect('user.usuarioRol', 'rol')
+      .leftJoinAndSelect('user.sede', 'sede')
+      .leftJoinAndSelect('user.bodega', 'bodega')
+      .where('user.usuarioSede = :sedeId', { sedeId })
+      .andWhere('rol.rolTipo IN (:...roles)', {
+        roles: ['tecnico', 'soldador'],
+      })
+      .andWhere('user.usuarioEstado = :estado', { estado: true });
+
+    if (search) {
+      queryBuilder.andWhere(
+        '(user.usuarioNombre LIKE :search OR user.usuarioApellido LIKE :search OR user.usuarioCorreo LIKE :search OR user.usuarioDocumento LIKE :search)',
+        { search: `%${search}%` },
+      );
+    }
+
+    queryBuilder
+      .orderBy('user.usuarioApellido', 'ASC')
+      .addOrderBy('user.usuarioNombre', 'ASC')
+      .skip(skip)
+      .take(limit);
+
+    const [data, total] = await queryBuilder.getManyAndCount();
+
+    // No exponer contraseña
+    const dataSinPassword = data.map((u) => {
+      const { usuarioContrasena: _p, ...rest } = u;
+      return rest as User;
+    });
+
+    return {
+      data: dataSinPassword,
+      total,
+      page,
+      limit,
+    };
+  }
+
   async findOne(
     id: number,
     requestingUser?: {

@@ -35,6 +35,7 @@
     "seed:auditoria": "node scripts/seed-auditoria.js",
     "db:reset": "node scripts/reset-database.js",
     "db:reset:yes": "node scripts/reset-database.js --yes",
+    "user:delete": "node scripts/delete-user-cascade.js",
     "docker:db:up": "docker-compose up -d mysql",
     "docker:db:down": "docker-compose down",
     "docker:db:stop": "docker-compose stop mysql",

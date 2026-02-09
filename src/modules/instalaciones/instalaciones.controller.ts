@@ -40,6 +40,7 @@ export class InstalacionesController {
     'admin',
     'admin-internas',
     'admin-redes',
+    'almacenista',
     'tecnico',
     'soldador',
     'bodega-internas',
