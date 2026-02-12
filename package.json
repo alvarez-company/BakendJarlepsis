@@ -33,6 +33,7 @@
     "seed": "node scripts/seed-full.js",
     "seed:superadmin": "node scripts/seed-superadmin.js",
     "seed:auditoria": "node scripts/seed-auditoria.js",
+    "seed:municipios": "node scripts/seed-municipios.js",
     "db:reset": "node scripts/reset-database.js",
     "db:reset:yes": "node scripts/reset-database.js --yes",
     "user:delete": "node scripts/delete-user-cascade.js",
