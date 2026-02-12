@@ -38,6 +38,7 @@ export class ClientesController {
     'admin',
     'admin-internas',
     'admin-redes',
+    'almacenista',
     'tecnico',
     'soldador',
     'bodega-internas',
@@ -88,10 +89,7 @@ export class ClientesController {
     'admin',
     'admin-internas',
     'admin-redes',
-    'tecnico',
-    'soldador',
-    'bodega-internas',
-    'bodega-redes',
+    'almacenista'
   )
   @ApiOperation({ summary: 'Update a cliente' })
   update(@Param('id') id: string, @Body() updateClienteDto: UpdateClienteDto, @Request() req) {
@@ -111,13 +109,9 @@ export class ClientesController {
     'admin',
     'admin-internas',
     'admin-redes',
-    'almacenista',
-    'tecnico',
-    'soldador',
-    'bodega-internas',
-    'bodega-redes',
+    'almacenista'
   )
-  @ApiOperation({ summary: 'Export clients to Excel' })
+  @ApiOperation({ summary: 'Export clients to Excel (almacenista no tiene acceso)' })
   @ApiQuery({ name: 'filters', required: false, type: String })
   async exportToExcel(@Res() res: Response, @Request() req, @Query('filters') filters?: string) {
     try {
@@ -175,13 +169,9 @@ export class ClientesController {
     'admin',
     'admin-internas',
     'admin-redes',
-    'almacenista',
-    'tecnico',
-    'soldador',
-    'bodega-internas',
-    'bodega-redes',
+    'almacenista'
   )
-  @ApiOperation({ summary: 'Export clients to PDF' })
+  @ApiOperation({ summary: 'Export clients to PDF (almacenista no tiene acceso)' })
   @ApiQuery({ name: 'filters', required: false, type: String })
   async exportToPdf(@Res() res: Response, @Request() req, @Query('filters') filters?: string) {
     try {

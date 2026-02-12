@@ -265,16 +265,36 @@ export class NotificacionesService {
     limit: number = 50,
     noLeidas?: boolean,
   ): Promise<Notificacion[]> {
-    const where: any = { usuarioId };
-    if (noLeidas !== undefined) {
-      where.leida = !noLeidas;
-    }
+    const maxRetries = 3;
+    let lastError: any;
 
-    return this.notificacionesRepository.find({
-      where,
-      order: { fechaCreacion: 'DESC' },
-      take: limit,
-    });
+    for (let attempt = 1; attempt <= maxRetries; attempt++) {
+      try {
+        const where: any = { usuarioId };
+        if (noLeidas !== undefined) {
+          where.leida = !noLeidas;
+        }
+
+        return await this.notificacionesRepository.find({
+          where,
+          order: { fechaCreacion: 'DESC' },
+          take: limit,
+        });
+      } catch (error: any) {
+        lastError = error;
+        console.error(`[NotificacionesService] Error al obtener notificaciones (intento ${attempt}/${maxRetries}):`, error.message);
+        
+        if (attempt < maxRetries && (error.code === 'ECONNRESET' || error.errno === 'ECONNRESET')) {
+          const waitTime = Math.pow(2, attempt) * 100;
+          await new Promise(resolve => setTimeout(resolve, waitTime));
+          continue;
+        }
+        break;
+      }
+    }
+    
+    console.error('[NotificacionesService] ❌ Error final al obtener notificaciones:', lastError?.message);
+    return [];
   }
 
   async marcarComoLeida(notificacionId: number, usuarioId: number): Promise<Notificacion> {
@@ -314,26 +334,65 @@ export class NotificacionesService {
   }
 
   async contarNoLeidas(usuarioId: number): Promise<number> {
-    return this.notificacionesRepository.count({
-      where: { usuarioId, leida: false },
-    });
+    const maxRetries = 3;
+    let lastError: any;
+
+    for (let attempt = 1; attempt <= maxRetries; attempt++) {
+      try {
+        return await this.notificacionesRepository.count({
+          where: { usuarioId, leida: false },
+        });
+      } catch (error: any) {
+        lastError = error;
+        console.error(`[NotificacionesService] Error al contar notificaciones no leídas (intento ${attempt}/${maxRetries}):`, error.message);
+        
+        if (attempt < maxRetries && (error.code === 'ECONNRESET' || error.errno === 'ECONNRESET')) {
+          const waitTime = Math.pow(2, attempt) * 100;
+          await new Promise(resolve => setTimeout(resolve, waitTime));
+          continue;
+        }
+        break;
+      }
+    }
+    
+    console.error('[NotificacionesService] ❌ Error final al contar notificaciones no leídas:', lastError?.message);
+    return 0;
   }
 
   async contarMensajesNoLeidos(usuarioId: number): Promise<number> {
-    try {
-      const count = await this.notificacionesRepository.count({
-        where: {
-          usuarioId,
-          leida: false,
-          tipoNotificacion: TipoNotificacion.MENSAJE_NUEVO,
-        },
-      });
-      return count;
-    } catch (error) {
-      console.error('Error al contar mensajes no leídos:', error);
-      // Retornar 0 en caso de error para no bloquear la aplicación
-      return 0;
+    const maxRetries = 3;
+    let lastError: any;
+
+    for (let attempt = 1; attempt <= maxRetries; attempt++) {
+      try {
+        const count = await this.notificacionesRepository.count({
+          where: {
+            usuarioId,
+            leida: false,
+            tipoNotificacion: TipoNotificacion.MENSAJE_NUEVO,
+          },
+        });
+        return count;
+      } catch (error: any) {
+        lastError = error;
+        console.error(`[NotificacionesService] Error al contar mensajes no leídos (intento ${attempt}/${maxRetries}):`, error.message);
+        
+        // Si es un error de conexión y no es el último intento, esperar antes de reintentar
+        if (attempt < maxRetries && (error.code === 'ECONNRESET' || error.errno === 'ECONNRESET')) {
+          const waitTime = Math.pow(2, attempt) * 100; // 200ms, 400ms, 800ms
+          console.log(`[NotificacionesService] Reintentando en ${waitTime}ms...`);
+          await new Promise(resolve => setTimeout(resolve, waitTime));
+          continue;
+        }
+        
+        // Si no es un error de conexión o es el último intento, romper el ciclo
+        break;
+      }
     }
+    
+    console.error('[NotificacionesService] ❌ Error final al contar mensajes no leídos después de reintentos:', lastError?.message);
+    // Retornar 0 en caso de error para no bloquear la aplicación
+    return 0;
   }
 
   async eliminarNotificacion(notificacionId: number, usuarioId: number): Promise<void> {

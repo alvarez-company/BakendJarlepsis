@@ -145,7 +145,12 @@ export class NumerosMedidorService {
       .take(limit);
 
     let [data, total] = await queryBuilder.getManyAndCount();
-    if (user?.usuarioSede) {
+    
+    // Superadmin y gerencia ven todo independientemente de si tienen sede asignada
+    const rolTipo = (user?.usuarioRol?.rolTipo || user?.role || '').toLowerCase();
+    const esSuperadminOGerencia = rolTipo === 'superadmin' || rolTipo === 'gerencia';
+    
+    if (user?.usuarioSede && !esSuperadminOGerencia) {
       data = this.filterBySede(data, user.usuarioSede);
       total = data.length;
     }
@@ -179,7 +184,12 @@ export class NumerosMedidorService {
         'bodega.sede',
       ],
     });
-    if (user?.usuarioSede) {
+    
+    // Superadmin y gerencia ven todo independientemente de si tienen sede asignada
+    const rolTipo = (user?.usuarioRol?.rolTipo || user?.role || '').toLowerCase();
+    const esSuperadminOGerencia = rolTipo === 'superadmin' || rolTipo === 'gerencia';
+    
+    if (user?.usuarioSede && !esSuperadminOGerencia) {
       numeros = this.filterBySede(numeros, user.usuarioSede);
     }
     return numeros;
@@ -257,7 +267,12 @@ export class NumerosMedidorService {
         'bodega.sede',
       ],
     });
-    if (user?.usuarioSede) {
+    
+    // Superadmin y gerencia ven todo independientemente de si tienen sede asignada
+    const rolTipo = (user?.usuarioRol?.rolTipo || user?.role || '').toLowerCase();
+    const esSuperadminOGerencia = rolTipo === 'superadmin' || rolTipo === 'gerencia';
+    
+    if (user?.usuarioSede && !esSuperadminOGerencia) {
       numeros = this.filterBySede(numeros, user.usuarioSede);
     }
     return numeros;

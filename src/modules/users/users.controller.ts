@@ -92,6 +92,39 @@ export class UsersController {
     return this.usersService.findAll(paginationDto, search, req?.user);
   }
 
+  @Get('tecnicos-mi-centro')
+  @Roles('almacenista')
+  @ApiOperation({
+    summary:
+      'Listar técnicos del mismo centro operativo (almacenista). Solo lectura: ver inventario vía inventario-tecnico/usuario/:usuarioId',
+  })
+  @ApiQuery({ name: 'page', required: false, type: Number })
+  @ApiQuery({ name: 'limit', required: false, type: Number })
+  @ApiQuery({ name: 'search', required: false, type: String })
+  async findTecnicosMiCentro(
+    @Query() paginationDto: PaginationDto,
+    @Query('search') search: string | undefined,
+    @Request() req: { user: any },
+  ) {
+    // Obtener sedeId de múltiples formas posibles para soportar impersonación
+    // El campo usuarioSede debería estar disponible directamente en la entidad
+    // Si no está, intentar obtenerlo desde la relación sede
+    let sedeId = req.user?.usuarioSede;
+    
+    // Si no está disponible directamente, intentar desde la relación
+    if (!sedeId && req.user?.sede) {
+      sedeId = req.user.sede.sedeId;
+    }
+    
+    // Si aún no hay sedeId válido, retornar array vacío
+    // Esto puede ocurrir si el almacenista no tiene sede asignada
+    if (!sedeId || sedeId === 0) {
+      return { data: [], total: 0, page: 1, limit: paginationDto?.limit ?? 10 };
+    }
+    
+    return this.usersService.findTecnicosBySede(sedeId, paginationDto, search);
+  }
+
   @Get(':id')
   @Roles(
     'superadmin',
@@ -99,10 +132,11 @@ export class UsersController {
     'admin',
     'admin-internas',
     'admin-redes',
+    'almacenista',
     'bodega-internas',
     'bodega-redes',
   )
-  @ApiOperation({ summary: 'Get a user by ID' })
+  @ApiOperation({ summary: 'Get a user by ID (almacenista solo ve usuarios de su centro, p. ej. técnicos)' })
   findOne(@Param('id') id: string, @Request() req?: { user?: any }) {
     return this.usersService.findOne(+id, req?.user);
   }

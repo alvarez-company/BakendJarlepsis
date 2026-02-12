@@ -230,33 +230,41 @@ export class BodegasService {
       );
     }
 
-    // Bodega Internas - solo ve bodegas de tipo internas (y su propia bodega si está asignada)
+    const sedeId = user?.usuarioSede ?? user?.sede?.sedeId;
+
+    // Bodega Internas - solo bodegas de su centro operativo y tipo internas (y su propia bodega si está asignada)
     if (user?.usuarioRol?.rolTipo === 'bodega-internas' || user?.role === 'bodega-internas') {
       return allBodegas.filter((bodega) => {
-        // Si tiene bodega asignada, puede ver su bodega
-        if (user.usuarioBodega && bodega.bodegaId === user.usuarioBodega) {
-          return true;
-        }
-        // Solo puede ver bodegas de tipo 'internas'
+        if (sedeId != null && bodega.sedeId !== sedeId) return false;
+        if (user.usuarioBodega && bodega.bodegaId === user.usuarioBodega) return true;
         return bodega.bodegaTipo === 'internas';
       });
     }
 
-    // Bodega Redes - solo ve bodegas de tipo redes (y su propia bodega si está asignada)
+    // Bodega Redes - solo bodegas de su centro operativo y tipo redes (y su propia bodega si está asignada)
     if (user?.usuarioRol?.rolTipo === 'bodega-redes' || user?.role === 'bodega-redes') {
       return allBodegas.filter((bodega) => {
-        // Si tiene bodega asignada, puede ver su bodega
-        if (user.usuarioBodega && bodega.bodegaId === user.usuarioBodega) {
-          return true;
-        }
-        // Solo puede ver bodegas de tipo 'redes'
+        if (sedeId != null && bodega.sedeId !== sedeId) return false;
+        if (user.usuarioBodega && bodega.bodegaId === user.usuarioBodega) return true;
         return bodega.bodegaTipo === 'redes';
       });
     }
 
-    // Almacenista ve todas las bodegas
+    // Almacenista: solo bodegas de su centro operativo
     if (user?.usuarioRol?.rolTipo === 'almacenista' || user?.role === 'almacenista') {
-      return allBodegas;
+      if (sedeId != null) {
+        return allBodegas.filter((bodega) => bodega.sedeId === sedeId);
+      }
+      return [];
+    }
+
+    // Técnico / Soldador: solo bodegas de su centro operativo
+    if (user?.usuarioRol?.rolTipo === 'tecnico' || user?.role === 'tecnico' ||
+        user?.usuarioRol?.rolTipo === 'soldador' || user?.role === 'soldador') {
+      if (sedeId != null) {
+        return allBodegas.filter((bodega) => bodega.sedeId === sedeId);
+      }
+      return [];
     }
 
     return allBodegas;
@@ -284,6 +292,18 @@ export class BodegasService {
         if (bodega.sedeId !== user.usuarioSede || bodega.bodegaTipo !== 'redes') {
           throw new NotFoundException(`Bodega with ID ${id} not found`);
         }
+      }
+      // Almacenista, técnico y soldador: solo bodegas de su centro operativo
+      if (
+        (rolTipo === 'almacenista' || rolTipo === 'tecnico' || rolTipo === 'soldador') &&
+        sedeId != null &&
+        bodega.sedeId !== sedeId
+      ) {
+        throw new NotFoundException(`Bodega with ID ${id} not found`);
+      }
+      // Bodega-internas / bodega-redes: solo bodegas de su centro (y su bodega asignada)
+      if ((rolTipo === 'bodega-internas' || rolTipo === 'bodega-redes') && sedeId != null && bodega.sedeId !== sedeId) {
+        throw new NotFoundException(`Bodega with ID ${id} not found`);
       }
     }
     return bodega;

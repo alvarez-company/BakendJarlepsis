@@ -22,11 +22,12 @@ import { NumerosMedidorService } from '../numeros-medidor/numeros-medidor.servic
 import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard';
 import { RolesGuard } from '../../common/guards/roles.guard';
 import { Roles } from '../../common/decorators/roles.decorator';
+import { ImpersonationGuard } from '../auth/guards/impersonation.guard';
 
 @ApiTags('materiales')
 @ApiBearerAuth()
 @Controller('materiales')
-@UseGuards(JwtAuthGuard, RolesGuard)
+@UseGuards(JwtAuthGuard, ImpersonationGuard, RolesGuard)
 export class MaterialesController {
   constructor(
     private readonly materialesService: MaterialesService,

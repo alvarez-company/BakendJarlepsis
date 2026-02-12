@@ -85,8 +85,19 @@ import { UploadModule } from './modules/upload/upload.module';
           autoLoadEntities: true,
           synchronize: false,
           logging: false,
-          retryAttempts: 1,
-          retryDelay: 1000,
+          retryAttempts: 3,
+          retryDelay: 2000,
+          // Opciones para conexiones remotas: mantener conexión viva y timeout más tolerante
+          extra: {
+            connectionLimit: 20, // Aumentado de 10 a 20 para manejar más conexiones simultáneas
+            connectTimeout: 60000, // 60 segundos para establecer conexión
+            acquireTimeout: 60000, // 60 segundos para adquirir conexión del pool
+            timeout: 60000, // 60 segundos para ejecutar queries
+            enableKeepAlive: true,
+            keepAliveInitialDelay: 0,
+            waitForConnections: true,
+            queueLimit: 0,
+          },
         };
 
         return config;

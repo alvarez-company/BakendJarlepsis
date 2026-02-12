@@ -293,11 +293,11 @@ export class InstalacionesService {
           `;
           queryParams.push(user.usuarioId);
         }
-        // Almacenista: instalaciones de bodegas de su sede
+        // Almacenista: instalaciones de su centro operativo (tanto internas como redes)
         else if (rolTipo === 'almacenista') {
           whereClause = `
-            INNER JOIN bodegas b ON i.bodegaId = b.bodegaId
-            WHERE b.sedeId = ?
+            LEFT JOIN bodegas b ON i.bodegaId = b.bodegaId
+            WHERE (i.bodegaId IS NULL OR b.sedeId = ?)
           `;
           queryParams.push(usuarioSede);
         }
@@ -592,9 +592,12 @@ export class InstalacionesService {
         });
       }
 
-      // Almacenista puede ver todas las instalaciones (solo lectura)
+      // Almacenista puede ver todas las instalaciones de su centro operativo (tanto internas como redes)
       if (user?.usuarioRol?.rolTipo === 'almacenista' || user?.role === 'almacenista') {
-        return allInstalaciones;
+        if (user?.usuarioSede) {
+          return allInstalaciones.filter((inst) => !inst.bodegaId || inst.bodega?.sedeId === user.usuarioSede);
+        }
+        return allInstalaciones; // Si no tiene sede asignada, ver todas
       }
 
       // Bodega Internas y Admin Internas solo ven instalaciones de tipo "internas" (y por sede si aplica)

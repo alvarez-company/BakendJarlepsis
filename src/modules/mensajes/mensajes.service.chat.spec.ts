@@ -7,6 +7,7 @@ import { NotificacionesService } from '../notificaciones/notificaciones.service'
 import { UsuariosGruposService } from '../usuarios-grupos/usuarios-grupos.service';
 import { UsersService } from '../users/users.service';
 import { GruposService } from '../grupos/grupos.service';
+import { InstalacionesService } from '../instalaciones/instalaciones.service';
 
 describe('MensajesService - Chat y Notificaciones', () => {
   let service: MensajesService;
@@ -65,6 +66,10 @@ describe('MensajesService - Chat y Notificaciones', () => {
               usuarioId: 1,
               usuarioEstado: true,
             }),
+            findOneForAuth: jest.fn().mockResolvedValue({
+              usuarioId: 1,
+              usuarioEstado: true,
+            }),
           },
         },
         {
@@ -76,6 +81,10 @@ describe('MensajesService - Chat y Notificaciones', () => {
               grupoNombre: 'Test Group',
             }),
           },
+        },
+        {
+          provide: InstalacionesService,
+          useValue: {},
         },
       ],
     }).compile();

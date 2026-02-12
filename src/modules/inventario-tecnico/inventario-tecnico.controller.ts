@@ -1,4 +1,14 @@
-import { Controller, Get, Post, Body, Param, Delete, Put, UseGuards } from '@nestjs/common';
+import {
+  Controller,
+  Get,
+  Post,
+  Body,
+  Param,
+  Delete,
+  Put,
+  UseGuards,
+  Request,
+} from '@nestjs/common';
 import { ApiTags, ApiBearerAuth, ApiOperation } from '@nestjs/swagger';
 import { InventarioTecnicoService } from './inventario-tecnico.service';
 import {
@@ -59,9 +69,12 @@ export class InventarioTecnicoController {
     'bodega-internas',
     'bodega-redes',
   )
-  @ApiOperation({ summary: 'Obtener inventario de un técnico específico' })
-  findByUsuario(@Param('usuarioId') usuarioId: string) {
-    return this.service.findByUsuario(+usuarioId);
+  @ApiOperation({
+    summary:
+      'Obtener inventario de un técnico específico. Almacenista solo puede ver técnicos de su centro operativo.',
+  })
+  findByUsuario(@Param('usuarioId') usuarioId: string, @Request() req: { user?: any }) {
+    return this.service.findByUsuario(+usuarioId, req?.user);
   }
 
   @Get('material/:materialId')

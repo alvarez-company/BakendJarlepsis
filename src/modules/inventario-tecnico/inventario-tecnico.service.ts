@@ -1,4 +1,10 @@
-import { Injectable, NotFoundException, Inject, forwardRef } from '@nestjs/common';
+import {
+  Injectable,
+  NotFoundException,
+  ForbiddenException,
+  Inject,
+  forwardRef,
+} from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { InventarioTecnico } from './inventario-tecnico.entity';
@@ -383,7 +389,21 @@ export class InventarioTecnicoService {
     });
   }
 
-  async findByUsuario(usuarioId: number): Promise<InventarioTecnico[]> {
+  async findByUsuario(
+    usuarioId: number,
+    requestingUser?: { usuarioRol?: { rolTipo: string }; role?: string; usuarioSede?: number },
+  ): Promise<InventarioTecnico[]> {
+    const rolTipo = requestingUser?.usuarioRol?.rolTipo || requestingUser?.role;
+    if (rolTipo === 'almacenista') {
+      const tecnico = await this.usersService.findOne(usuarioId, requestingUser);
+      const sedeAlmacenista = requestingUser?.usuarioSede;
+      if (sedeAlmacenista != null && tecnico.usuarioSede !== sedeAlmacenista) {
+        throw new ForbiddenException(
+          'Solo puede ver el inventario de técnicos de su mismo centro operativo',
+        );
+      }
+    }
+
     const inventarios = await this.inventarioTecnicoRepository.find({
       where: { usuarioId },
       relations: ['material', 'material.categoria', 'material.unidadMedida', 'usuario'],
