@@ -8,6 +8,7 @@ import { NotificacionesService } from '../notificaciones/notificaciones.service'
 import { UsuariosGruposService } from '../usuarios-grupos/usuarios-grupos.service';
 import { UsersService } from '../users/users.service';
 import { GruposService } from '../grupos/grupos.service';
+import { InstalacionesService } from '../instalaciones/instalaciones.service';
 
 describe('MensajesService', () => {
   let service: MensajesService;
@@ -32,10 +33,12 @@ describe('MensajesService', () => {
   };
   const mockUsersService = {
     findOne: jest.fn(),
+    findOneForAuth: jest.fn(),
   };
   const mockGruposService = {
     obtenerGrupoPorId: jest.fn().mockResolvedValue({ grupoId: 1, grupoActivo: true }),
   };
+  const mockInstalacionesService = {};
 
   beforeEach(async () => {
     const module: TestingModule = await Test.createTestingModule({
@@ -64,6 +67,10 @@ describe('MensajesService', () => {
         {
           provide: GruposService,
           useValue: mockGruposService,
+        },
+        {
+          provide: InstalacionesService,
+          useValue: mockInstalacionesService,
         },
       ],
     }).compile();
@@ -94,6 +101,7 @@ describe('MensajesService', () => {
         grupo: { grupoId: 1, grupoNombre: 'Test Group' },
       };
       mockUsersService.findOne.mockResolvedValue(mockUsuario);
+      mockUsersService.findOneForAuth.mockResolvedValue(mockUsuario);
       mockRepository.create.mockReturnValue(mockMensaje);
       mockRepository.save.mockResolvedValue(mockMensaje);
       mockRepository.findOne.mockResolvedValue(mockMensajeConRelaciones);
@@ -102,12 +110,13 @@ describe('MensajesService', () => {
       const result = await service.enviarMensaje(1, 1, 'Test message');
 
       expect(result).toEqual(mockMensajeConRelaciones);
-      expect(mockUsersService.findOne).toHaveBeenCalledWith(1);
+      expect(mockUsersService.findOneForAuth).toHaveBeenCalledWith(1);
       expect(mockRepository.create).toHaveBeenCalledWith({
         grupoId: 1,
         usuarioId: 1,
         mensajeTexto: 'Test message',
         mensajeRespuestaId: undefined,
+        archivosAdjuntos: null,
       });
     });
   });

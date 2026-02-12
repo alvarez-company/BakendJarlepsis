@@ -205,7 +205,7 @@ describe('UsersService - Roles y Permisos', () => {
           1, // requestingUserId (admin)
           'admin', // requestingUserRole (not superadmin)
         ),
-      ).rejects.toThrow(BadRequestException);
+      ).rejects.toThrow('Solo SuperAdmin o Gerencia pueden cambiar roles de usuarios');
 
       await expect(service.update(2, updateDto, 1, 'admin')).rejects.toThrow(
         'Solo SuperAdmin o Gerencia pueden cambiar roles de usuarios',

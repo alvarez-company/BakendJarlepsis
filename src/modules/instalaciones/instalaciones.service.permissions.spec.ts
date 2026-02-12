@@ -18,6 +18,7 @@ import { AuditoriaService } from '../auditoria/auditoria.service';
 import { EstadosInstalacionService } from '../estados-instalacion/estados-instalacion.service';
 import { InventarioTecnicoService } from '../inventario-tecnico/inventario-tecnico.service';
 import { NumerosMedidorService } from '../numeros-medidor/numeros-medidor.service';
+import { BodegasService } from '../bodegas/bodegas.service';
 
 describe('InstalacionesService - Permisos', () => {
   let service: InstalacionesService;
@@ -88,6 +89,7 @@ describe('InstalacionesService - Permisos', () => {
   const mockNumerosMedidorService = {
     findByInstalacion: jest.fn().mockResolvedValue([]),
   };
+  const mockBodegasService = {};
 
   beforeEach(async () => {
     const module: TestingModule = await Test.createTestingModule({
@@ -156,6 +158,10 @@ describe('InstalacionesService - Permisos', () => {
         {
           provide: NumerosMedidorService,
           useValue: mockNumerosMedidorService,
+        },
+        {
+          provide: BodegasService,
+          useValue: mockBodegasService,
         },
       ],
     }).compile();
