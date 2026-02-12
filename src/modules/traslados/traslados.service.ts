@@ -114,13 +114,19 @@ export class TrasladosService {
         .createQueryBuilder('traslado')
         .leftJoinAndSelect('traslado.material', 'material')
         .leftJoinAndSelect('traslado.bodegaOrigen', 'bodegaOrigen')
+        .leftJoinAndSelect('bodegaOrigen.sede', 'bodegaOrigenSede')
         .leftJoinAndSelect('traslado.bodegaDestino', 'bodegaDestino')
+        .leftJoinAndSelect('bodegaDestino.sede', 'bodegaDestinoSede')
         .leftJoinAndSelect('traslado.usuario', 'usuario')
         .orderBy('traslado.fechaCreacion', 'DESC')
         .skip(skip)
         .take(limit);
 
-      const rolTipo = user?.usuarioRol?.rolTipo || user?.role;
+      const rolTipo = (user?.usuarioRol?.rolTipo || user?.role || '').toLowerCase();
+      
+      // SuperAdmin y Gerencia ven todo - no aplicar filtros
+      const esSuperadminOGerencia = rolTipo === 'superadmin' || rolTipo === 'gerencia';
+      
       const rolesConFiltroBodega = [
         'admin',
         'admin-internas',
@@ -128,7 +134,8 @@ export class TrasladosService {
         'bodega-internas',
         'bodega-redes',
       ];
-      if (user && rolesConFiltroBodega.includes(rolTipo)) {
+      
+      if (user && !esSuperadminOGerencia && rolesConFiltroBodega.includes(rolTipo)) {
         const bodegasPermitidas = await this.bodegasService.findAll(user);
         const bodegaIds = bodegasPermitidas.map((b) => b.bodegaId);
         if (bodegaIds.length > 0) {
@@ -141,6 +148,21 @@ export class TrasladosService {
       }
 
       const [data, total] = await queryBuilder.getManyAndCount();
+
+      // Debug temporal: verificar que las relaciones están cargadas
+      if (data.length > 0) {
+        const primerTraslado = data[0];
+        console.log('[TrasladosService] Primer traslado:', {
+          trasladoId: primerTraslado.trasladoId,
+          bodegaOrigenId: primerTraslado.bodegaOrigenId,
+          bodegaOrigen: primerTraslado.bodegaOrigen ? {
+            bodegaId: primerTraslado.bodegaOrigen.bodegaId,
+            sedeId: primerTraslado.bodegaOrigen.sedeId,
+            tieneSedeRelacion: !!primerTraslado.bodegaOrigen.sede,
+            sedeSedeId: primerTraslado.bodegaOrigen.sede?.sedeId,
+          } : null,
+        });
+      }
 
       return {
         data,
@@ -174,7 +196,9 @@ export class TrasladosService {
           ])
           .leftJoinAndSelect('traslado.material', 'material')
           .leftJoinAndSelect('traslado.bodegaOrigen', 'bodegaOrigen')
+          .leftJoinAndSelect('bodegaOrigen.sede', 'bodegaOrigenSede')
           .leftJoinAndSelect('traslado.bodegaDestino', 'bodegaDestino')
+          .leftJoinAndSelect('bodegaDestino.sede', 'bodegaDestinoSede')
           .leftJoinAndSelect('traslado.usuario', 'usuario')
           .orderBy('traslado.fechaCreacion', 'DESC')
           .skip(skip)
@@ -230,7 +254,9 @@ export class TrasladosService {
               ])
               .leftJoinAndSelect('traslado.material', 'material')
               .leftJoinAndSelect('traslado.bodegaOrigen', 'bodegaOrigen')
+              .leftJoinAndSelect('bodegaOrigen.sede', 'bodegaOrigenSede')
               .leftJoinAndSelect('traslado.bodegaDestino', 'bodegaDestino')
+              .leftJoinAndSelect('bodegaDestino.sede', 'bodegaDestinoSede')
               .leftJoinAndSelect('traslado.usuario', 'usuario')
               .orderBy('traslado.fechaCreacion', 'DESC')
               .skip(skip)
@@ -278,7 +304,11 @@ export class TrasladosService {
       if (!traslado) {
         throw new NotFoundException(`Traslado con ID ${id} no encontrado`);
       }
-      const rolTipo = user?.usuarioRol?.rolTipo || user?.role;
+      const rolTipo = (user?.usuarioRol?.rolTipo || user?.role || '').toLowerCase();
+      
+      // SuperAdmin y Gerencia ven todo - no aplicar filtros
+      const esSuperadminOGerencia = rolTipo === 'superadmin' || rolTipo === 'gerencia';
+      
       const rolesConFiltroBodega = [
         'admin',
         'admin-internas',
@@ -286,7 +316,8 @@ export class TrasladosService {
         'bodega-internas',
         'bodega-redes',
       ];
-      if (user && rolesConFiltroBodega.includes(rolTipo)) {
+      
+      if (user && !esSuperadminOGerencia && rolesConFiltroBodega.includes(rolTipo)) {
         const bodegasPermitidas = await this.bodegasService.findAll(user);
         const bodegaIds = new Set(bodegasPermitidas.map((b) => b.bodegaId));
         const permitido =
@@ -318,7 +349,9 @@ export class TrasladosService {
           ])
           .leftJoinAndSelect('traslado.material', 'material')
           .leftJoinAndSelect('traslado.bodegaOrigen', 'bodegaOrigen')
+          .leftJoinAndSelect('bodegaOrigen.sede', 'bodegaOrigenSede')
           .leftJoinAndSelect('traslado.bodegaDestino', 'bodegaDestino')
+          .leftJoinAndSelect('bodegaDestino.sede', 'bodegaDestinoSede')
           .leftJoinAndSelect('traslado.usuario', 'usuario')
           .where('traslado.trasladoId = :id', { id });
 
@@ -332,7 +365,11 @@ export class TrasladosService {
         if (!traslado) {
           throw new NotFoundException(`Traslado con ID ${id} no encontrado`);
         }
-        const rolTipoFallback = user?.usuarioRol?.rolTipo || user?.role;
+        const rolTipoFallback = (user?.usuarioRol?.rolTipo || user?.role || '').toLowerCase();
+        
+        // SuperAdmin y Gerencia ven todo - no aplicar filtros
+        const esSuperadminOGerenciaFallback = rolTipoFallback === 'superadmin' || rolTipoFallback === 'gerencia';
+        
         const rolesConFiltroBodegaFallback = [
           'admin',
           'admin-internas',
@@ -340,7 +377,8 @@ export class TrasladosService {
           'bodega-internas',
           'bodega-redes',
         ];
-        if (user && rolesConFiltroBodegaFallback.includes(rolTipoFallback)) {
+        
+        if (user && !esSuperadminOGerenciaFallback && rolesConFiltroBodegaFallback.includes(rolTipoFallback)) {
           const bodegasPermitidasFallback = await this.bodegasService.findAll(user);
           const bodegaIdsFallback = new Set(bodegasPermitidasFallback.map((b) => b.bodegaId));
           const permitidoFallback =
@@ -381,7 +419,9 @@ export class TrasladosService {
           ])
           .leftJoinAndSelect('traslado.material', 'material')
           .leftJoinAndSelect('traslado.bodegaOrigen', 'bodegaOrigen')
+          .leftJoinAndSelect('bodegaOrigen.sede', 'bodegaOrigenSede')
           .leftJoinAndSelect('traslado.bodegaDestino', 'bodegaDestino')
+          .leftJoinAndSelect('bodegaDestino.sede', 'bodegaDestinoSede')
           .leftJoinAndSelect('traslado.usuario', 'usuario');
 
         // Si trasladoCodigo existe, filtrar por él
@@ -531,6 +571,12 @@ export class TrasladosService {
 
   async update(id: number, updateTrasladoDto: UpdateTrasladoDto): Promise<Traslado> {
     const traslado = await this.findOne(id);
+    
+    // Si el traslado está completado, cambiar su estado a pendiente al editar
+    if (traslado.trasladoEstado === EstadoTraslado.COMPLETADO) {
+      traslado.trasladoEstado = EstadoTraslado.PENDIENTE;
+    }
+    
     Object.assign(traslado, updateTrasladoDto);
     return this.trasladosRepository.save(traslado);
   }

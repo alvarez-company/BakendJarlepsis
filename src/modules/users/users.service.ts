@@ -7,7 +7,7 @@ import {
   forwardRef,
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Repository, DeepPartial } from 'typeorm';
+import { Repository, DeepPartial, QueryFailedError } from 'typeorm';
 import * as bcrypt from 'bcrypt';
 import { User } from './user.entity';
 import { CreateUserDto } from './dto/create-user.dto';
@@ -440,6 +440,7 @@ export class UsersService {
   /**
    * Lista técnicos (y soldadores) del mismo centro operativo (sede).
    * Usado por almacenista para ver técnicos de su sede y acceder a su inventario (solo lectura).
+   * Incluye reintento ante ECONNRESET (conexión MySQL cerrada inesperadamente).
    */
   async findTecnicosBySede(
     sedeId: number,
@@ -450,31 +451,48 @@ export class UsersService {
     const limit = paginationDto?.limit || 10;
     const skip = (page - 1) * limit;
 
-    const queryBuilder = this.usersRepository
-      .createQueryBuilder('user')
-      .leftJoinAndSelect('user.usuarioRol', 'rol')
-      .leftJoinAndSelect('user.sede', 'sede')
-      .leftJoinAndSelect('user.bodega', 'bodega')
-      .where('user.usuarioSede = :sedeId', { sedeId })
-      .andWhere('rol.rolTipo IN (:...roles)', {
-        roles: ['tecnico', 'soldador'],
-      })
-      .andWhere('user.usuarioEstado = :estado', { estado: true });
+    const runQuery = async (): Promise<[User[], number]> => {
+      const qb = this.usersRepository
+        .createQueryBuilder('user')
+        .leftJoinAndSelect('user.usuarioRol', 'rol')
+        .leftJoinAndSelect('user.sede', 'sede')
+        .leftJoinAndSelect('user.bodega', 'bodega')
+        .where('user.usuarioSede = :sedeId', { sedeId })
+        .andWhere('rol.rolTipo IN (:...roles)', {
+          roles: ['tecnico', 'soldador'],
+        })
+        .andWhere('user.usuarioEstado = :estado', { estado: true });
 
-    if (search) {
-      queryBuilder.andWhere(
-        '(user.usuarioNombre LIKE :search OR user.usuarioApellido LIKE :search OR user.usuarioCorreo LIKE :search OR user.usuarioDocumento LIKE :search)',
-        { search: `%${search}%` },
-      );
+      if (search) {
+        qb.andWhere(
+          '(user.usuarioNombre LIKE :search OR user.usuarioApellido LIKE :search OR user.usuarioCorreo LIKE :search OR user.usuarioDocumento LIKE :search)',
+          { search: `%${search}%` },
+        );
+      }
+
+      qb.orderBy('user.usuarioApellido', 'ASC')
+        .addOrderBy('user.usuarioNombre', 'ASC')
+        .skip(skip)
+        .take(limit);
+
+      return qb.getManyAndCount();
+    };
+
+    let data: User[];
+    let total: number;
+    try {
+      [data, total] = await runQuery();
+    } catch (err: any) {
+      const isConnReset =
+        err instanceof QueryFailedError ||
+        (err?.message && String(err.message).includes('ECONNRESET'));
+      if (isConnReset) {
+        await new Promise((r) => setTimeout(r, 500));
+        [data, total] = await runQuery();
+      } else {
+        throw err;
+      }
     }
-
-    queryBuilder
-      .orderBy('user.usuarioApellido', 'ASC')
-      .addOrderBy('user.usuarioNombre', 'ASC')
-      .skip(skip)
-      .take(limit);
-
-    const [data, total] = await queryBuilder.getManyAndCount();
 
     // No exponer contraseña
     const dataSinPassword = data.map((u) => {

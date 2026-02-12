@@ -185,8 +185,12 @@ export class MaterialesService {
       // Catálogo compartido: todos ven los mismos materiales. Stock y distribución (materialBodegas) solo del centro del usuario.
       const listToReturn = allMateriales;
 
-      // Si el usuario tiene centro operativo (sede), stock y materialBodegas solo de ese centro
-      if (user?.usuarioSede) {
+      // Superadmin y gerencia ven todo independientemente de si tienen sede asignada
+      const rolTipo = (user?.usuarioRol?.rolTipo || user?.role || '').toLowerCase();
+      const esSuperadminOGerencia = rolTipo === 'superadmin' || rolTipo === 'gerencia';
+
+      // Si el usuario tiene centro operativo (sede) y NO es superadmin/gerencia, stock y materialBodegas solo de ese centro
+      if (user?.usuarioSede && !esSuperadminOGerencia) {
         const sedeId = user.usuarioSede;
         const materialesConStockYSede = await Promise.all(
           listToReturn.map(async (material) => {
@@ -204,7 +208,7 @@ export class MaterialesService {
         return materialesConStockYSede;
       }
 
-      // Superadmin/gerencia (sin sede): devolver todos los materiales con stock total y todas las bodegas
+      // Superadmin/gerencia: devolver todos los materiales con stock total y todas las bodegas
       return listToReturn;
     } catch (error) {
       console.error('Error al obtener materiales:', error);
@@ -263,8 +267,13 @@ export class MaterialesService {
     if (!material) {
       throw new NotFoundException(`Material con ID ${id} no encontrado`);
     }
+    
+    // Superadmin y gerencia ven todo independientemente de si tienen sede asignada
+    const rolTipo = (user?.usuarioRol?.rolTipo || user?.role || '').toLowerCase();
+    const esSuperadminOGerencia = rolTipo === 'superadmin' || rolTipo === 'gerencia';
+    
     // Catálogo compartido: cualquier usuario puede ver cualquier material. Stock/distribución solo de su centro.
-    if (user?.usuarioSede) {
+    if (user?.usuarioSede && !esSuperadminOGerencia) {
       const sedeId = user.usuarioSede;
       const materialBodegasCentro = (material.materialBodegas || []).filter(
         (mb: any) => mb.bodega?.sedeId === sedeId,

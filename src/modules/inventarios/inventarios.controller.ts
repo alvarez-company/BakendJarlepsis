@@ -20,11 +20,12 @@ import { ExportacionService } from '../exportacion/exportacion.service';
 import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard';
 import { RolesGuard } from '../../common/guards/roles.guard';
 import { Roles } from '../../common/decorators/roles.decorator';
+import { ImpersonationGuard } from '../auth/guards/impersonation.guard';
 
 @ApiTags('inventarios')
 @ApiBearerAuth()
 @Controller('inventarios')
-@UseGuards(JwtAuthGuard, RolesGuard)
+@UseGuards(JwtAuthGuard, ImpersonationGuard, RolesGuard)
 export class InventariosController {
   constructor(
     private readonly inventariosService: InventariosService,

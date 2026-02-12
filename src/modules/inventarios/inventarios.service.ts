@@ -27,11 +27,18 @@ export class InventariosService {
       where: { inventarioEstado: true },
     });
     if (!user) return all;
+    
+    // Superadmin y gerencia ven todo independientemente de si tienen sede asignada
+    const rolTipo = (user.usuarioRol?.rolTipo || user.role || '').toLowerCase();
+    const esSuperadminOGerencia = rolTipo === 'superadmin' || rolTipo === 'gerencia';
+    
+    if (esSuperadminOGerencia) return all;
+    
     // Inventario no compartido: solo del centro operativo del usuario
     if (user.usuarioSede) {
       return all.filter((inv) => inv.bodega?.sedeId === user.usuarioSede);
     }
-    const rolTipo = user.usuarioRol?.rolTipo || user.role;
+    
     const rolesConFiltroBodega = ['bodega-internas', 'bodega-redes'];
     if (!rolesConFiltroBodega.includes(rolTipo)) return all;
     const bodegasPermitidas = await this.bodegasService.findAll(user);
@@ -48,16 +55,21 @@ export class InventariosService {
       throw new NotFoundException(`Inventario con ID ${id} no encontrado`);
     }
     if (user) {
-      if (user.usuarioSede && inventario.bodega?.sedeId !== user.usuarioSede) {
-        throw new NotFoundException(`Inventario con ID ${id} no encontrado`);
-      }
-      const rolTipo = user.usuarioRol?.rolTipo || user.role;
-      const rolesConFiltroBodega = ['bodega-internas', 'bodega-redes'];
-      if (rolesConFiltroBodega.includes(rolTipo)) {
-        const bodegasPermitidas = await this.bodegasService.findAll(user);
-        const permitido = bodegasPermitidas.some((b) => b.bodegaId === inventario.bodegaId);
-        if (!permitido) {
+      // Superadmin y gerencia ven todo independientemente de si tienen sede asignada
+      const rolTipo = (user.usuarioRol?.rolTipo || user.role || '').toLowerCase();
+      const esSuperadminOGerencia = rolTipo === 'superadmin' || rolTipo === 'gerencia';
+      
+      if (!esSuperadminOGerencia) {
+        if (user.usuarioSede && inventario.bodega?.sedeId !== user.usuarioSede) {
           throw new NotFoundException(`Inventario con ID ${id} no encontrado`);
+        }
+        const rolesConFiltroBodega = ['bodega-internas', 'bodega-redes'];
+        if (rolesConFiltroBodega.includes(rolTipo)) {
+          const bodegasPermitidas = await this.bodegasService.findAll(user);
+          const permitido = bodegasPermitidas.some((b) => b.bodegaId === inventario.bodegaId);
+          if (!permitido) {
+            throw new NotFoundException(`Inventario con ID ${id} no encontrado`);
+          }
         }
       }
     }
