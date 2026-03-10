@@ -19,6 +19,10 @@ import {
 import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard';
 import { RolesGuard } from '../../common/guards/roles.guard';
 import { Roles } from '../../common/decorators/roles.decorator';
+import {
+  ROLES_INVENTARIO_TECNICO_EDITAR,
+  ROLES_VER_INVENTARIO_TECNICO,
+} from '../../common/constants/roles.constants';
 
 @ApiTags('inventario-tecnico')
 @ApiBearerAuth()
@@ -28,14 +32,14 @@ export class InventarioTecnicoController {
   constructor(private readonly service: InventarioTecnicoService) {}
 
   @Post()
-  @Roles('superadmin', 'almacenista')
+  @Roles(...ROLES_INVENTARIO_TECNICO_EDITAR)
   @ApiOperation({ summary: 'Crear o actualizar inventario de técnico' })
   create(@Body() createDto: CreateInventarioTecnicoDto) {
     return this.service.create(createDto);
   }
 
   @Post('usuario/:usuarioId/asignar')
-  @Roles('superadmin', 'almacenista')
+  @Roles(...ROLES_INVENTARIO_TECNICO_EDITAR)
   @ApiOperation({ summary: 'Asignar múltiples materiales a un técnico' })
   asignarMateriales(
     @Param('usuarioId') usuarioId: string,
@@ -45,30 +49,14 @@ export class InventarioTecnicoController {
   }
 
   @Get()
-  @Roles(
-    'superadmin',
-    'admin',
-    'almacenista',
-    'tecnico',
-    'soldador',
-    'bodega-internas',
-    'bodega-redes',
-  )
+  @Roles(...ROLES_VER_INVENTARIO_TECNICO)
   @ApiOperation({ summary: 'Obtener todo el inventario de técnicos' })
   findAll() {
     return this.service.findAll();
   }
 
   @Get('usuario/:usuarioId')
-  @Roles(
-    'superadmin',
-    'admin',
-    'almacenista',
-    'tecnico',
-    'soldador',
-    'bodega-internas',
-    'bodega-redes',
-  )
+  @Roles(...ROLES_VER_INVENTARIO_TECNICO)
   @ApiOperation({
     summary:
       'Obtener inventario de un técnico específico. Almacenista solo puede ver técnicos de su centro operativo.',
@@ -78,51 +66,35 @@ export class InventarioTecnicoController {
   }
 
   @Get('material/:materialId')
-  @Roles(
-    'superadmin',
-    'admin',
-    'almacenista',
-    'tecnico',
-    'soldador',
-    'bodega-internas',
-    'bodega-redes',
-  )
+  @Roles(...ROLES_VER_INVENTARIO_TECNICO)
   @ApiOperation({ summary: 'Obtener técnicos que tienen un material específico' })
   findByMaterial(@Param('materialId') materialId: string) {
     return this.service.findByMaterial(+materialId);
   }
 
   @Get(':id')
-  @Roles(
-    'superadmin',
-    'admin',
-    'almacenista',
-    'tecnico',
-    'soldador',
-    'bodega-internas',
-    'bodega-redes',
-  )
+  @Roles(...ROLES_VER_INVENTARIO_TECNICO)
   @ApiOperation({ summary: 'Obtener un registro de inventario técnico por ID' })
   findOne(@Param('id') id: string) {
     return this.service.findOne(+id);
   }
 
   @Put(':id')
-  @Roles('superadmin', 'almacenista')
+  @Roles(...ROLES_INVENTARIO_TECNICO_EDITAR)
   @ApiOperation({ summary: 'Actualizar inventario técnico' })
   update(@Param('id') id: string, @Body() updateDto: UpdateInventarioTecnicoDto) {
     return this.service.update(+id, updateDto);
   }
 
   @Delete(':id')
-  @Roles('superadmin', 'almacenista')
+  @Roles(...ROLES_INVENTARIO_TECNICO_EDITAR)
   @ApiOperation({ summary: 'Eliminar registro de inventario técnico' })
   remove(@Param('id') id: string) {
     return this.service.remove(+id);
   }
 
   @Delete('usuario/:usuarioId/material/:materialId')
-  @Roles('superadmin', 'almacenista')
+  @Roles(...ROLES_INVENTARIO_TECNICO_EDITAR)
   @ApiOperation({ summary: 'Eliminar material del inventario de un técnico' })
   removeByUsuarioAndMaterial(
     @Param('usuarioId') usuarioId: string,

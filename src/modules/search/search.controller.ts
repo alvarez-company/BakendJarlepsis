@@ -4,6 +4,7 @@ import { SearchService } from './search.service';
 import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard';
 import { RolesGuard } from '../../common/guards/roles.guard';
 import { Roles } from '../../common/decorators/roles.decorator';
+import { ROLES_VER_MATERIALES_INVENTARIO } from '../../common/constants/roles.constants';
 
 @ApiTags('search')
 @ApiBearerAuth()
@@ -13,17 +14,7 @@ export class SearchController {
   constructor(private readonly searchService: SearchService) {}
 
   @Get()
-  @Roles(
-    'superadmin',
-    'admin',
-    'admin-internas',
-    'admin-redes',
-    'almacenista',
-    'tecnico',
-    'soldador',
-    'bodega-internas',
-    'bodega-redes',
-  )
+  @Roles(...ROLES_VER_MATERIALES_INVENTARIO)
   @ApiOperation({ summary: 'Global search across all entities' })
   @ApiQuery({ name: 'q', required: true, description: 'Search query' })
   async globalSearch(@Query('q') query: string, @Request() req?: any) {

@@ -6,6 +6,11 @@ import { UpdateCategoriaDto } from './dto/update-categoria.dto';
 import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard';
 import { RolesGuard } from '../../common/guards/roles.guard';
 import { Roles } from '../../common/decorators/roles.decorator';
+import {
+  ROLES_GESTION_CATEGORIAS,
+  ROLES_VER_CATEGORIAS,
+  ROLES_SUPERADMIN_GERENCIA,
+} from '../../common/constants/roles.constants';
 
 @ApiTags('categorias')
 @ApiBearerAuth()
@@ -15,51 +20,35 @@ export class CategoriasController {
   constructor(private readonly categoriasService: CategoriasService) {}
 
   @Post()
-  @Roles('superadmin', 'admin')
+  @Roles(...ROLES_GESTION_CATEGORIAS)
   @ApiOperation({ summary: 'Create a new categoria' })
   create(@Body() createCategoriaDto: CreateCategoriaDto) {
     return this.categoriasService.create(createCategoriaDto);
   }
 
   @Get()
-  @Roles(
-    'superadmin',
-    'admin',
-    'almacenista',
-    'tecnico',
-    'soldador',
-    'bodega-internas',
-    'bodega-redes',
-  )
+  @Roles(...ROLES_VER_CATEGORIAS)
   @ApiOperation({ summary: 'Get all categorias' })
   findAll() {
     return this.categoriasService.findAll();
   }
 
   @Get(':id')
-  @Roles(
-    'superadmin',
-    'admin',
-    'almacenista',
-    'tecnico',
-    'soldador',
-    'bodega-internas',
-    'bodega-redes',
-  )
+  @Roles(...ROLES_VER_CATEGORIAS)
   @ApiOperation({ summary: 'Get a categoria by ID' })
   findOne(@Param('id') id: string) {
     return this.categoriasService.findOne(+id);
   }
 
   @Patch(':id')
-  @Roles('superadmin', 'admin')
+  @Roles(...ROLES_GESTION_CATEGORIAS)
   @ApiOperation({ summary: 'Update a categoria' })
   update(@Param('id') id: string, @Body() updateCategoriaDto: UpdateCategoriaDto) {
     return this.categoriasService.update(+id, updateCategoriaDto);
   }
 
   @Delete(':id')
-  @Roles('superadmin', 'gerencia')
+  @Roles(...ROLES_SUPERADMIN_GERENCIA)
   @ApiOperation({ summary: 'Delete a categoria' })
   remove(@Param('id') id: string) {
     return this.categoriasService.remove(+id);

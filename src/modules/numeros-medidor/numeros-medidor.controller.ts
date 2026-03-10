@@ -17,19 +17,7 @@ import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard';
 import { RolesGuard } from '../../common/guards/roles.guard';
 import { Roles } from '../../common/decorators/roles.decorator';
 import { PaginationDto } from '../../common/dto/pagination.dto';
-
-const ROLES_NUMEROS_MEDIDOR = [
-  'superadmin',
-  'gerencia',
-  'admin',
-  'admin-internas',
-  'admin-redes',
-  'almacenista',
-  'tecnico',
-  'soldador',
-  'bodega-internas',
-  'bodega-redes',
-] as const;
+import { ROLES_NUMEROS_MEDIDOR } from '../../common/constants/roles.constants';
 
 @Controller('numeros-medidor')
 @UseGuards(JwtAuthGuard, RolesGuard)

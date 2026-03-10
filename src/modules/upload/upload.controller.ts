@@ -14,6 +14,7 @@ import { mkdirSync } from 'fs';
 import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard';
 import { RolesGuard } from '../../common/guards/roles.guard';
 import { Roles } from '../../common/decorators/roles.decorator';
+import { ROLES_CHAT } from '../../common/constants/roles.constants';
 
 const MAX_SIZE = 5 * 1024 * 1024; // 5MB
 const ALLOWED_MIMES = ['image/jpeg', 'image/png', 'image/gif', 'image/webp'];
@@ -24,17 +25,7 @@ const ALLOWED_MIMES = ['image/jpeg', 'image/png', 'image/gif', 'image/webp'];
 @UseGuards(JwtAuthGuard, RolesGuard)
 export class UploadController {
   @Post('chat')
-  @Roles(
-    'superadmin',
-    'admin',
-    'admin-internas',
-    'admin-redes',
-    'almacenista',
-    'tecnico',
-    'soldador',
-    'bodega-internas',
-    'bodega-redes',
-  )
+  @Roles(...ROLES_CHAT)
   @UseInterceptors(
     FileInterceptor('file', {
       limits: { fileSize: MAX_SIZE },

@@ -4,6 +4,10 @@ import { AuditoriaInventarioService } from './auditoria-inventario.service';
 import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard';
 import { RolesGuard } from '../../common/guards/roles.guard';
 import { Roles } from '../../common/decorators/roles.decorator';
+import {
+  ROLES_AUDITORIA_INVENTARIO,
+  ROLES_VER_CATALOGOS_ADMIN,
+} from '../../common/constants/roles.constants';
 
 @ApiTags('auditoria-inventario')
 @ApiBearerAuth()
@@ -13,21 +17,21 @@ export class AuditoriaInventarioController {
   constructor(private readonly auditoriaService: AuditoriaInventarioService) {}
 
   @Get('material/:materialId')
-  @Roles('superadmin', 'admin', 'almacenista')
+  @Roles(...ROLES_AUDITORIA_INVENTARIO)
   @ApiOperation({ summary: 'Obtener histórico de cambios de un material' })
   findByMaterial(@Param('materialId') materialId: string) {
     return this.auditoriaService.findByMaterial(+materialId);
   }
 
   @Get('usuario/:usuarioId')
-  @Roles('superadmin', 'admin')
+  @Roles(...ROLES_VER_CATALOGOS_ADMIN)
   @ApiOperation({ summary: 'Obtener histórico de cambios por usuario' })
   findByUsuario(@Param('usuarioId') usuarioId: string) {
     return this.auditoriaService.findByUsuario(+usuarioId);
   }
 
   @Get()
-  @Roles('superadmin', 'admin', 'almacenista')
+  @Roles(...ROLES_AUDITORIA_INVENTARIO)
   @ApiOperation({ summary: 'Obtener todos los cambios de auditoría con filtros' })
   @ApiQuery({ name: 'materialId', required: false, type: Number })
   @ApiQuery({ name: 'usuarioId', required: false, type: Number })

@@ -23,6 +23,12 @@ import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard';
 import { RolesGuard } from '../../common/guards/roles.guard';
 import { Roles } from '../../common/decorators/roles.decorator';
 import { ImpersonationGuard } from '../auth/guards/impersonation.guard';
+import {
+  ROLES_ALMACENISTA,
+  ROLES_VER_MATERIALES_INVENTARIO,
+  ROLES_SUPERADMIN_GERENCIA,
+  ROLES_ASIGNAR_MATERIAL,
+} from '../../common/constants/roles.constants';
 
 @ApiTags('materiales')
 @ApiBearerAuth()
@@ -36,55 +42,35 @@ export class MaterialesController {
   ) {}
 
   @Post()
-  @Roles('superadmin', 'almacenista')
+  @Roles(...ROLES_ALMACENISTA)
   @ApiOperation({ summary: 'Create a new material' })
   create(@Body() createMaterialDto: CreateMaterialDto, @Request() req) {
     return this.materialesService.create(createMaterialDto, req.user.usuarioId);
   }
 
   @Get()
-  @Roles(
-    'superadmin',
-    'admin',
-    'admin-internas',
-    'admin-redes',
-    'almacenista',
-    'tecnico',
-    'soldador',
-    'bodega-internas',
-    'bodega-redes',
-  )
+  @Roles(...ROLES_VER_MATERIALES_INVENTARIO)
   @ApiOperation({ summary: 'Get all materiales' })
   findAll(@Request() req) {
     return this.materialesService.findAll(req.user);
   }
 
   @Get(':id')
-  @Roles(
-    'superadmin',
-    'admin',
-    'admin-internas',
-    'admin-redes',
-    'almacenista',
-    'tecnico',
-    'soldador',
-    'bodega-internas',
-    'bodega-redes',
-  )
+  @Roles(...ROLES_VER_MATERIALES_INVENTARIO)
   @ApiOperation({ summary: 'Get a material by ID' })
   findOne(@Param('id') id: string, @Request() req?: any) {
     return this.materialesService.findOne(+id, req?.user);
   }
 
   @Patch(':id')
-  @Roles('superadmin', 'almacenista')
+  @Roles(...ROLES_ALMACENISTA)
   @ApiOperation({ summary: 'Update a material' })
   update(@Param('id') id: string, @Body() updateMaterialDto: UpdateMaterialDto, @Request() req) {
     return this.materialesService.update(+id, updateMaterialDto, req.user.usuarioId);
   }
 
   @Post(':id/ajustar-stock')
-  @Roles('superadmin', 'almacenista')
+  @Roles(...ROLES_ALMACENISTA)
   @ApiOperation({ summary: 'Ajustar stock de un material' })
   ajustarStock(@Param('id') id: string, @Body() ajustarStockDto: AjustarStockDto, @Request() req) {
     return this.materialesService.ajustarStock(
@@ -96,14 +82,14 @@ export class MaterialesController {
   }
 
   @Post(':id/duplicate')
-  @Roles('superadmin', 'almacenista')
+  @Roles(...ROLES_ALMACENISTA)
   @ApiOperation({ summary: 'Duplicar un material' })
   duplicate(@Param('id') id: string, @Request() req) {
     return this.materialesService.duplicate(+id, req.user.usuarioId);
   }
 
   @Post(':id/asignar-numeros-medidor')
-  @Roles('superadmin', 'admin', 'almacenista')
+  @Roles(...ROLES_ASIGNAR_MATERIAL)
   @ApiOperation({
     summary:
       'Asignar números de medidor a un material. Cada item puede incluir bodegaId; si no se asigna bodega, el medidor queda en el centro operativo.',
@@ -116,24 +102,14 @@ export class MaterialesController {
   }
 
   @Delete(':id')
-  @Roles('superadmin', 'gerencia')
+  @Roles(...ROLES_SUPERADMIN_GERENCIA)
   @ApiOperation({ summary: 'Delete a material' })
   remove(@Param('id') id: string) {
     return this.materialesService.remove(+id);
   }
 
   @Get('export/excel')
-  @Roles(
-    'superadmin',
-    'admin',
-    'admin-internas',
-    'admin-redes',
-    'almacenista',
-    'tecnico',
-    'soldador',
-    'bodega-internas',
-    'bodega-redes',
-  )
+  @Roles(...ROLES_VER_MATERIALES_INVENTARIO)
   @ApiOperation({ summary: 'Export materials to Excel' })
   @ApiQuery({ name: 'filters', required: false, type: String })
   async exportToExcel(@Request() req, @Res() res: Response, @Query('filters') filters?: string) {
@@ -202,17 +178,7 @@ export class MaterialesController {
   }
 
   @Get('export/pdf')
-  @Roles(
-    'superadmin',
-    'admin',
-    'admin-internas',
-    'admin-redes',
-    'almacenista',
-    'tecnico',
-    'soldador',
-    'bodega-internas',
-    'bodega-redes',
-  )
+  @Roles(...ROLES_VER_MATERIALES_INVENTARIO)
   @ApiOperation({ summary: 'Export materials to PDF' })
   @ApiQuery({ name: 'filters', required: false, type: String })
   async exportToPdf(@Request() req, @Res() res: Response, @Query('filters') filters?: string) {

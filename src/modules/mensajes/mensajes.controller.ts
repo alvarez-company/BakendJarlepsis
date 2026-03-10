@@ -4,6 +4,7 @@ import { MensajesService } from './mensajes.service';
 import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard';
 import { RolesGuard } from '../../common/guards/roles.guard';
 import { Roles } from '../../common/decorators/roles.decorator';
+import { ROLES_CHAT } from '../../common/constants/roles.constants';
 
 @ApiTags('mensajes')
 @ApiBearerAuth()
@@ -13,18 +14,7 @@ export class MensajesController {
   constructor(private readonly service: MensajesService) {}
 
   @Post('enviar')
-  @Roles(
-    'superadmin',
-    'gerencia',
-    'admin',
-    'admin-internas',
-    'admin-redes',
-    'almacenista',
-    'tecnico',
-    'soldador',
-    'bodega-internas',
-    'bodega-redes',
-  )
+  @Roles(...ROLES_CHAT)
   enviarMensaje(
     @Request() req,
     @Body()
@@ -45,18 +35,7 @@ export class MensajesController {
   }
 
   @Get('grupo/:grupoId')
-  @Roles(
-    'superadmin',
-    'gerencia',
-    'admin',
-    'admin-internas',
-    'admin-redes',
-    'almacenista',
-    'tecnico',
-    'soldador',
-    'bodega-internas',
-    'bodega-redes',
-  )
+  @Roles(...ROLES_CHAT)
   obtenerMensajes(
     @Param('grupoId') grupoId: string,
     @Query('limit') limit?: string,
@@ -66,18 +45,7 @@ export class MensajesController {
   }
 
   @Post(':mensajeId/editar')
-  @Roles(
-    'superadmin',
-    'gerencia',
-    'admin',
-    'admin-internas',
-    'admin-redes',
-    'almacenista',
-    'tecnico',
-    'soldador',
-    'bodega-internas',
-    'bodega-redes',
-  )
+  @Roles(...ROLES_CHAT)
   editarMensaje(
     @Request() req,
     @Param('mensajeId') mensajeId: string,
@@ -87,18 +55,7 @@ export class MensajesController {
   }
 
   @Post(':mensajeId/eliminar')
-  @Roles(
-    'superadmin',
-    'gerencia',
-    'admin',
-    'admin-internas',
-    'admin-redes',
-    'almacenista',
-    'tecnico',
-    'soldador',
-    'bodega-internas',
-    'bodega-redes',
-  )
+  @Roles(...ROLES_CHAT)
   eliminarMensaje(@Request() req, @Param('mensajeId') mensajeId: string) {
     return this.service.eliminarMensaje(+mensajeId, req.user.usuarioId);
   }

@@ -6,6 +6,11 @@ import { UpdateProveedorDto } from './dto/update-proveedor.dto';
 import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard';
 import { RolesGuard } from '../../common/guards/roles.guard';
 import { Roles } from '../../common/decorators/roles.decorator';
+import {
+  ROLES_GESTION_CATEGORIAS,
+  ROLES_VER_PROVEEDORES,
+  ROLES_SUPERADMIN_GERENCIA,
+} from '../../common/constants/roles.constants';
 
 @ApiTags('proveedores')
 @ApiBearerAuth()
@@ -15,35 +20,35 @@ export class ProveedoresController {
   constructor(private readonly proveedoresService: ProveedoresService) {}
 
   @Post()
-  @Roles('superadmin', 'admin')
+  @Roles(...ROLES_GESTION_CATEGORIAS)
   @ApiOperation({ summary: 'Create a new proveedor' })
   create(@Body() createProveedorDto: CreateProveedorDto) {
     return this.proveedoresService.create(createProveedorDto);
   }
 
   @Get()
-  @Roles('superadmin', 'admin', 'tecnico', 'soldador')
+  @Roles(...ROLES_VER_PROVEEDORES)
   @ApiOperation({ summary: 'Get all proveedores' })
   findAll() {
     return this.proveedoresService.findAll();
   }
 
   @Get(':id')
-  @Roles('superadmin', 'admin', 'tecnico', 'soldador')
+  @Roles(...ROLES_VER_PROVEEDORES)
   @ApiOperation({ summary: 'Get a proveedor by ID' })
   findOne(@Param('id') id: string) {
     return this.proveedoresService.findOne(+id);
   }
 
   @Patch(':id')
-  @Roles('superadmin', 'admin')
+  @Roles(...ROLES_GESTION_CATEGORIAS)
   @ApiOperation({ summary: 'Update a proveedor' })
   update(@Param('id') id: string, @Body() updateProveedorDto: UpdateProveedorDto) {
     return this.proveedoresService.update(+id, updateProveedorDto);
   }
 
   @Delete(':id')
-  @Roles('superadmin', 'gerencia')
+  @Roles(...ROLES_SUPERADMIN_GERENCIA)
   @ApiOperation({ summary: 'Delete a proveedor' })
   remove(@Param('id') id: string) {
     return this.proveedoresService.remove(+id);

@@ -22,6 +22,13 @@ import { ExportacionService } from '../exportacion/exportacion.service';
 import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard';
 import { RolesGuard } from '../../common/guards/roles.guard';
 import { Roles } from '../../common/decorators/roles.decorator';
+import {
+  ROLES_INSTALACIONES,
+  ROLES_EDITAR_INSTALACIONES,
+  ROLES_ELIMINAR_INSTALACIONES,
+  ROLES_EXPORT_METROGAS,
+  ROLES_GESTION_BODEGAS,
+} from '../../common/constants/roles.constants';
 import { ImpersonationGuard } from '../auth/guards/impersonation.guard';
 
 @ApiTags('instalaciones')
@@ -35,34 +42,14 @@ export class InstalacionesController {
   ) {}
 
   @Post()
-  @Roles(
-    'superadmin',
-    'admin',
-    'admin-internas',
-    'admin-redes',
-    'almacenista',
-    'tecnico',
-    'soldador',
-    'bodega-internas',
-    'bodega-redes',
-  )
+  @Roles(...ROLES_INSTALACIONES)
   @ApiOperation({ summary: 'Create a new instalacion' })
   create(@Body() createInstalacionDto: CreateInstalacionDto, @Request() req) {
     return this.instalacionesService.create(createInstalacionDto, req.user.usuarioId, req.user);
   }
 
   @Get()
-  @Roles(
-    'superadmin',
-    'admin',
-    'admin-internas',
-    'admin-redes',
-    'almacenista',
-    'tecnico',
-    'soldador',
-    'bodega-internas',
-    'bodega-redes',
-  )
+  @Roles(...ROLES_INSTALACIONES)
   @ApiOperation({ summary: 'Get all instalaciones' })
   async findAll(@Request() req) {
     try {
@@ -76,17 +63,7 @@ export class InstalacionesController {
   }
 
   @Get(':id')
-  @Roles(
-    'superadmin',
-    'admin',
-    'admin-internas',
-    'admin-redes',
-    'almacenista',
-    'tecnico',
-    'soldador',
-    'bodega-internas',
-    'bodega-redes',
-  )
+  @Roles(...ROLES_INSTALACIONES)
   @ApiOperation({ summary: 'Get an instalacion by ID' })
   findOne(@Param('id') id: string, @Request() req) {
     const instalacionId = parseInt(id, 10);
@@ -97,16 +74,7 @@ export class InstalacionesController {
   }
 
   @Patch(':id')
-  @Roles(
-    'superadmin',
-    'admin',
-    'admin-internas',
-    'admin-redes',
-    'tecnico',
-    'soldador',
-    'bodega-internas',
-    'bodega-redes',
-  )
+  @Roles(...ROLES_EDITAR_INSTALACIONES)
   @ApiOperation({ summary: 'Update an instalacion' })
   update(
     @Param('id') id: string,
@@ -122,23 +90,14 @@ export class InstalacionesController {
   }
 
   @Delete(':id')
-  @Roles('superadmin', 'bodega-internas', 'bodega-redes')
+  @Roles(...ROLES_ELIMINAR_INSTALACIONES)
   @ApiOperation({ summary: 'Delete an instalacion' })
   remove(@Param('id') id: string, @Request() req) {
     return this.instalacionesService.remove(+id, req.user.usuarioId, req.user);
   }
 
   @Post(':id/actualizar-estado')
-  @Roles(
-    'superadmin',
-    'admin',
-    'admin-internas',
-    'admin-redes',
-    'tecnico',
-    'soldador',
-    'bodega-internas',
-    'bodega-redes',
-  )
+  @Roles(...ROLES_EDITAR_INSTALACIONES)
   @ApiOperation({ summary: 'Update instalacion status' })
   actualizarEstado(
     @Param('id') id: string,
@@ -154,7 +113,7 @@ export class InstalacionesController {
   }
 
   @Get('export/metrogas/excel')
-  @Roles('superadmin', 'gerencia', 'admin', 'admin-internas', 'admin-redes')
+  @Roles(...ROLES_EXPORT_METROGAS)
   @ApiOperation({ summary: 'Export Reporte Metrogas to Excel (by date range)' })
   @ApiQuery({ name: 'dateStart', required: false, type: String })
   @ApiQuery({ name: 'dateEnd', required: false, type: String })
@@ -207,7 +166,7 @@ export class InstalacionesController {
   }
 
   @Get('export/metrogas/pdf')
-  @Roles('superadmin', 'gerencia', 'admin', 'admin-internas', 'admin-redes')
+  @Roles(...ROLES_EXPORT_METROGAS)
   @ApiOperation({ summary: 'Export Reporte Metrogas to PDF (by date range)' })
   @ApiQuery({ name: 'dateStart', required: false, type: String })
   @ApiQuery({ name: 'dateEnd', required: false, type: String })
@@ -257,17 +216,7 @@ export class InstalacionesController {
   }
 
   @Get('export/excel')
-  @Roles(
-    'superadmin',
-    'admin',
-    'admin-internas',
-    'admin-redes',
-    'almacenista',
-    'tecnico',
-    'soldador',
-    'bodega-internas',
-    'bodega-redes',
-  )
+  @Roles(...ROLES_INSTALACIONES)
   @ApiOperation({ summary: 'Export installations to Excel' })
   @ApiQuery({ name: 'filters', required: false, type: String })
   @ApiQuery({ name: 'dateStart', required: false, type: String })
@@ -444,17 +393,7 @@ export class InstalacionesController {
   }
 
   @Get('export/pdf')
-  @Roles(
-    'superadmin',
-    'admin',
-    'admin-internas',
-    'admin-redes',
-    'almacenista',
-    'tecnico',
-    'soldador',
-    'bodega-internas',
-    'bodega-redes',
-  )
+  @Roles(...ROLES_INSTALACIONES)
   @ApiOperation({ summary: 'Export installations to PDF' })
   @ApiQuery({ name: 'filters', required: false, type: String })
   @ApiQuery({ name: 'dateStart', required: false, type: String })
@@ -628,7 +567,7 @@ export class InstalacionesController {
   }
 
   @Delete(':id/anexos')
-  @Roles('superadmin', 'admin', 'admin-internas', 'admin-redes')
+  @Roles(...ROLES_GESTION_BODEGAS)
   @ApiOperation({ summary: 'Eliminar un anexo de la instalación' })
   async eliminarAnexo(@Param('id') id: string, @Body() body: { url: string }) {
     const instalacionId = parseInt(id, 10);

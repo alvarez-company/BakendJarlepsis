@@ -20,6 +20,11 @@ import { ExportacionService } from '../exportacion/exportacion.service';
 import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard';
 import { RolesGuard } from '../../common/guards/roles.guard';
 import { Roles } from '../../common/decorators/roles.decorator';
+import {
+  ROLES_TRASLADOS_EDITAR,
+  ROLES_VER_TRASLADOS,
+  ROLES_VER_MOVIMIENTOS_CODIGO,
+} from '../../common/constants/roles.constants';
 import { PaginationDto } from '../../common/dto/pagination.dto';
 import { ImpersonationGuard } from '../auth/guards/impersonation.guard';
 
@@ -34,99 +39,63 @@ export class TrasladosController {
   ) {}
 
   @Post()
-  @Roles('superadmin', 'almacenista')
+  @Roles(...ROLES_TRASLADOS_EDITAR)
   @ApiOperation({ summary: 'Create a new traslado' })
   create(@Body() createTrasladoDto: CreateTrasladoDto) {
     return this.trasladosService.create(createTrasladoDto);
   }
 
   @Get()
-  @Roles(
-    'superadmin',
-    'admin',
-    'admin-internas',
-    'admin-redes',
-    'almacenista',
-    'tecnico',
-    'soldador',
-    'bodega-internas',
-    'bodega-redes',
-  )
+  @Roles(...ROLES_VER_TRASLADOS)
   @ApiOperation({ summary: 'Get all traslados' })
   findAll(@Query() paginationDto?: PaginationDto, @Request() req?: any) {
     return this.trasladosService.findAll(paginationDto, req?.user);
   }
 
   @Get('codigo/:codigo')
-  @Roles(
-    'superadmin',
-    'admin',
-    'admin-internas',
-    'admin-redes',
-    'almacenista',
-    'tecnico',
-    'soldador',
-  )
+  @Roles(...ROLES_VER_MOVIMIENTOS_CODIGO)
   @ApiOperation({ summary: 'Get traslados by código' })
   findByCodigo(@Param('codigo') codigo: string) {
     return this.trasladosService.findByCodigo(codigo);
   }
 
   @Get(':id')
-  @Roles(
-    'superadmin',
-    'admin',
-    'admin-internas',
-    'admin-redes',
-    'almacenista',
-    'tecnico',
-    'soldador',
-    'bodega-internas',
-    'bodega-redes',
-  )
+  @Roles(...ROLES_VER_TRASLADOS)
   @ApiOperation({ summary: 'Get a traslado by ID' })
   findOne(@Param('id') id: string, @Request() req?: any) {
     return this.trasladosService.findOne(+id, req?.user);
   }
 
   @Post(':id/completar')
-  @Roles('superadmin', 'almacenista')
+  @Roles(...ROLES_TRASLADOS_EDITAR)
   @ApiOperation({ summary: 'Completar traslado (crea movimientos automáticamente)' })
   completarTraslado(@Param('id') id: string) {
     return this.trasladosService.completarTraslado(+id);
   }
 
   @Post(':id/cancelar')
-  @Roles('superadmin', 'almacenista')
+  @Roles(...ROLES_TRASLADOS_EDITAR)
   @ApiOperation({ summary: 'Cancelar traslado' })
   cancelarTraslado(@Param('id') id: string) {
     return this.trasladosService.cancelarTraslado(+id);
   }
 
   @Patch(':id')
-  @Roles('superadmin', 'almacenista')
+  @Roles(...ROLES_TRASLADOS_EDITAR)
   @ApiOperation({ summary: 'Update a traslado' })
   update(@Param('id') id: string, @Body() updateTrasladoDto: UpdateTrasladoDto) {
     return this.trasladosService.update(+id, updateTrasladoDto);
   }
 
   @Delete(':id')
-  @Roles('superadmin', 'almacenista')
+  @Roles(...ROLES_TRASLADOS_EDITAR)
   @ApiOperation({ summary: 'Delete a traslado' })
   remove(@Param('id') id: string, @Request() req) {
     return this.trasladosService.remove(+id, req.user.usuarioId);
   }
 
   @Get('export/excel')
-  @Roles(
-    'superadmin',
-    'admin',
-    'admin-internas',
-    'admin-redes',
-    'almacenista',
-    'tecnico',
-    'soldador',
-  )
+  @Roles(...ROLES_VER_TRASLADOS)
   @ApiOperation({ summary: 'Export transfers to Excel' })
   @ApiQuery({ name: 'filters', required: false, type: String })
   @ApiQuery({ name: 'dateStart', required: false, type: String })
@@ -214,15 +183,7 @@ export class TrasladosController {
   }
 
   @Get('export/pdf')
-  @Roles(
-    'superadmin',
-    'admin',
-    'admin-internas',
-    'admin-redes',
-    'almacenista',
-    'tecnico',
-    'soldador',
-  )
+  @Roles(...ROLES_VER_TRASLADOS)
   @ApiOperation({ summary: 'Export transfers to PDF' })
   @ApiQuery({ name: 'filters', required: false, type: String })
   @ApiQuery({ name: 'dateStart', required: false, type: String })

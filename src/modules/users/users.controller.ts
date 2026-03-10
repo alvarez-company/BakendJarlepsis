@@ -23,6 +23,16 @@ import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard';
 import { RolesGuard } from '../../common/guards/roles.guard';
 import { Roles } from '../../common/decorators/roles.decorator';
 import { ImpersonationGuard } from '../auth/guards/impersonation.guard';
+import {
+  ROLES_CREAR_USUARIO,
+  ROLES_VER_USUARIOS,
+  ROLES_VER_USUARIOS_CON_ALMACENISTA,
+  ROLES_ACTUALIZAR_USUARIO,
+  ROLES_ELIMINAR_USUARIO,
+  ROLES_CAMBIAR_ROL,
+  ROLES_GESTION_ESTADO_USUARIO,
+  ROLES_VER_TECNICOS_CENTRO,
+} from '../../common/constants/roles.constants';
 
 @ApiTags('users')
 @ApiBearerAuth()
@@ -32,8 +42,8 @@ export class UsersController {
   constructor(private readonly usersService: UsersService) {}
 
   @Post()
-  @Roles('superadmin', 'gerencia', 'admin', 'admin-internas', 'admin-redes')
-  @ApiOperation({ summary: 'Create a new user' })
+  @Roles(...ROLES_CREAR_USUARIO)
+  @ApiOperation({ summary: 'Create a new user (admin: solo usuarios de su centro operativo)' })
   create(@Body() createUserDto: CreateUserDto, @Request() req) {
     const rolTipo = req.user.usuarioRol?.rolTipo || req.user.role;
     return this.usersService.create(createUserDto, req.user.usuarioId, rolTipo);
@@ -71,15 +81,7 @@ export class UsersController {
   }
 
   @Get()
-  @Roles(
-    'superadmin',
-    'gerencia',
-    'admin',
-    'admin-internas',
-    'admin-redes',
-    'bodega-internas',
-    'bodega-redes',
-  )
+  @Roles(...ROLES_VER_USUARIOS)
   @ApiOperation({ summary: 'Get all users with pagination' })
   @ApiQuery({ name: 'page', required: false, type: Number })
   @ApiQuery({ name: 'limit', required: false, type: Number })
@@ -93,7 +95,7 @@ export class UsersController {
   }
 
   @Get('tecnicos-mi-centro')
-  @Roles('almacenista')
+  @Roles(...ROLES_VER_TECNICOS_CENTRO)
   @ApiOperation({
     summary:
       'Listar técnicos del mismo centro operativo (almacenista). Solo lectura: ver inventario vía inventario-tecnico/usuario/:usuarioId',
@@ -126,16 +128,7 @@ export class UsersController {
   }
 
   @Get(':id')
-  @Roles(
-    'superadmin',
-    'gerencia',
-    'admin',
-    'admin-internas',
-    'admin-redes',
-    'almacenista',
-    'bodega-internas',
-    'bodega-redes',
-  )
+  @Roles(...ROLES_VER_USUARIOS_CON_ALMACENISTA)
   @ApiOperation({ summary: 'Get a user by ID (almacenista solo ve usuarios de su centro, p. ej. técnicos)' })
   findOne(@Param('id') id: string, @Request() req?: { user?: any }) {
     return this.usersService.findOne(+id, req?.user);
@@ -143,21 +136,21 @@ export class UsersController {
 
   // Rutas específicas deben ir ANTES de las rutas genéricas
   @Patch(':id/cancelar-contrato')
-  @Roles('superadmin', 'gerencia', 'admin')
+  @Roles(...ROLES_GESTION_ESTADO_USUARIO)
   @ApiOperation({ summary: 'Cancelar contrato de técnico y transferir materiales a la sede' })
   cancelarContrato(@Param('id') id: string, @Request() req) {
     return this.usersService.cancelarContrato(+id, req.user.usuarioId);
   }
 
   @Patch(':id/estado')
-  @Roles('superadmin', 'gerencia', 'admin')
+  @Roles(...ROLES_GESTION_ESTADO_USUARIO)
   @ApiOperation({ summary: 'Update user status (SuperAdmin/Gerencia/Admin only)' })
   updateEstado(@Param('id') id: string, @Body() updateEstadoDto: UpdateEstadoUsuarioDto) {
     return this.usersService.updateEstado(+id, updateEstadoDto.usuarioEstado);
   }
 
   @Post(':id/change-role')
-  @Roles('superadmin', 'gerencia')
+  @Roles(...ROLES_CAMBIAR_ROL)
   @ApiOperation({
     summary:
       'Change user role (SuperAdmin o Gerencia). No se puede asignar rol Super Administrador.',
@@ -167,15 +160,7 @@ export class UsersController {
   }
 
   @Patch(':id')
-  @Roles(
-    'superadmin',
-    'gerencia',
-    'admin',
-    'admin-internas',
-    'admin-redes',
-    'bodega-internas',
-    'bodega-redes',
-  )
+  @Roles(...ROLES_ACTUALIZAR_USUARIO)
   @ApiOperation({ summary: 'Update a user' })
   update(@Param('id') id: string, @Body() updateUserDto: UpdateUserDto, @Request() req) {
     const rolTipo = req.user.usuarioRol?.rolTipo || req.user.role;
@@ -183,7 +168,7 @@ export class UsersController {
   }
 
   @Delete(':id')
-  @Roles('superadmin', 'gerencia')
+  @Roles(...ROLES_ELIMINAR_USUARIO)
   @ApiOperation({ summary: 'Delete a user (no se puede eliminar el usuario Super Administrador)' })
   remove(@Param('id') id: string) {
     return this.usersService.remove(+id);

@@ -4,6 +4,7 @@ import { UsuariosGruposService } from './usuarios-grupos.service';
 import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard';
 import { RolesGuard } from '../../common/guards/roles.guard';
 import { Roles } from '../../common/decorators/roles.decorator';
+import { ROLES_VER_CATALOGOS_ADMIN } from '../../common/constants/roles.constants';
 
 @ApiTags('usuarios-grupos')
 @ApiBearerAuth()
@@ -13,7 +14,7 @@ export class UsuariosGruposController {
   constructor(private readonly service: UsuariosGruposService) {}
 
   @Post('agregar')
-  @Roles('superadmin', 'admin')
+  @Roles(...ROLES_VER_CATALOGOS_ADMIN)
   agregarUsuarios(@Body() body: { grupoId: number; usuariosId: number[] }) {
     return this.service.agregarUsuariosGrupo(body.grupoId, body.usuariosId);
   }

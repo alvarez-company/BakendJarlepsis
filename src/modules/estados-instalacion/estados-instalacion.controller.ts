@@ -4,6 +4,7 @@ import { EstadosInstalacionService } from './estados-instalacion.service';
 import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard';
 import { RolesGuard } from '../../common/guards/roles.guard';
 import { Roles } from '../../common/decorators/roles.decorator';
+import { ROLES_ESTADOS_CAMPO } from '../../common/constants/roles.constants';
 
 @ApiTags('estados-instalacion')
 @ApiBearerAuth()
@@ -13,7 +14,7 @@ export class EstadosInstalacionController {
   constructor(private readonly estadosInstalacionService: EstadosInstalacionService) {}
 
   @Get()
-  @Roles('superadmin', 'admin', 'tecnico')
+  @Roles(...ROLES_ESTADOS_CAMPO)
   @ApiOperation({ summary: 'Get all estados de instalación' })
   findAll() {
     return this.estadosInstalacionService.findAll();

@@ -31,14 +31,14 @@ Sede (centro operativo)
 
 | Rol | Descripción |
 |-----|-------------|
-| **SuperAdmin** | Acceso total; puede cambiar de rol y gestionar todo el sistema |
+| **SuperAdmin** | Acceso total; puede cambiar de rol y gestionar todo el sistema y personificacion |
 | **Gerencia** | Gestión global; crea usuarios de cualquier rol y asigna centros/bodegas |
-| **Admin** | Administrador de centro operativo; gestiona su sede y bodegas |
+| **Admin** | Administrador de centro operativo; gestiona su centro operativo o sede y bodegas |
 | **Admin Internas / Admin Redes** | Admin restringido a bodegas de tipo internas o redes de su sede |
 | **Almacenista** | Gestión de inventario en su centro operativo |
 | **Bodega Internas / Bodega Redes** | Usuario asignado a una bodega concreta (internas o redes) |
 | **Técnico** | Acceso a instalaciones asignadas y miniapp móvil |
-| **Soldador** | Rol operativo en el sistema |
+| **Soldador** |Es igual al rol tecnico |
 
 ## 🚀 Inicio rápido
 

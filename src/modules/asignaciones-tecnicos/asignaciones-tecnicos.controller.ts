@@ -20,6 +20,12 @@ import { UpdateAsignacionTecnicoDto } from './dto/update-asignacion-tecnico.dto'
 import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard';
 import { RolesGuard } from '../../common/guards/roles.guard';
 import { Roles } from '../../common/decorators/roles.decorator';
+import {
+  ROLES_ASIGNACIONES_TECNICOS,
+  ROLES_VER_ASIGNACIONES,
+  ROLES_EDITAR_ASIGNACIONES,
+  ROLES_APROBAR_ASIGNACIONES,
+} from '../../common/constants/roles.constants';
 import { ExportacionService } from '../exportacion/exportacion.service';
 import { PaginationDto } from '../../common/dto/pagination.dto';
 import { ImpersonationGuard } from '../auth/guards/impersonation.guard';
@@ -35,96 +41,63 @@ export class AsignacionesTecnicosController {
   ) {}
 
   @Post()
-  @Roles(
-    'superadmin',
-    'admin',
-    'admin-internas',
-    'admin-redes',
-    'almacenista',
-    'bodega-internas',
-    'bodega-redes',
-  )
+  @Roles(...ROLES_ASIGNACIONES_TECNICOS)
   @ApiOperation({ summary: 'Crear una nueva asignación' })
   create(@Body() createDto: CreateAsignacionTecnicoDto, @Request() req) {
     return this.service.create(createDto, req.user);
   }
 
   @Get()
-  @Roles(
-    'superadmin',
-    'admin',
-    'admin-internas',
-    'admin-redes',
-    'almacenista',
-    'bodega-internas',
-    'bodega-redes',
-  )
+  @Roles(...ROLES_ASIGNACIONES_TECNICOS)
   @ApiOperation({ summary: 'Obtener todas las asignaciones' })
   findAll(@Query() paginationDto?: PaginationDto, @Request() req?: any) {
     return this.service.findAll(paginationDto, req?.user);
   }
 
   @Get(':id')
-  @Roles(
-    'superadmin',
-    'admin',
-    'admin-internas',
-    'admin-redes',
-    'almacenista',
-    'bodega-internas',
-    'bodega-redes',
-  )
+  @Roles(...ROLES_ASIGNACIONES_TECNICOS)
   @ApiOperation({ summary: 'Obtener una asignación por ID' })
   findOne(@Param('id') id: string) {
     return this.service.findOne(+id);
   }
 
   @Get('usuario/:usuarioId')
-  @Roles(
-    'superadmin',
-    'admin',
-    'admin-internas',
-    'admin-redes',
-    'almacenista',
-    'bodega-internas',
-    'bodega-redes',
-    'tecnico',
-    'soldador',
-  )
+  @Roles(...ROLES_VER_ASIGNACIONES)
   @ApiOperation({ summary: 'Obtener asignaciones de un técnico o soldador' })
   findByUsuario(@Param('usuarioId') usuarioId: string, @Request() req) {
     return this.service.findByUsuario(+usuarioId, req.user);
   }
 
   @Put(':id')
-  @Roles('superadmin', 'admin', 'almacenista', 'bodega-internas', 'bodega-redes')
+  @Roles(...ROLES_EDITAR_ASIGNACIONES)
   @ApiOperation({ summary: 'Actualizar una asignación' })
   update(@Param('id') id: string, @Body() updateDto: UpdateAsignacionTecnicoDto, @Request() req) {
     return this.service.update(+id, updateDto, req.user);
   }
 
   @Patch(':id/aprobar')
-  @Roles('superadmin', 'admin', 'almacenista')
+  @Roles(...ROLES_APROBAR_ASIGNACIONES)
   @ApiOperation({ summary: 'Aprobar una asignación' })
   aprobar(@Param('id') id: string, @Request() req) {
     return this.service.aprobar(+id, req.user);
   }
 
   @Patch(':id/rechazar')
-  @Roles('superadmin', 'admin', 'almacenista')
+  @Roles(...ROLES_APROBAR_ASIGNACIONES)
   @ApiOperation({ summary: 'Rechazar una asignación' })
   rechazar(@Param('id') id: string, @Request() req) {
     return this.service.rechazar(+id, req.user);
   }
 
   @Delete(':id')
-  @Roles('superadmin', 'admin', 'almacenista', 'bodega-internas', 'bodega-redes')
+  @Roles(...ROLES_EDITAR_ASIGNACIONES)
   @ApiOperation({ summary: 'Eliminar una asignación' })
   remove(@Param('id') id: string, @Request() req) {
     return this.service.remove(+id, req.user.usuarioId, req.user);
   }
 
   @Get('export/excel')
+  @Roles(...ROLES_ASIGNACIONES_TECNICOS)
   @ApiOperation({ summary: 'Export assignments to Excel' })
   @ApiQuery({ name: 'dateStart', required: false, type: String })
   @ApiQuery({ name: 'dateEnd', required: false, type: String })
@@ -195,6 +168,7 @@ export class AsignacionesTecnicosController {
   }
 
   @Get('export/pdf')
+  @Roles(...ROLES_ASIGNACIONES_TECNICOS)
   @ApiOperation({ summary: 'Export assignments to PDF' })
   @ApiQuery({ name: 'dateStart', required: false, type: String })
   @ApiQuery({ name: 'dateEnd', required: false, type: String })

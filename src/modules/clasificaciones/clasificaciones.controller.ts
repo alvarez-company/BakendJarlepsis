@@ -16,6 +16,11 @@ import { UpdateClasificacionDto } from './dto/update-clasificacion.dto';
 import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard';
 import { RolesGuard } from '../../common/guards/roles.guard';
 import { Roles } from '../../common/decorators/roles.decorator';
+import {
+  ROLES_GESTION_CATEGORIAS,
+  ROLES_VER_CATEGORIAS,
+  ROLES_SUPERADMIN_GERENCIA,
+} from '../../common/constants/roles.constants';
 
 @ApiTags('clasificaciones')
 @ApiBearerAuth()
@@ -25,47 +30,31 @@ export class ClasificacionesController {
   constructor(private readonly clasificacionesService: ClasificacionesService) {}
 
   @Post()
-  @Roles('superadmin', 'admin')
+  @Roles(...ROLES_GESTION_CATEGORIAS)
   create(@Body() createClasificacionDto: CreateClasificacionDto, @Request() req) {
     return this.clasificacionesService.create(createClasificacionDto, req.user.usuarioId);
   }
 
   @Get()
-  @Roles(
-    'superadmin',
-    'admin',
-    'almacenista',
-    'tecnico',
-    'soldador',
-    'bodega-internas',
-    'bodega-redes',
-  )
+  @Roles(...ROLES_VER_CATEGORIAS)
   findAll() {
     return this.clasificacionesService.findAll();
   }
 
   @Get(':id')
-  @Roles(
-    'superadmin',
-    'admin',
-    'almacenista',
-    'tecnico',
-    'soldador',
-    'bodega-internas',
-    'bodega-redes',
-  )
+  @Roles(...ROLES_VER_CATEGORIAS)
   findOne(@Param('id') id: string) {
     return this.clasificacionesService.findOne(+id);
   }
 
   @Patch(':id')
-  @Roles('superadmin', 'admin')
+  @Roles(...ROLES_GESTION_CATEGORIAS)
   update(@Param('id') id: string, @Body() updateClasificacionDto: UpdateClasificacionDto) {
     return this.clasificacionesService.update(+id, updateClasificacionDto);
   }
 
   @Delete(':id')
-  @Roles('superadmin', 'gerencia')
+  @Roles(...ROLES_SUPERADMIN_GERENCIA)
   remove(@Param('id') id: string) {
     return this.clasificacionesService.remove(+id);
   }

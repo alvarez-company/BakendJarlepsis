@@ -16,6 +16,11 @@ import { UpdateUnidadMedidaDto } from './dto/update-unidad-medida.dto';
 import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard';
 import { RolesGuard } from '../../common/guards/roles.guard';
 import { Roles } from '../../common/decorators/roles.decorator';
+import {
+  ROLES_GESTION_CATEGORIAS,
+  ROLES_VER_CATEGORIAS,
+  ROLES_SUPERADMIN_GERENCIA,
+} from '../../common/constants/roles.constants';
 
 @ApiTags('unidades-medida')
 @ApiBearerAuth()
@@ -25,47 +30,31 @@ export class UnidadesMedidaController {
   constructor(private readonly unidadesMedidaService: UnidadesMedidaService) {}
 
   @Post()
-  @Roles('superadmin', 'admin')
+  @Roles(...ROLES_GESTION_CATEGORIAS)
   create(@Body() createUnidadMedidaDto: CreateUnidadMedidaDto, @Request() req) {
     return this.unidadesMedidaService.create(createUnidadMedidaDto, req.user.usuarioId);
   }
 
   @Get()
-  @Roles(
-    'superadmin',
-    'admin',
-    'almacenista',
-    'tecnico',
-    'soldador',
-    'bodega-internas',
-    'bodega-redes',
-  )
+  @Roles(...ROLES_VER_CATEGORIAS)
   findAll() {
     return this.unidadesMedidaService.findAll();
   }
 
   @Get(':id')
-  @Roles(
-    'superadmin',
-    'admin',
-    'almacenista',
-    'tecnico',
-    'soldador',
-    'bodega-internas',
-    'bodega-redes',
-  )
+  @Roles(...ROLES_VER_CATEGORIAS)
   findOne(@Param('id') id: string) {
     return this.unidadesMedidaService.findOne(+id);
   }
 
   @Patch(':id')
-  @Roles('superadmin', 'admin')
+  @Roles(...ROLES_GESTION_CATEGORIAS)
   update(@Param('id') id: string, @Body() updateUnidadMedidaDto: UpdateUnidadMedidaDto) {
     return this.unidadesMedidaService.update(+id, updateUnidadMedidaDto);
   }
 
   @Delete(':id')
-  @Roles('superadmin', 'gerencia')
+  @Roles(...ROLES_SUPERADMIN_GERENCIA)
   remove(@Param('id') id: string) {
     return this.unidadesMedidaService.remove(+id);
   }

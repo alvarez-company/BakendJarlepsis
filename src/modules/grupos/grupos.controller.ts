@@ -4,6 +4,11 @@ import { GruposService } from './grupos.service';
 import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard';
 import { RolesGuard } from '../../common/guards/roles.guard';
 import { Roles } from '../../common/decorators/roles.decorator';
+import {
+  ROLES_CHAT,
+  ROLES_VER_INVENTARIO_TECNICO,
+  ROLES_SINCRONIZAR_GRUPOS,
+} from '../../common/constants/roles.constants';
 
 @ApiTags('grupos')
 @ApiBearerAuth()
@@ -13,46 +18,19 @@ export class GruposController {
   constructor(private readonly service: GruposService) {}
 
   @Get('general')
-  @Roles(
-    'superadmin',
-    'admin',
-    'almacenista',
-    'tecnico',
-    'soldador',
-    'bodega-internas',
-    'bodega-redes',
-  )
+  @Roles(...ROLES_CHAT)
   obtenerGrupoGeneral() {
     return this.service.obtenerGrupoGeneral();
   }
 
   @Get('mis-grupos')
-  @Roles(
-    'superadmin',
-    'gerencia',
-    'admin',
-    'admin-internas',
-    'admin-redes',
-    'almacenista',
-    'tecnico',
-    'soldador',
-    'bodega-internas',
-    'bodega-redes',
-  )
+  @Roles(...ROLES_CHAT)
   obtenerMisGrupos(@Request() req) {
     return this.service.obtenerMisGruposConInfo(req.user.usuarioId);
   }
 
   @Get('entidad/:tipoGrupo/:entidadId')
-  @Roles(
-    'superadmin',
-    'admin',
-    'almacenista',
-    'tecnico',
-    'soldador',
-    'bodega-internas',
-    'bodega-redes',
-  )
+  @Roles(...ROLES_VER_INVENTARIO_TECNICO)
   obtenerGrupoPorEntidad(
     @Request() req,
     @Param('tipoGrupo') tipoGrupo: string,
@@ -62,18 +40,7 @@ export class GruposController {
   }
 
   @Get('directo/:usuarioId')
-  @Roles(
-    'superadmin',
-    'gerencia',
-    'admin',
-    'admin-internas',
-    'admin-redes',
-    'almacenista',
-    'tecnico',
-    'soldador',
-    'bodega-internas',
-    'bodega-redes',
-  )
+  @Roles(...ROLES_CHAT)
   @ApiOperation({ summary: 'Obtener o crear chat directo con un usuario' })
   async obtenerOCrearChatDirecto(@Request() req, @Param('usuarioId') usuarioId: string) {
     try {
@@ -87,21 +54,13 @@ export class GruposController {
   }
 
   @Get(':grupoId')
-  @Roles(
-    'superadmin',
-    'admin',
-    'almacenista',
-    'tecnico',
-    'soldador',
-    'bodega-internas',
-    'bodega-redes',
-  )
+  @Roles(...ROLES_CHAT)
   obtenerGrupoPorId(@Param('grupoId') grupoId: string) {
     return this.service.obtenerGrupoPorId(+grupoId);
   }
 
   @Post('sincronizar')
-  @Roles('superadmin', 'gerencia')
+  @Roles(...ROLES_SINCRONIZAR_GRUPOS)
   @ApiOperation({ summary: 'Sincronizar usuarios con grupos existentes' })
   sincronizarGruposYUsuarios() {
     return this.service.sincronizarGruposYUsuarios();

@@ -121,21 +121,23 @@ describe('InstalacionesMaterialesController - Roles y Permisos', () => {
         'admin',
         'tecnico',
         'soldador',
+        'almacenista',
       ]);
 
       expect(rolesGuard.canActivate(context)).toBe(true);
     });
 
-    it('should deny almacenista from assigning materials to installations', () => {
+    it('should allow almacenista to assign materials to installations', () => {
       const user = { usuarioRol: { rolTipo: 'almacenista' } };
       const context = createMockExecutionContext(user, [
         'superadmin',
         'admin',
         'tecnico',
         'soldador',
+        'almacenista',
       ]);
 
-      expect(rolesGuard.canActivate(context)).toBe(false);
+      expect(rolesGuard.canActivate(context)).toBe(true);
     });
 
     it('should deny bodega-internas from assigning materials to installations', () => {
@@ -145,6 +147,7 @@ describe('InstalacionesMaterialesController - Roles y Permisos', () => {
         'admin',
         'tecnico',
         'soldador',
+        'almacenista',
       ]);
 
       expect(rolesGuard.canActivate(context)).toBe(false);

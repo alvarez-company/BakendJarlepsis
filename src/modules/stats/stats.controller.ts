@@ -4,6 +4,7 @@ import { StatsService } from './stats.service';
 import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard';
 import { RolesGuard } from '../../common/guards/roles.guard';
 import { Roles } from '../../common/decorators/roles.decorator';
+import { ROLES_VER_MATERIALES_INVENTARIO } from '../../common/constants/roles.constants';
 
 @ApiTags('stats')
 @ApiBearerAuth()
@@ -13,17 +14,7 @@ export class StatsController {
   constructor(private readonly statsService: StatsService) {}
 
   @Get('dashboard')
-  @Roles(
-    'superadmin',
-    'admin',
-    'admin-internas',
-    'admin-redes',
-    'almacenista',
-    'tecnico',
-    'soldador',
-    'bodega-internas',
-    'bodega-redes',
-  )
+  @Roles(...ROLES_VER_MATERIALES_INVENTARIO)
   @ApiOperation({ summary: 'Get dashboard statistics' })
   async getDashboardStats(@Request() req) {
     return {

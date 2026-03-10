@@ -17,6 +17,11 @@ import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard';
 import { RolesGuard } from '../../common/guards/roles.guard';
 import { Roles } from '../../common/decorators/roles.decorator';
 import { ImpersonationGuard } from '../auth/guards/impersonation.guard';
+import {
+  ROLES_GESTION_BODEGAS,
+  ROLES_VER_BODEGAS,
+  ROLES_ELIMINAR_BODEGA,
+} from '../../common/constants/roles.constants';
 
 @ApiTags('bodegas')
 @ApiBearerAuth()
@@ -26,55 +31,35 @@ export class BodegasController {
   constructor(private readonly bodegasService: BodegasService) {}
 
   @Post()
-  @Roles('superadmin', 'admin', 'admin-internas', 'admin-redes')
+  @Roles(...ROLES_GESTION_BODEGAS)
   @ApiOperation({ summary: 'Create a new bodega (tipo internas o redes obligatorio)' })
   create(@Body() createBodegaDto: CreateBodegaDto, @Request() req) {
     return this.bodegasService.create(createBodegaDto, req.user);
   }
 
   @Get()
-  @Roles(
-    'superadmin',
-    'admin',
-    'admin-internas',
-    'admin-redes',
-    'bodega-internas',
-    'bodega-redes',
-    'almacenista',
-    'tecnico',
-    'soldador',
-  )
+  @Roles(...ROLES_VER_BODEGAS)
   @ApiOperation({ summary: 'Get all bodegas' })
   findAll(@Request() req) {
     return this.bodegasService.findAll(req.user);
   }
 
   @Get(':id')
-  @Roles(
-    'superadmin',
-    'admin',
-    'admin-internas',
-    'admin-redes',
-    'bodega-internas',
-    'bodega-redes',
-    'almacenista',
-    'tecnico',
-    'soldador',
-  )
+  @Roles(...ROLES_VER_BODEGAS)
   @ApiOperation({ summary: 'Get a bodega by ID' })
   findOne(@Param('id') id: string, @Request() req) {
     return this.bodegasService.findOne(+id, req.user);
   }
 
   @Patch(':id')
-  @Roles('superadmin', 'admin', 'admin-internas', 'admin-redes')
+  @Roles(...ROLES_GESTION_BODEGAS)
   @ApiOperation({ summary: 'Update a bodega' })
   update(@Param('id') id: string, @Body() updateBodegaDto: UpdateBodegaDto, @Request() req) {
     return this.bodegasService.update(+id, updateBodegaDto, req.user);
   }
 
   @Delete(':id')
-  @Roles('superadmin', 'gerencia')
+  @Roles(...ROLES_ELIMINAR_BODEGA)
   @ApiOperation({ summary: 'Delete a bodega' })
   remove(@Param('id') id: string, @Request() req) {
     return this.bodegasService.remove(+id, req.user);

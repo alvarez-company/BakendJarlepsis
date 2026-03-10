@@ -19,6 +19,13 @@ import { ExportacionService } from '../exportacion/exportacion.service';
 import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard';
 import { RolesGuard } from '../../common/guards/roles.guard';
 import { Roles } from '../../common/decorators/roles.decorator';
+import {
+  ROLES_ALMACENISTA,
+  ROLES_VER_MATERIALES_INVENTARIO,
+  ROLES_VER_MOVIMIENTOS_CODIGO,
+  ROLES_VER_HISTORIAL_BODEGA,
+  ROLES_SUPERADMIN_GERENCIA,
+} from '../../common/constants/roles.constants';
 import { PaginationDto } from '../../common/dto/pagination.dto';
 import { ImpersonationGuard } from '../auth/guards/impersonation.guard';
 
@@ -33,24 +40,14 @@ export class MovimientosController {
   ) {}
 
   @Post()
-  @Roles('superadmin', 'almacenista')
+  @Roles(...ROLES_ALMACENISTA)
   @ApiOperation({ summary: 'Create a new movimiento (Entrada, Salida o Devolución)' })
   create(@Body() createMovimientoDto: CreateMovimientoDto) {
     return this.movimientosService.create(createMovimientoDto);
   }
 
   @Get()
-  @Roles(
-    'superadmin',
-    'admin',
-    'admin-internas',
-    'admin-redes',
-    'almacenista',
-    'tecnico',
-    'soldador',
-    'bodega-internas',
-    'bodega-redes',
-  )
+  @Roles(...ROLES_VER_MATERIALES_INVENTARIO)
   @ApiOperation({ summary: 'Get all movimientos' })
   findAll(
     @Query('instalacionId') instalacionId?: string,
@@ -64,94 +61,42 @@ export class MovimientosController {
   }
 
   @Get('codigo/:codigo')
-  @Roles(
-    'superadmin',
-    'admin',
-    'admin-internas',
-    'admin-redes',
-    'almacenista',
-    'tecnico',
-    'soldador',
-  )
+  @Roles(...ROLES_VER_MOVIMIENTOS_CODIGO)
   @ApiOperation({ summary: 'Get movimientos by código' })
   findByCodigo(@Param('codigo') codigo: string) {
     return this.movimientosService.findByCodigo(codigo);
   }
 
   @Get('material/:materialId')
-  @Roles(
-    'superadmin',
-    'admin',
-    'admin-internas',
-    'admin-redes',
-    'almacenista',
-    'tecnico',
-    'soldador',
-    'bodega-internas',
-    'bodega-redes',
-  )
+  @Roles(...ROLES_VER_MATERIALES_INVENTARIO)
   @ApiOperation({ summary: 'Get movimientos by material ID with stock history' })
   findByMaterial(@Param('materialId') materialId: string) {
     return this.movimientosService.findByMaterial(+materialId);
   }
 
   @Get('bodega/:bodegaId/historial')
-  @Roles(
-    'superadmin',
-    'admin',
-    'admin-internas',
-    'admin-redes',
-    'almacenista',
-    'bodega-internas',
-    'bodega-redes',
-  )
+  @Roles(...ROLES_VER_HISTORIAL_BODEGA)
   @ApiOperation({ summary: 'Get stock history by bodega ID' })
   findByBodega(@Param('bodegaId') bodegaId: string, @Request() req?: any) {
     return this.movimientosService.findByBodega(+bodegaId, req?.user);
   }
 
   @Get('sede/:sedeId/historial')
-  @Roles(
-    'superadmin',
-    'admin',
-    'admin-internas',
-    'admin-redes',
-    'almacenista',
-    'bodega-internas',
-    'bodega-redes',
-  )
+  @Roles(...ROLES_VER_HISTORIAL_BODEGA)
   @ApiOperation({ summary: 'Get stock history by sede ID' })
   findBySede(@Param('sedeId') sedeId: string, @Request() req?: any) {
     return this.movimientosService.findBySede(+sedeId, req?.user);
   }
 
   @Get('tecnico/:usuarioId/historial')
-  @Roles(
-    'superadmin',
-    'admin',
-    'admin-internas',
-    'admin-redes',
-    'almacenista',
-    'tecnico',
-    'soldador',
-    'bodega-internas',
-    'bodega-redes',
-  )
+  @Roles(...ROLES_VER_MATERIALES_INVENTARIO)
   @ApiOperation({ summary: 'Get stock history by tecnico (usuario) ID' })
   findByTecnico(@Param('usuarioId') usuarioId: string) {
     return this.movimientosService.findByTecnico(+usuarioId);
   }
 
   @Get('export/excel')
-  @Roles(
-    'superadmin',
-    'admin',
-    'admin-internas',
-    'admin-redes',
-    'almacenista',
-    'tecnico',
-    'soldador',
-  )
+  @Roles(...ROLES_VER_MATERIALES_INVENTARIO)
   @ApiOperation({ summary: 'Export movements to Excel' })
   @ApiQuery({ name: 'filters', required: false, type: String })
   @ApiQuery({ name: 'dateStart', required: false, type: String })
@@ -253,15 +198,7 @@ export class MovimientosController {
   }
 
   @Get('export/pdf')
-  @Roles(
-    'superadmin',
-    'admin',
-    'admin-internas',
-    'admin-redes',
-    'almacenista',
-    'tecnico',
-    'soldador',
-  )
+  @Roles(...ROLES_VER_MATERIALES_INVENTARIO)
   @ApiOperation({ summary: 'Export movements to PDF' })
   @ApiQuery({ name: 'filters', required: false, type: String })
   @ApiQuery({ name: 'dateStart', required: false, type: String })
@@ -359,31 +296,21 @@ export class MovimientosController {
   }
 
   @Get(':id')
-  @Roles(
-    'superadmin',
-    'admin',
-    'admin-internas',
-    'admin-redes',
-    'almacenista',
-    'tecnico',
-    'soldador',
-    'bodega-internas',
-    'bodega-redes',
-  )
+  @Roles(...ROLES_VER_MATERIALES_INVENTARIO)
   @ApiOperation({ summary: 'Get a movimiento by ID' })
   findOne(@Param('id') id: string, @Request() req?: any) {
     return this.movimientosService.findOne(+id, req?.user);
   }
 
   @Patch(':id')
-  @Roles('superadmin', 'almacenista')
+  @Roles(...ROLES_ALMACENISTA)
   @ApiOperation({ summary: 'Update a movimiento' })
   update(@Param('id') id: string, @Body() updateMovimientoDto: CreateMovimientoDto) {
     return this.movimientosService.update(+id, updateMovimientoDto);
   }
 
   @Delete(':id')
-  @Roles('superadmin', 'gerencia')
+  @Roles(...ROLES_SUPERADMIN_GERENCIA)
   @ApiOperation({ summary: 'Delete a movimiento' })
   async remove(@Param('id') id: string, @Request() req) {
     await this.movimientosService.remove(+id, req.user.usuarioId);

@@ -21,6 +21,11 @@ import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard';
 import { RolesGuard } from '../../common/guards/roles.guard';
 import { Roles } from '../../common/decorators/roles.decorator';
 import { ImpersonationGuard } from '../auth/guards/impersonation.guard';
+import {
+  ROLES_ALMACENISTA,
+  ROLES_VER_MATERIALES_INVENTARIO,
+  ROLES_SUPERADMIN_GERENCIA,
+} from '../../common/constants/roles.constants';
 
 @ApiTags('inventarios')
 @ApiBearerAuth()
@@ -33,70 +38,42 @@ export class InventariosController {
   ) {}
 
   @Post()
-  @Roles('superadmin', 'almacenista')
+  @Roles(...ROLES_ALMACENISTA)
   @ApiOperation({ summary: 'Create a new inventario' })
   create(@Body() createInventarioDto: CreateInventarioDto) {
     return this.inventariosService.create(createInventarioDto);
   }
 
   @Get()
-  @Roles(
-    'superadmin',
-    'admin',
-    'admin-internas',
-    'admin-redes',
-    'almacenista',
-    'tecnico',
-    'soldador',
-    'bodega-internas',
-    'bodega-redes',
-  )
+  @Roles(...ROLES_VER_MATERIALES_INVENTARIO)
   @ApiOperation({ summary: 'Get all inventarios' })
   findAll(@Request() req) {
     return this.inventariosService.findAll(req.user);
   }
 
   @Get(':id')
-  @Roles(
-    'superadmin',
-    'admin',
-    'admin-internas',
-    'admin-redes',
-    'almacenista',
-    'tecnico',
-    'soldador',
-    'bodega-internas',
-    'bodega-redes',
-  )
+  @Roles(...ROLES_VER_MATERIALES_INVENTARIO)
   @ApiOperation({ summary: 'Get an inventario by ID' })
   findOne(@Param('id') id: string, @Request() req) {
     return this.inventariosService.findOne(+id, req.user);
   }
 
   @Patch(':id')
-  @Roles('superadmin', 'almacenista')
+  @Roles(...ROLES_ALMACENISTA)
   @ApiOperation({ summary: 'Update an inventario' })
   update(@Param('id') id: string, @Body() updateInventarioDto: UpdateInventarioDto) {
     return this.inventariosService.update(+id, updateInventarioDto);
   }
 
   @Delete(':id')
-  @Roles('superadmin', 'gerencia')
+  @Roles(...ROLES_SUPERADMIN_GERENCIA)
   @ApiOperation({ summary: 'Delete an inventario' })
   remove(@Param('id') id: string) {
     return this.inventariosService.remove(+id);
   }
 
   @Get('export/excel')
-  @Roles(
-    'superadmin',
-    'admin',
-    'admin-internas',
-    'admin-redes',
-    'almacenista',
-    'tecnico',
-    'soldador',
-  )
+  @Roles(...ROLES_VER_MATERIALES_INVENTARIO)
   @ApiOperation({ summary: 'Export inventories to Excel' })
   @ApiQuery({ name: 'filters', required: false, type: String })
   async exportToExcel(
@@ -156,15 +133,7 @@ export class InventariosController {
   }
 
   @Get('export/pdf')
-  @Roles(
-    'superadmin',
-    'admin',
-    'admin-internas',
-    'admin-redes',
-    'almacenista',
-    'tecnico',
-    'soldador',
-  )
+  @Roles(...ROLES_VER_MATERIALES_INVENTARIO)
   @ApiOperation({ summary: 'Export inventories to PDF' })
   @ApiQuery({ name: 'filters', required: false, type: String })
   async exportToPdf(

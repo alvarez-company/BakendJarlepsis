@@ -6,6 +6,7 @@ import { UpdatePaisDto } from './dto/update-pais.dto';
 import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard';
 import { RolesGuard } from '../../common/guards/roles.guard';
 import { Roles } from '../../common/decorators/roles.decorator';
+import { ROLES_SUPERADMIN_GERENCIA, ROLES_VER_CATALOGOS_ADMIN } from '../../common/constants/roles.constants';
 
 @ApiTags('paises')
 @ApiBearerAuth()
@@ -15,35 +16,35 @@ export class PaisesController {
   constructor(private readonly paisesService: PaisesService) {}
 
   @Post()
-  @Roles('superadmin', 'gerencia')
+  @Roles(...ROLES_SUPERADMIN_GERENCIA)
   @ApiOperation({ summary: 'Create a new país' })
   create(@Body() createPaisDto: CreatePaisDto) {
     return this.paisesService.create(createPaisDto);
   }
 
   @Get()
-  @Roles('superadmin', 'admin')
+  @Roles(...ROLES_VER_CATALOGOS_ADMIN)
   @ApiOperation({ summary: 'Get all países' })
   findAll() {
     return this.paisesService.findAll();
   }
 
   @Get(':id')
-  @Roles('superadmin', 'admin')
+  @Roles(...ROLES_VER_CATALOGOS_ADMIN)
   @ApiOperation({ summary: 'Get a país by ID' })
   findOne(@Param('id') id: string) {
     return this.paisesService.findOne(+id);
   }
 
   @Patch(':id')
-  @Roles('superadmin', 'gerencia')
+  @Roles(...ROLES_SUPERADMIN_GERENCIA)
   @ApiOperation({ summary: 'Update a país' })
   update(@Param('id') id: string, @Body() updatePaisDto: UpdatePaisDto) {
     return this.paisesService.update(+id, updatePaisDto);
   }
 
   @Delete(':id')
-  @Roles('superadmin', 'gerencia')
+  @Roles(...ROLES_SUPERADMIN_GERENCIA)
   @ApiOperation({ summary: 'Delete a país' })
   remove(@Param('id') id: string) {
     return this.paisesService.remove(+id);

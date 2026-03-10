@@ -89,7 +89,7 @@ export class UsersService {
         const creator = await this.findOne(creadorId);
         if (!creator.usuarioSede) {
           throw new BadRequestException(
-            'Tu usuario no tiene centro operativo asignado. No puedes crear usuarios.',
+            'Tu usuario no tiene centro operativo (sede) asignado. Para crear usuarios debes tener un centro operativo asignado. Contacte a Gerencia o SuperAdmin para que le asignen uno.',
           );
         }
 

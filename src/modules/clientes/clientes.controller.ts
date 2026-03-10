@@ -20,6 +20,12 @@ import { ExportacionService } from '../exportacion/exportacion.service';
 import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard';
 import { RolesGuard } from '../../common/guards/roles.guard';
 import { Roles } from '../../common/decorators/roles.decorator';
+import {
+  ROLES_INSTALACIONES,
+  ROLES_CLIENTES_UPDATE,
+  ROLES_CLIENTES_EXPORT,
+  ROLES_SUPERADMIN_GERENCIA,
+} from '../../common/constants/roles.constants';
 import { ImpersonationGuard } from '../auth/guards/impersonation.guard';
 
 @ApiTags('clientes')
@@ -33,84 +39,42 @@ export class ClientesController {
   ) {}
 
   @Post()
-  @Roles(
-    'superadmin',
-    'admin',
-    'admin-internas',
-    'admin-redes',
-    'almacenista',
-    'tecnico',
-    'soldador',
-    'bodega-internas',
-    'bodega-redes',
-  )
+  @Roles(...ROLES_INSTALACIONES)
   @ApiOperation({ summary: 'Create a new cliente' })
   create(@Body() createClienteDto: CreateClienteDto, @Request() req) {
     return this.clientesService.create(createClienteDto, req.user.usuarioId);
   }
 
   @Get()
-  @Roles(
-    'superadmin',
-    'admin',
-    'admin-internas',
-    'admin-redes',
-    'almacenista',
-    'tecnico',
-    'soldador',
-    'bodega-internas',
-    'bodega-redes',
-  )
+  @Roles(...ROLES_INSTALACIONES)
   @ApiOperation({ summary: 'Get all clientes' })
   findAll(@Request() req) {
     return this.clientesService.findAll(req.user);
   }
 
   @Get(':id')
-  @Roles(
-    'superadmin',
-    'admin',
-    'admin-internas',
-    'admin-redes',
-    'almacenista',
-    'tecnico',
-    'soldador',
-    'bodega-internas',
-    'bodega-redes',
-  )
+  @Roles(...ROLES_INSTALACIONES)
   @ApiOperation({ summary: 'Get a cliente by ID' })
   findOne(@Param('id') id: string, @Request() req) {
     return this.clientesService.findOne(+id, req.user);
   }
 
   @Patch(':id')
-  @Roles(
-    'superadmin',
-    'admin',
-    'admin-internas',
-    'admin-redes',
-    'almacenista'
-  )
+  @Roles(...ROLES_CLIENTES_UPDATE)
   @ApiOperation({ summary: 'Update a cliente' })
   update(@Param('id') id: string, @Body() updateClienteDto: UpdateClienteDto, @Request() req) {
     return this.clientesService.update(+id, updateClienteDto, req.user);
   }
 
   @Delete(':id')
-  @Roles('superadmin', 'gerencia')
+  @Roles(...ROLES_SUPERADMIN_GERENCIA)
   @ApiOperation({ summary: 'Delete a cliente' })
   remove(@Param('id') id: string) {
     return this.clientesService.remove(+id);
   }
 
   @Get('export/excel')
-  @Roles(
-    'superadmin',
-    'admin',
-    'admin-internas',
-    'admin-redes',
-    'almacenista'
-  )
+  @Roles(...ROLES_CLIENTES_EXPORT)
   @ApiOperation({ summary: 'Export clients to Excel (almacenista no tiene acceso)' })
   @ApiQuery({ name: 'filters', required: false, type: String })
   async exportToExcel(@Res() res: Response, @Request() req, @Query('filters') filters?: string) {
@@ -164,13 +128,7 @@ export class ClientesController {
   }
 
   @Get('export/pdf')
-  @Roles(
-    'superadmin',
-    'admin',
-    'admin-internas',
-    'admin-redes',
-    'almacenista'
-  )
+  @Roles(...ROLES_CLIENTES_EXPORT)
   @ApiOperation({ summary: 'Export clients to PDF (almacenista no tiene acceso)' })
   @ApiQuery({ name: 'filters', required: false, type: String })
   async exportToPdf(@Res() res: Response, @Request() req, @Query('filters') filters?: string) {
