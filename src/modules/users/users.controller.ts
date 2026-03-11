@@ -45,8 +45,12 @@ export class UsersController {
   @Roles(...ROLES_CREAR_USUARIO)
   @ApiOperation({ summary: 'Create a new user (admin: solo usuarios de su centro operativo)' })
   create(@Body() createUserDto: CreateUserDto, @Request() req) {
-    const rolTipo = req.user.usuarioRol?.rolTipo || req.user.role;
-    return this.usersService.create(createUserDto, req.user.usuarioId, rolTipo);
+    const rolTipo = req.user?.usuarioRol?.rolTipo ?? req.user?.role ?? '';
+    const creadorId = req.user?.usuarioId ?? req.user?.sub;
+    if (!creadorId) {
+      throw new UnauthorizedException('Usuario no autenticado');
+    }
+    return this.usersService.create(createUserDto, creadorId, rolTipo);
   }
 
   // Endpoints para el usuario actual (sin restricción de roles) - DEBEN IR ANTES de las rutas genéricas

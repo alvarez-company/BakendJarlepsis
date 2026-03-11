@@ -5,13 +5,11 @@
  * Uso en controladores: @Roles(...ROLES_CREAR_USUARIO)
  */
 
-/** Roles que pueden crear usuarios (admin solo para su centro operativo) */
+/** Roles que pueden crear usuarios (solo admin de centro, superadmin y gerencia) */
 export const ROLES_CREAR_USUARIO = [
   'superadmin',
   'gerencia',
   'admin',
-  'admin-internas',
-  'admin-redes',
 ] as const;
 
 /** Roles que pueden listar/ver usuarios */
