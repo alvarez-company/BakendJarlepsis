@@ -160,8 +160,24 @@ export class ClientesService {
             bodegaIds,
           );
           const clienteIds = clienteIdsRaw.map((c: any) => c.clienteId);
-          if (clienteIds.length > 0) {
-            const placeholdersClientes = clienteIds.map(() => '?').join(',');
+
+          // Permitir ver también clientes sin instalaciones creados por el admin
+          // o por usuarios de su misma sede.
+          if (rolTipo === 'admin' || rolTipo === 'admin-internas' || rolTipo === 'admin-redes') {
+            const clienteIdsCreadosRaw = await this.clientesRepository.query(
+              `SELECT c.clienteId
+               FROM clientes c
+               LEFT JOIN users u ON c.usuarioRegistra = u.usuarioId
+               WHERE c.usuarioRegistra = ? OR u.usuarioSede = ?`,
+              [user.usuarioId, usuarioSede],
+            );
+            const clienteIdsCreados = clienteIdsCreadosRaw.map((c: any) => c.clienteId);
+            clienteIds.push(...clienteIdsCreados);
+          }
+
+          const clienteIdsUnicos = [...new Set(clienteIds)];
+          if (clienteIdsUnicos.length > 0) {
+            const placeholdersClientes = clienteIdsUnicos.map(() => '?').join(',');
             clientes = await this.clientesRepository
               .createQueryBuilder('cliente')
               .select([
@@ -177,7 +193,7 @@ export class ClientesService {
                 'cliente.fechaCreacion',
                 'cliente.fechaActualizacion',
               ])
-              .where(`cliente.clienteId IN (${placeholdersClientes})`, clienteIds)
+              .where(`cliente.clienteId IN (${placeholdersClientes})`, clienteIdsUnicos)
               .getMany();
           }
         }
@@ -294,7 +310,19 @@ export class ClientesService {
         [id, user.usuarioSede],
       );
       if (!rows || rows.length === 0) {
-        throw new NotFoundException(`Cliente con ID ${id} no encontrado`);
+        // También permitir clientes recién creados que aún no tienen instalaciones,
+        // si pertenecen al mismo centro operativo (o los creó el usuario actual).
+        const clienteVisibleSinInstalacion = await this.clientesRepository.query(
+          `SELECT c.clienteId
+           FROM clientes c
+           LEFT JOIN users u ON c.usuarioRegistra = u.usuarioId
+           WHERE c.clienteId = ? AND (c.usuarioRegistra = ? OR u.usuarioSede = ?)
+           LIMIT 1`,
+          [id, user.usuarioId, user.usuarioSede],
+        );
+        if (!clienteVisibleSinInstalacion || clienteVisibleSinInstalacion.length === 0) {
+          throw new NotFoundException(`Cliente con ID ${id} no encontrado`);
+        }
       }
     }
 
