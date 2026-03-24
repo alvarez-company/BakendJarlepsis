@@ -249,36 +249,72 @@ export class InstalacionesService {
   async findAll(user?: any): Promise<Instalacion[]> {
     try {
       // Filtrar por centro operativo (sede): usuarios con sede solo ven instalaciones de bodegas de su sede
-      const rolTipo = user?.usuarioRol?.rolTipo || user?.role || '';
-      const usuarioSede = user?.usuarioSede;
+      const rolTipo = (user?.usuarioRol?.rolTipo || user?.role || '').toString().toLowerCase();
+      // 0 se usa a veces como "vacío"; sin sede válida no aplicar filtro (mismo criterio que otros servicios)
+      const rawSede = user?.usuarioSede;
+      const usuarioSede =
+        rawSede != null && rawSede !== '' && Number(rawSede) !== 0 ? Number(rawSede) : null;
       let whereClause = '';
       const queryParams: any[] = [];
 
       // SuperAdmin/Gerencia: sin filtro (ven todas las instalaciones)
       if (usuarioSede != null) {
-        // Admin (centro operativo): solo instalaciones de bodegas de su sede
-        if (rolTipo === 'admin') {
+        // Admin / almacenista: solo instalaciones del centro operativo (bodega de su sede)
+        // o sin bodega aún pero registradas por su centro (usuario registra o usuarioRegistra = yo).
+        if (rolTipo === 'admin' || rolTipo === 'almacenista') {
           whereClause = `
-            INNER JOIN bodegas b ON i.bodegaId = b.bodegaId
-            WHERE b.sedeId = ?
+            LEFT JOIN bodegas b ON i.bodegaId = b.bodegaId
+            LEFT JOIN usuarios ur ON i.usuarioRegistra = ur.usuarioId
+            WHERE (
+              (i.bodegaId IS NOT NULL AND b.sedeId = ?)
+              OR (
+                i.bodegaId IS NULL
+                AND (
+                  i.usuarioRegistra = ?
+                  OR ur.usuarioSede = ?
+                )
+              )
+            )
           `;
-          queryParams.push(usuarioSede);
+          queryParams.push(usuarioSede, user.usuarioId, usuarioSede);
         }
-        // Admin-internas: solo instalaciones de bodegas tipo internas de su sede
+        // Admin-internas: bodega internas de su sede, o sin bodega pero instalacionTipo internas y su centro
         else if (rolTipo === 'admin-internas') {
           whereClause = `
-            INNER JOIN bodegas b ON i.bodegaId = b.bodegaId
-            WHERE b.sedeId = ? AND b.bodegaTipo = 'internas'
+            LEFT JOIN bodegas b ON i.bodegaId = b.bodegaId
+            LEFT JOIN usuarios ur ON i.usuarioRegistra = ur.usuarioId
+            WHERE (
+              (i.bodegaId IS NOT NULL AND b.sedeId = ? AND b.bodegaTipo = 'internas')
+              OR (
+                i.bodegaId IS NULL
+                AND i.instalacionTipo = 'internas'
+                AND (
+                  i.usuarioRegistra = ?
+                  OR ur.usuarioSede = ?
+                )
+              )
+            )
           `;
-          queryParams.push(usuarioSede);
+          queryParams.push(usuarioSede, user.usuarioId, usuarioSede);
         }
-        // Admin-redes: solo instalaciones de bodegas tipo redes de su sede
+        // Admin-redes: bodega redes de su sede, o sin bodega pero instalacionTipo redes y su centro
         else if (rolTipo === 'admin-redes') {
           whereClause = `
-            INNER JOIN bodegas b ON i.bodegaId = b.bodegaId
-            WHERE b.sedeId = ? AND b.bodegaTipo = 'redes'
+            LEFT JOIN bodegas b ON i.bodegaId = b.bodegaId
+            LEFT JOIN usuarios ur ON i.usuarioRegistra = ur.usuarioId
+            WHERE (
+              (i.bodegaId IS NOT NULL AND b.sedeId = ? AND b.bodegaTipo = 'redes')
+              OR (
+                i.bodegaId IS NULL
+                AND i.instalacionTipo = 'redes'
+                AND (
+                  i.usuarioRegistra = ?
+                  OR ur.usuarioSede = ?
+                )
+              )
+            )
           `;
-          queryParams.push(usuarioSede);
+          queryParams.push(usuarioSede, user.usuarioId, usuarioSede);
         }
         // Bodega-internas/redes: solo instalaciones de su bodega
         else if (rolTipo === 'bodega-internas' || rolTipo === 'bodega-redes') {
@@ -292,14 +328,6 @@ export class InstalacionesService {
             WHERE iu.usuarioId = ? AND iu.activo = 1
           `;
           queryParams.push(user.usuarioId);
-        }
-        // Almacenista: instalaciones de su centro operativo (tanto internas como redes)
-        else if (rolTipo === 'almacenista') {
-          whereClause = `
-            LEFT JOIN bodegas b ON i.bodegaId = b.bodegaId
-            WHERE (i.bodegaId IS NULL OR b.sedeId = ?)
-          `;
-          queryParams.push(usuarioSede);
         }
       }
 
@@ -481,7 +509,7 @@ export class InstalacionesService {
         try {
           const usuariosRaw = await this.instalacionesRepository.query(
             `SELECT usuarioId, usuarioNombre, usuarioApellido, usuarioCorreo, 
-                  usuarioTelefono, usuarioDocumento, usuarioEstado
+                  usuarioTelefono, usuarioDocumento, usuarioEstado, usuarioSede
            FROM usuarios 
            WHERE usuarioId IN (${usuarioIds.map(() => '?').join(',')})`,
             usuarioIds,
@@ -551,6 +579,70 @@ export class InstalacionesService {
         return instalacion;
       });
 
+      /** Bodega de la sede del usuario, o sin bodega pero registrada en su centro / por él. */
+      const instalacionPerteneceASede = (inst: any): boolean => {
+        if (usuarioSede == null) return false;
+        if (inst.bodegaId && inst.bodega?.sedeId != null) {
+          return Number(inst.bodega.sedeId) === usuarioSede;
+        }
+        if (!inst.bodegaId) {
+          if (
+            inst.usuarioRegistra != null &&
+            Number(inst.usuarioRegistra) === Number(user.usuarioId)
+          ) {
+            return true;
+          }
+          const regSede = inst.usuarioRegistrador?.usuarioSede;
+          return (
+            regSede != null &&
+            regSede !== '' &&
+            Number(regSede) !== 0 &&
+            Number(regSede) === usuarioSede
+          );
+        }
+        return false;
+      };
+
+      /** Admin-internas / admin-redes: mismo alcance de sede y tipo de bodega o instalacionTipo acorde. */
+      const instalacionPerteneceSedeYTipoBodega = (
+        inst: any,
+        tipo: 'internas' | 'redes',
+      ): boolean => {
+        if (usuarioSede == null) return false;
+        const tipoLower = tipo;
+        if (inst.bodegaId && inst.bodega) {
+          const bTipo = (inst.bodega.bodegaTipo ?? '').toString().toLowerCase();
+          if (bTipo !== tipoLower) return false;
+          return Number(inst.bodega.sedeId) === usuarioSede;
+        }
+        if (!inst.bodegaId) {
+          const colTipo = (inst.instalacionTipo ?? '').toString().toLowerCase();
+          if (colTipo !== tipoLower) return false;
+          if (
+            inst.usuarioRegistra != null &&
+            Number(inst.usuarioRegistra) === Number(user.usuarioId)
+          ) {
+            return true;
+          }
+          const regSede = inst.usuarioRegistrador?.usuarioSede;
+          return (
+            regSede != null &&
+            regSede !== '' &&
+            Number(regSede) !== 0 &&
+            Number(regSede) === usuarioSede
+          );
+        }
+        return false;
+      };
+
+      const instalacionCoincideTipoOperacion = (inst: any, tipo: 'internas' | 'redes'): boolean => {
+        if (inst.bodegaId && inst.bodega?.bodegaTipo) {
+          return (inst.bodega.bodegaTipo as string).toLowerCase() === tipo;
+        }
+        if ((inst.instalacionTipo ?? '').toString().toLowerCase() === tipo) return true;
+        return (inst.tipoInstalacion?.tipoInstalacionNombre ?? '').toLowerCase().includes(tipo);
+      };
+
       // SuperAdmin / desarrollador / Gerencia ven todo (rol sin distinguir mayúsculas)
       const rolTipoListado = (user?.usuarioRol?.rolTipo ?? user?.role ?? '')
         .toString()
@@ -559,12 +651,10 @@ export class InstalacionesService {
         return allInstalaciones;
       }
 
-      // Admin (centro operativo) ve instalaciones de su sede y las sin bodega (recién creadas)
-      if (user?.usuarioRol?.rolTipo === 'admin' || user?.role === 'admin') {
-        if (user.usuarioSede) {
-          return allInstalaciones.filter(
-            (inst) => !inst.bodegaId || inst.bodega?.sedeId === user.usuarioSede,
-          );
+      // Admin (centro operativo): solo su sede; sin bodega solo si es de su centro o la creó él
+      if (rolTipoListado === 'admin') {
+        if (usuarioSede != null) {
+          return allInstalaciones.filter(instalacionPerteneceASede);
         }
         return [];
       }
@@ -592,44 +682,42 @@ export class InstalacionesService {
         });
       }
 
-      // Almacenista puede ver todas las instalaciones de su centro operativo (tanto internas como redes)
-      if (user?.usuarioRol?.rolTipo === 'almacenista' || user?.role === 'almacenista') {
-        if (user?.usuarioSede) {
-          return allInstalaciones.filter((inst) => !inst.bodegaId || inst.bodega?.sedeId === user.usuarioSede);
+      // Almacenista: mismo criterio de centro que admin cuando tiene sede
+      if (rolTipoListado === 'almacenista') {
+        if (usuarioSede != null) {
+          return allInstalaciones.filter(instalacionPerteneceASede);
         }
-        return allInstalaciones; // Si no tiene sede asignada, ver todas
+        return allInstalaciones;
       }
 
-      // Bodega Internas y Admin Internas solo ven instalaciones de tipo "internas" (y por sede si aplica)
+      // Bodega Internas y Admin Internas: solo operación internas (bodega o clasificación coherente + sede si aplica)
       if (
         user?.usuarioRol?.rolTipo === 'bodega-internas' ||
         user?.role === 'bodega-internas' ||
         user?.usuarioRol?.rolTipo === 'admin-internas' ||
         user?.role === 'admin-internas'
       ) {
-        let list = allInstalaciones.filter((inst) => {
-          const tipoNombre = inst.tipoInstalacion?.tipoInstalacionNombre?.toLowerCase() || '';
-          return tipoNombre.includes('internas');
-        });
+        let list = allInstalaciones.filter((inst) =>
+          instalacionCoincideTipoOperacion(inst, 'internas'),
+        );
         if (filterBySedeIfAdmin) {
-          list = list.filter((inst) => !inst.bodegaId || inst.bodega?.sedeId === user.usuarioSede);
+          list = list.filter((inst) => instalacionPerteneceSedeYTipoBodega(inst, 'internas'));
         }
         return list;
       }
 
-      // Bodega Redes y Admin Redes solo ven instalaciones de tipo "redes" (y por sede si aplica)
+      // Bodega Redes y Admin Redes: solo operación redes
       if (
         user?.usuarioRol?.rolTipo === 'bodega-redes' ||
         user?.role === 'bodega-redes' ||
         user?.usuarioRol?.rolTipo === 'admin-redes' ||
         user?.role === 'admin-redes'
       ) {
-        let list = allInstalaciones.filter((inst) => {
-          const tipoNombre = inst.tipoInstalacion?.tipoInstalacionNombre?.toLowerCase() || '';
-          return tipoNombre.includes('redes');
-        });
+        let list = allInstalaciones.filter((inst) =>
+          instalacionCoincideTipoOperacion(inst, 'redes'),
+        );
         if (filterBySedeIfAdmin) {
-          list = list.filter((inst) => !inst.bodegaId || inst.bodega?.sedeId === user.usuarioSede);
+          list = list.filter((inst) => instalacionPerteneceSedeYTipoBodega(inst, 'redes'));
         }
         return list;
       }
@@ -815,6 +903,7 @@ export class InstalacionesService {
         i.instalacionId,
         i.identificadorUnico,
         i.instalacionCodigo,
+        i.instalacionTipo,
         i.tipoInstalacionId,
         i.clienteId,
         i.instalacionMedidorNumero,
@@ -954,6 +1043,7 @@ export class InstalacionesService {
     const instalacion: any = {
       instalacionId: row.instalacionId,
       identificadorUnico: row.identificadorUnico,
+      instalacionTipo: row.instalacionTipo ?? null,
       tipoInstalacionId: row.tipoInstalacionId,
       clienteId: row.clienteId,
       instalacionMedidorNumero: row.instalacionMedidorNumero,
@@ -999,15 +1089,60 @@ export class InstalacionesService {
       bodega,
     };
 
-    // Restricción por centro operativo: admin / admin-internas / admin-redes solo ven instalaciones de su sede
-    const rolTipo = user?.usuarioRol?.rolTipo ?? user?.role ?? '';
+    // Restricción por centro operativo (admin, admin-internas, admin-redes, almacenista con sede)
+    const rolTipo = (user?.usuarioRol?.rolTipo ?? user?.role ?? '').toString().toLowerCase();
+    const rawSede = user?.usuarioSede;
+    const usuarioSede =
+      rawSede != null && rawSede !== '' && Number(rawSede) !== 0 ? Number(rawSede) : null;
     const sedeRestricted =
-      (rolTipo === 'admin' || rolTipo === 'admin-internas' || rolTipo === 'admin-redes') &&
-      user?.usuarioSede;
+      (rolTipo === 'admin' ||
+        rolTipo === 'admin-internas' ||
+        rolTipo === 'admin-redes' ||
+        rolTipo === 'almacenista') &&
+      usuarioSede != null;
     if (sedeRestricted) {
-      const perteneceSede = !instalacion.bodegaId || (bodega && bodega.sedeId === user.usuarioSede);
-      if (!perteneceSede) {
+      // Sin bodega: solo si es de su centro (registrador con misma sede o la creó el usuario actual)
+      if (!instalacion.bodegaId) {
+        if (instalacion.usuarioRegistra == null) {
+          throw new NotFoundException(`Instalación con ID ${id} no encontrada`);
+        }
+        const esPropia = Number(instalacion.usuarioRegistra) === Number(user.usuarioId);
+        if (!esPropia) {
+          const reg = await this.instalacionesRepository.query(
+            `SELECT usuarioSede FROM usuarios WHERE usuarioId = ? LIMIT 1`,
+            [instalacion.usuarioRegistra],
+          );
+          const rawRegSede = reg?.[0]?.usuarioSede;
+          const sedeRegistrador =
+            rawRegSede != null && rawRegSede !== '' && Number(rawRegSede) !== 0
+              ? Number(rawRegSede)
+              : null;
+          if (sedeRegistrador == null || sedeRegistrador !== usuarioSede) {
+            throw new NotFoundException(`Instalación con ID ${id} no encontrada`);
+          }
+        }
+      } else if (!bodega) {
+        // bodegaId inválido o borrada
         throw new NotFoundException(`Instalación con ID ${id} no encontrada`);
+      } else if (bodega.sedeId !== usuarioSede) {
+        throw new NotFoundException(`Instalación con ID ${id} no encontrada`);
+      } else if (rolTipo === 'admin-internas' && bodega.bodegaTipo !== 'internas') {
+        throw new NotFoundException(`Instalación con ID ${id} no encontrada`);
+      } else if (rolTipo === 'admin-redes' && bodega.bodegaTipo !== 'redes') {
+        throw new NotFoundException(`Instalación con ID ${id} no encontrada`);
+      }
+
+      // Admin-internas / admin-redes: deben ser de ese tipo (bodega, columna o nombre de tipo catálogo)
+      if (rolTipo === 'admin-internas' || rolTipo === 'admin-redes') {
+        const esperado = rolTipo === 'admin-internas' ? 'internas' : 'redes';
+        const porBodega = String(bodega?.bodegaTipo ?? '').toLowerCase() === esperado;
+        const porInst = (instalacion.instalacionTipo ?? '').toString().toLowerCase() === esperado;
+        const porNombre = (tipoInstalacion?.tipoInstalacionNombre ?? '')
+          .toLowerCase()
+          .includes(esperado);
+        if (!porBodega && !porInst && !porNombre) {
+          throw new NotFoundException(`Instalación con ID ${id} no encontrada`);
+        }
       }
     }
 
