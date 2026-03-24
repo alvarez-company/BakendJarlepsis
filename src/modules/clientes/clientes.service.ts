@@ -104,7 +104,6 @@ export class ClientesService {
           );
           const clienteIds = clienteIdsRaw.map((c: any) => c.clienteId);
           if (clienteIds.length > 0) {
-            const placeholdersClientes = clienteIds.map(() => '?').join(',');
             clientes = await this.clientesRepository
               .createQueryBuilder('cliente')
               .select([
@@ -120,7 +119,7 @@ export class ClientesService {
                 'cliente.fechaCreacion',
                 'cliente.fechaActualizacion',
               ])
-              .where(`cliente.clienteId IN (${placeholdersClientes})`, clienteIds)
+              .where('cliente.clienteId IN (:...ids)', { ids: clienteIds })
               .getMany();
           } else {
             clientes = [];
@@ -167,7 +166,7 @@ export class ClientesService {
             const clienteIdsCreadosRaw = await this.clientesRepository.query(
               `SELECT c.clienteId
                FROM clientes c
-               LEFT JOIN users u ON c.usuarioRegistra = u.usuarioId
+               LEFT JOIN usuarios u ON c.usuarioRegistra = u.usuarioId
                WHERE c.usuarioRegistra = ? OR u.usuarioSede = ?`,
               [user.usuarioId, usuarioSede],
             );
@@ -177,7 +176,6 @@ export class ClientesService {
 
           const clienteIdsUnicos = [...new Set(clienteIds)];
           if (clienteIdsUnicos.length > 0) {
-            const placeholdersClientes = clienteIdsUnicos.map(() => '?').join(',');
             clientes = await this.clientesRepository
               .createQueryBuilder('cliente')
               .select([
@@ -193,7 +191,7 @@ export class ClientesService {
                 'cliente.fechaCreacion',
                 'cliente.fechaActualizacion',
               ])
-              .where(`cliente.clienteId IN (${placeholdersClientes})`, clienteIdsUnicos)
+              .where('cliente.clienteId IN (:...ids)', { ids: clienteIdsUnicos })
               .getMany();
           }
         }
@@ -315,7 +313,7 @@ export class ClientesService {
         const clienteVisibleSinInstalacion = await this.clientesRepository.query(
           `SELECT c.clienteId
            FROM clientes c
-           LEFT JOIN users u ON c.usuarioRegistra = u.usuarioId
+           LEFT JOIN usuarios u ON c.usuarioRegistra = u.usuarioId
            WHERE c.clienteId = ? AND (c.usuarioRegistra = ? OR u.usuarioSede = ?)
            LIMIT 1`,
           [id, user.usuarioId, user.usuarioSede],
