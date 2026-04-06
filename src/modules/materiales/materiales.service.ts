@@ -2,6 +2,7 @@ import {
   Injectable,
   NotFoundException,
   ConflictException,
+  ForbiddenException,
   Inject,
   forwardRef,
 } from '@nestjs/common';
@@ -14,7 +15,6 @@ import { UpdateMaterialDto } from './dto/update-material.dto';
 import { InventariosService } from '../inventarios/inventarios.service';
 import { BodegasService } from '../bodegas/bodegas.service';
 import { InventarioTecnicoService } from '../inventario-tecnico/inventario-tecnico.service';
-import { NumerosMedidorService } from '../numeros-medidor/numeros-medidor.service';
 import { AuditoriaInventarioService } from '../auditoria-inventario/auditoria-inventario.service';
 import { TipoCambioInventario } from '../auditoria-inventario/auditoria-inventario.entity';
 
@@ -30,10 +30,93 @@ export class MaterialesService {
     private bodegasService: BodegasService,
     @Inject(forwardRef(() => InventarioTecnicoService))
     private inventarioTecnicoService: InventarioTecnicoService,
-    @Inject(forwardRef(() => NumerosMedidorService))
-    private numerosMedidorService: NumerosMedidorService,
     private auditoriaService: AuditoriaInventarioService,
   ) {}
+
+  /** Sede del usuario para catálogo compartido + stock por centro (desde usuarioSede o bodega asignada). */
+  private async resolveUsuarioSedeId(user?: any): Promise<number | null> {
+    if (!user) return null;
+    const rolTipo = (user.usuarioRol?.rolTipo || user.role || '').toLowerCase();
+    if (rolTipo === 'superadmin' || rolTipo === 'gerencia') return null;
+    if (user.usuarioSede != null && user.usuarioSede !== '') {
+      const n = Number(user.usuarioSede);
+      if (!Number.isNaN(n) && n > 0) return n;
+    }
+    if (user.usuarioBodega != null && user.usuarioBodega !== '') {
+      try {
+        const b = await this.bodegasService.findOne(Number(user.usuarioBodega));
+        if (b?.sedeId != null) return Number(b.sedeId);
+      } catch {
+        /* ignorar */
+      }
+    }
+    return null;
+  }
+
+  /** Superadmin/gerencia: cualquier sede; resto: solo su centro (sede o sede de su bodega). */
+  private async usuarioPuedeVerStockEnCentro(sedeId: number, user?: any): Promise<boolean> {
+    const rolTipo = (user?.usuarioRol?.rolTipo || user?.role || '').toLowerCase();
+    if (rolTipo === 'superadmin' || rolTipo === 'gerencia') return true;
+    const miSede = await this.resolveUsuarioSedeId(user);
+    return miSede != null && Number(miSede) === Number(sedeId);
+  }
+
+  /**
+   * Stock físico agregado por centro operativo (suma bodegas + inventario técnico).
+   * No depende del listado de materiales filtrado por usuario.
+   */
+  async getStockAcumuladoPorSede(user?: any): Promise<{ sedeId: number; stock: number }[]> {
+    const map = new Map<number, number>();
+
+    const fromBodegas = await this.materialesBodegasRepository
+      .createQueryBuilder('mb')
+      .innerJoin('bodegas', 'b', 'b.bodegaId = mb.bodegaId')
+      .select('b.sedeId', 'sedeId')
+      .addSelect('COALESCE(SUM(mb.stock), 0)', 'stock')
+      .where('b.sedeId IS NOT NULL')
+      .groupBy('b.sedeId')
+      .getRawMany<{ sedeId: number; stock: string }>();
+
+    for (const r of fromBodegas) {
+      const sid = Number(r.sedeId);
+      if (!Number.isFinite(sid) || sid <= 0) continue;
+      map.set(sid, (map.get(sid) || 0) + Number(r.stock || 0));
+    }
+
+    const fromTech = await this.materialesRepository.manager.query<
+      Array<{ sedeId: number; stock: string }>
+    >(
+      `SELECT 
+         COALESCE(u.usuarioSede, b.sedeId) AS sedeId,
+         COALESCE(SUM(it.cantidad), 0) AS stock
+       FROM inventario_tecnicos it
+       INNER JOIN usuarios u ON u.usuarioId = it.usuarioId
+       LEFT JOIN bodegas b ON b.bodegaId = u.usuarioBodega
+       WHERE it.cantidad > 0
+         AND COALESCE(u.usuarioSede, b.sedeId) IS NOT NULL
+       GROUP BY COALESCE(u.usuarioSede, b.sedeId)`,
+    );
+
+    for (const r of fromTech) {
+      const sid = Number(r.sedeId);
+      if (!Number.isFinite(sid) || sid <= 0) continue;
+      map.set(sid, (map.get(sid) || 0) + Number(r.stock || 0));
+    }
+
+    const rolTipo = (user?.usuarioRol?.rolTipo || user?.role || '').toLowerCase();
+    const verTodos = rolTipo === 'superadmin' || rolTipo === 'gerencia';
+    if (verTodos) {
+      return Array.from(map.entries())
+        .map(([sedeId, stock]) => ({ sedeId, stock }))
+        .sort((a, b) => a.sedeId - b.sedeId);
+    }
+
+    const miSede = await this.resolveUsuarioSedeId(user);
+    if (miSede != null) {
+      return [{ sedeId: miSede, stock: map.get(miSede) ?? 0 }];
+    }
+    return [];
+  }
 
   async create(createMaterialDto: CreateMaterialDto, usuarioId?: number): Promise<Material> {
     console.error('=== INICIANDO CREACIÓN DE MATERIAL (ERROR STREAM) ===');
@@ -166,10 +249,12 @@ export class MaterialesService {
     }
   }
 
-  async findAll(user?: any): Promise<Material[]> {
+  /**
+   * @param vistaCentroOperativoId Si viene informado (y el usuario puede ver ese centro), se filtra stock y bodegas a esa sede.
+   *        Útil en Empresa → inventario por sede sin depender del alcance del usuario en el listado global.
+   */
+  async findAll(user?: any, vistaCentroOperativoId?: number): Promise<Material[]> {
     try {
-      // Los materiales se comparten entre todos los centros operativos
-      // Todos los usuarios ven los mismos materiales, pero el stock se calcula por centro operativo
       const allMateriales = await this.materialesRepository.find({
         relations: [
           'categoria',
@@ -182,21 +267,30 @@ export class MaterialesService {
         ],
       });
 
-      // Catálogo compartido: todos ven los mismos materiales. Stock y distribución (materialBodegas) solo del centro del usuario.
-      const listToReturn = allMateriales;
-
-      // Superadmin y gerencia ven todo independientemente de si tienen sede asignada
       const rolTipo = (user?.usuarioRol?.rolTipo || user?.role || '').toLowerCase();
       const esSuperadminOGerencia = rolTipo === 'superadmin' || rolTipo === 'gerencia';
 
-      // Si el usuario tiene centro operativo (sede) y NO es superadmin/gerencia, stock y materialBodegas solo de ese centro
-      if (user?.usuarioSede && !esSuperadminOGerencia) {
-        const sedeId = user.usuarioSede;
+      let sedeFiltro: number | null = null;
+      if (vistaCentroOperativoId != null && Number.isFinite(Number(vistaCentroOperativoId))) {
+        const target = Number(vistaCentroOperativoId);
+        const puede = await this.usuarioPuedeVerStockEnCentro(target, user);
+        if (!puede) {
+          throw new ForbiddenException('No tiene acceso al inventario de ese centro operativo.');
+        }
+        sedeFiltro = target;
+      } else if (!esSuperadminOGerencia) {
+        sedeFiltro = await this.resolveUsuarioSedeId(user);
+      }
+
+      if (sedeFiltro != null) {
+        const sid = Number(sedeFiltro);
+        const ids = await this.bodegasService.findBodegaIdsBySedeId(sid);
+        const bodegaIdsEnSede = new Set(ids);
         const materialesConStockYSede = await Promise.all(
-          listToReturn.map(async (material) => {
-            const stockEnCentroOperativo = await this.calculateStockBySede(material, sedeId);
-            const materialBodegasCentro = (material.materialBodegas || []).filter(
-              (mb: any) => mb.bodega?.sedeId === sedeId,
+          allMateriales.map(async (material) => {
+            const stockEnCentroOperativo = await this.calculateStockBySede(material, sid, bodegaIdsEnSede);
+            const materialBodegasCentro = (material.materialBodegas || []).filter((mb: any) =>
+              this.materialBodegaEnSede(mb, sid, bodegaIdsEnSede),
             );
             return {
               ...material,
@@ -208,8 +302,7 @@ export class MaterialesService {
         return materialesConStockYSede;
       }
 
-      // Superadmin/gerencia: devolver todos los materiales con stock total y todas las bodegas
-      return listToReturn;
+      return allMateriales;
     } catch (error) {
       console.error('Error al obtener materiales:', error);
       throw error;
@@ -217,27 +310,55 @@ export class MaterialesService {
   }
 
   /**
-   * Calcula el stock de un material en un centro operativo específico
-   * Suma el stock de todas las bodegas del centro operativo + stock en técnicos del centro operativo
+   * Incluye fila de materiales_bodegas si la bodega pertenece al centro, aunque `mb.bodega.sedeId`
+   * no venga poblado en la relación (serialización / carga parcial).
    */
-  private async calculateStockBySede(material: Material, sedeId: number): Promise<number> {
+  private materialBodegaEnSede(
+    mb: { bodegaId?: number; bodega?: { sedeId?: number; sede?: { sedeId?: number } } },
+    sedeId: number,
+    bodegaIdsEnSede: Set<number>,
+  ): boolean {
+    const sid = Number(sedeId);
+    const fromRel = mb.bodega
+      ? Number(mb.bodega.sedeId ?? mb.bodega.sede?.sedeId)
+      : NaN;
+    if (Number.isFinite(fromRel) && fromRel === sid) return true;
+    const bid = mb.bodegaId != null ? Number(mb.bodegaId) : NaN;
+    return Number.isFinite(bid) && bid > 0 && bodegaIdsEnSede.has(bid);
+  }
+
+  /**
+   * Stock en un centro operativo: suma bodegas de la sede + cantidad en técnicos de esa sede.
+   * Misma lógica para todos los materiales (incl. medidores): los movimientos actualizan bodegas/técnicos.
+   */
+  private async calculateStockBySede(
+    material: Material,
+    sedeId: number,
+    bodegaIdsEnSede: Set<number>,
+  ): Promise<number> {
+    const sid = Number(sedeId);
+
     let stockTotal = 0;
 
-    // Sumar stock de bodegas del centro operativo
     if (material.materialBodegas && material.materialBodegas.length > 0) {
       const stockBodegas = material.materialBodegas
-        .filter((mb) => mb.bodega?.sedeId === sedeId)
+        .filter((mb) => this.materialBodegaEnSede(mb, sid, bodegaIdsEnSede))
         .reduce((sum, mb) => sum + Number(mb.stock || 0), 0);
       stockTotal += stockBodegas;
     }
 
-    // Sumar stock en técnicos del centro operativo
     try {
       const inventariosTecnicos = await this.inventarioTecnicoService.findByMaterial(
         material.materialId,
       );
       const stockTecnicos = inventariosTecnicos
-        .filter((inv) => inv.usuario?.usuarioSede === sedeId)
+        .filter((inv) => {
+          const u = inv.usuario as { usuarioSede?: number; bodega?: { sedeId?: number } } | undefined;
+          if (!u) return false;
+          if (u.usuarioSede != null && Number(u.usuarioSede) === sid) return true;
+          const bSede = u.bodega?.sedeId;
+          return bSede != null && Number(bSede) === sid;
+        })
         .reduce((sum, inv) => sum + Number(inv.cantidad || 0), 0);
       stockTotal += stockTecnicos;
     } catch (error) {
@@ -245,7 +366,6 @@ export class MaterialesService {
         `Error al calcular stock en técnicos para material ${material.materialId} y sede ${sedeId}:`,
         error,
       );
-      // Continuar con stockTecnicos = 0 si hay error
     }
 
     return stockTotal;
@@ -268,17 +388,18 @@ export class MaterialesService {
       throw new NotFoundException(`Material con ID ${id} no encontrado`);
     }
     
-    // Superadmin y gerencia ven todo independientemente de si tienen sede asignada
     const rolTipo = (user?.usuarioRol?.rolTipo || user?.role || '').toLowerCase();
     const esSuperadminOGerencia = rolTipo === 'superadmin' || rolTipo === 'gerencia';
-    
-    // Catálogo compartido: cualquier usuario puede ver cualquier material. Stock/distribución solo de su centro.
-    if (user?.usuarioSede && !esSuperadminOGerencia) {
-      const sedeId = user.usuarioSede;
-      const materialBodegasCentro = (material.materialBodegas || []).filter(
-        (mb: any) => mb.bodega?.sedeId === sedeId,
+    const sedeId = await this.resolveUsuarioSedeId(user);
+
+    if (sedeId != null && !esSuperadminOGerencia) {
+      const sid = Number(sedeId);
+      const ids = await this.bodegasService.findBodegaIdsBySedeId(sid);
+      const bodegaIdsEnSede = new Set(ids);
+      const materialBodegasCentro = (material.materialBodegas || []).filter((mb: any) =>
+        this.materialBodegaEnSede(mb, sid, bodegaIdsEnSede),
       );
-      const stockSede = await this.calculateStockBySede(material, sedeId);
+      const stockSede = await this.calculateStockBySede(material, sid, bodegaIdsEnSede);
       return {
         ...material,
         materialBodegas: materialBodegasCentro,
@@ -470,10 +591,8 @@ export class MaterialesService {
       materialStock: nuevoStock,
     });
 
-    // IMPORTANTE: Sincronizar después para asegurar que el stock total
-    // refleje correctamente la suma de bodegas + técnicos
-    // Si el nuevoStock es diferente a la suma real, la sincronización lo corregirá
-    await this.syncMaterialStock(id);
+    // No llamar syncMaterialStock aquí: esa función fija materialStock = solo bodegas + técnicos
+    // y borraría el stock "en sede" que acaba de sumarse cuando la entrada no va a una bodega concreta.
 
     return this.findOne(id);
   }
@@ -707,6 +826,10 @@ export class MaterialesService {
    * - Stock en técnicos (inventario_tecnicos)
    *
    * El stock en sede se calcula como: materialStock - stockBodegas - stockTecnicos
+   */
+  /**
+   * Stock total del material = suma en todas las bodegas + inventario de todos los técnicos.
+   * Debe coincidir con entradas, salidas, traslados, asignaciones y devoluciones (ajustan bodega/técnico).
    */
   private async syncMaterialStock(materialId: number): Promise<void> {
     // Sumar stock en bodegas

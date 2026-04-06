@@ -21,6 +21,7 @@ import { UsersModule } from '../users/users.module';
 import { NumerosMedidorModule } from '../numeros-medidor/numeros-medidor.module';
 import { AuthModule } from '../auth/auth.module';
 import { BodegasModule } from '../bodegas/bodegas.module';
+import { ProyectosRedesModule } from '../proyectos-redes/proyectos-redes.module';
 
 @Module({
   imports: [
@@ -42,6 +43,7 @@ import { BodegasModule } from '../bodegas/bodegas.module';
     forwardRef(() => UsersModule),
     forwardRef(() => NumerosMedidorModule),
     forwardRef(() => AuthModule),
+    ProyectosRedesModule,
   ],
   controllers: [InstalacionesController],
   providers: [InstalacionesService],

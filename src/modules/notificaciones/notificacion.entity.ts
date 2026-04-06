@@ -20,7 +20,9 @@ export enum TipoNotificacion {
   INSTALACION_CONSTRUCCION = 'instalacion_construccion',
   INSTALACION_CERTIFICACION = 'instalacion_certificacion',
   INSTALACION_NOVEDAD = 'instalacion_novedad',
+  /** Histórico; nuevas devoluciones usan INSTALACION_DEVUELTA */
   INSTALACION_ANULADA = 'instalacion_anulada',
+  INSTALACION_DEVUELTA = 'instalacion_devuelta',
   MENSAJE_RESPONDIDO = 'mensaje_respondido',
   USUARIO_INGRESO_GRUPO = 'usuario_ingreso_grupo',
   USUARIO_SALIO_GRUPO = 'usuario_salio_grupo',

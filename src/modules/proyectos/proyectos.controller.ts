@@ -30,7 +30,7 @@ export class ProyectosController {
   @Post()
   @Roles(...ROLES_PROYECTOS_EDITAR)
   create(@Body() data: any, @Request() req) {
-    return this.service.create(data, req.user.usuarioId);
+    return this.service.create(data, req.user);
   }
 
   @Get()

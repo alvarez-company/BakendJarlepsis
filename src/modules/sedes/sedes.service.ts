@@ -8,6 +8,8 @@ import {
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { Sede } from './sede.entity';
+import { Departamento } from '../departamentos/departamento.entity';
+import { esDepartamentoZonaOperacion } from '../../common/constants/departamentos-operacion.constants';
 import { CreateSedeDto } from './dto/create-sede.dto';
 import { UpdateSedeDto } from './dto/update-sede.dto';
 import { HasRelatedEntitiesException } from '../../common/exceptions/business.exception';
@@ -21,6 +23,8 @@ export class SedesService {
   constructor(
     @InjectRepository(Sede)
     private sedesRepository: Repository<Sede>,
+    @InjectRepository(Departamento)
+    private departamentosRepository: Repository<Departamento>,
     @Inject(forwardRef(() => GruposService))
     private gruposService: GruposService,
     @Inject(forwardRef(() => UsersService))
@@ -28,7 +32,17 @@ export class SedesService {
     private rolesService: RolesService,
   ) {}
 
+  private async assertDepartamentoZonaOperacion(departamentoId: number): Promise<void> {
+    const dep = await this.departamentosRepository.findOne({ where: { departamentoId } });
+    if (!dep || !esDepartamentoZonaOperacion(dep.departamentoNombre)) {
+      throw new BadRequestException(
+        'Las sedes solo pueden ubicarse en Santander o Norte de Santander.',
+      );
+    }
+  }
+
   async create(createSedeDto: CreateSedeDto): Promise<Sede> {
+    await this.assertDepartamentoZonaOperacion(createSedeDto.departamentoId);
     const sede = this.sedesRepository.create(createSedeDto);
     const savedSede = await this.sedesRepository.save(sede);
 
@@ -123,50 +137,38 @@ export class SedesService {
   async findAll(user?: any): Promise<Sede[]> {
     const allSedes = await this.sedesRepository.find({ relations: ['bodegas'] });
 
-    // SuperAdmin y Gerencia ven todo
-    if (
-      user?.usuarioRol?.rolTipo === 'superadmin' ||
-      user?.role === 'superadmin' ||
-      user?.usuarioRol?.rolTipo === 'gerencia' ||
-      user?.role === 'gerencia'
-    ) {
+    const rolTipo = (user?.usuarioRol?.rolTipo || user?.role || '').toLowerCase();
+
+    // SuperAdmin y Gerencia ven todo (aunque tengan usuarioSede informado)
+    if (rolTipo === 'superadmin' || rolTipo === 'gerencia') {
       return allSedes;
     }
 
     // Centro operativo: por columna usuarioSede o por relación sede (p. ej. usuario cargado con findOneForAuth)
     const sedeId = user?.usuarioSede ?? user?.sede?.sedeId;
-    if (sedeId != null && sedeId > 0) {
-      const filtradas = allSedes.filter((sede) => sede.sedeId === sedeId);
+    if (sedeId != null && Number(sedeId) > 0) {
+      const sid = Number(sedeId);
+      const filtradas = allSedes.filter((sede) => Number(sede.sedeId) === sid);
       if (filtradas.length > 0) return filtradas;
     }
 
     // Admin sin sede asignada: solo ve su centro; si no tiene asignado, lista vacía
-    if (user?.usuarioRol?.rolTipo === 'admin' || user?.role === 'admin') {
+    if (rolTipo === 'admin') {
       return [];
     }
 
     // Administrador de Internas y de Redes: solo su sede
-    if (
-      user?.usuarioRol?.rolTipo === 'admin-internas' ||
-      user?.role === 'admin-internas' ||
-      user?.usuarioRol?.rolTipo === 'admin-redes' ||
-      user?.role === 'admin-redes'
-    ) {
+    if (rolTipo === 'admin-internas' || rolTipo === 'admin-redes') {
       return [];
     }
 
     // Almacenista: solo su sede
-    if (user?.usuarioRol?.rolTipo === 'almacenista' || user?.role === 'almacenista') {
+    if (rolTipo === 'almacenista') {
       return [];
     }
 
     // Técnico y Soldador sin sede: no ven sedes
-    if (
-      user?.usuarioRol?.rolTipo === 'tecnico' ||
-      user?.role === 'tecnico' ||
-      user?.usuarioRol?.rolTipo === 'soldador' ||
-      user?.role === 'soldador'
-    ) {
+    if (rolTipo === 'tecnico' || rolTipo === 'soldador') {
       return [];
     }
 
@@ -185,9 +187,16 @@ export class SedesService {
     if (!sede) {
       throw new NotFoundException(`Sede with ID ${id} not found`);
     }
-    // Cualquier usuario con centro asignado solo puede ver su propia sede (por ID)
+    const rolTipo = (user?.usuarioRol?.rolTipo || user?.role || '').toLowerCase();
+    const veTodasLasSedes = rolTipo === 'superadmin' || rolTipo === 'gerencia';
+    // Cualquier usuario con centro asignado solo puede ver su propia sede — salvo superadmin/gerencia
     const userSedeId = user?.usuarioSede ?? user?.sede?.sedeId;
-    if (userSedeId != null && userSedeId > 0 && sede.sedeId !== userSedeId) {
+    if (
+      !veTodasLasSedes &&
+      userSedeId != null &&
+      Number(userSedeId) > 0 &&
+      Number(sede.sedeId) !== Number(userSedeId)
+    ) {
       throw new NotFoundException(`Sede with ID ${id} not found`);
     }
     return sede;
@@ -202,6 +211,10 @@ export class SedesService {
       if (rolTipo !== 'superadmin' && rolTipo !== 'gerencia') {
         throw new BadRequestException('No tienes permisos para editar sedes');
       }
+    }
+
+    if (updateSedeDto.departamentoId !== undefined) {
+      await this.assertDepartamentoZonaOperacion(updateSedeDto.departamentoId);
     }
 
     const estadoAnterior = sede.sedeEstado;

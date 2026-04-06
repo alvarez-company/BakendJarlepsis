@@ -1,4 +1,4 @@
-import { Injectable, NotFoundException } from '@nestjs/common';
+import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { DeepPartial, Repository } from 'typeorm';
 import { Proyecto } from './proyecto.entity';
@@ -10,19 +10,109 @@ export class ProyectosService {
     private proyectosRepository: Repository<Proyecto>,
   ) {}
 
-  async create(data: DeepPartial<Proyecto>, usuarioId?: number): Promise<Proyecto> {
+  private async tableHasTipoProyectoColumn(): Promise<boolean> {
+    const result = await this.proyectosRepository.manager.query(
+      `SELECT 1
+       FROM information_schema.COLUMNS
+       WHERE TABLE_SCHEMA = DATABASE()
+         AND TABLE_NAME = 'proyectos'
+         AND COLUMN_NAME = 'tipoProyectoId'
+       LIMIT 1`,
+    );
+
+    return Array.isArray(result) && result.length > 0;
+  }
+
+  private async resolveTipoProyectoId(data: any, user?: any): Promise<number | null> {
+    const tipoProyectoIdFromBody = Number(data?.tipoProyectoId);
+    if (Number.isFinite(tipoProyectoIdFromBody) && tipoProyectoIdFromBody > 0) {
+      const exists = await this.proyectosRepository.manager.query(
+        `SELECT tipoProyectoId
+         FROM tipos_proyecto
+         WHERE tipoProyectoId = ?
+         LIMIT 1`,
+        [tipoProyectoIdFromBody],
+      );
+      if (Array.isArray(exists) && exists.length > 0) {
+        return tipoProyectoIdFromBody;
+      }
+      throw new BadRequestException('El tipo de proyecto seleccionado no existe.');
+    }
+
+    const rolTipo = String(user?.usuarioRol?.rolTipo || user?.rolTipo || '').toLowerCase();
+    const tipoPreferido =
+      rolTipo === 'admin-redes' || rolTipo === 'bodega-redes'
+        ? 'redes'
+        : rolTipo === 'admin-internas' || rolTipo === 'bodega-internas'
+          ? 'internas'
+          : null;
+
+    if (tipoPreferido) {
+      const preferred = await this.proyectosRepository.manager.query(
+        `SELECT tipoProyectoId
+         FROM tipos_proyecto
+         WHERE LOWER(tipoProyectoNombre) LIKE ?
+         ORDER BY tipoProyectoId ASC
+         LIMIT 1`,
+        [`%${tipoPreferido}%`],
+      );
+      if (Array.isArray(preferred) && preferred.length > 0) {
+        return Number(preferred[0].tipoProyectoId);
+      }
+    }
+
+    const firstAvailable = await this.proyectosRepository.manager.query(
+      `SELECT tipoProyectoId
+       FROM tipos_proyecto
+       ORDER BY tipoProyectoId ASC
+       LIMIT 1`,
+    );
+    if (Array.isArray(firstAvailable) && firstAvailable.length > 0) {
+      return Number(firstAvailable[0].tipoProyectoId);
+    }
+
+    throw new BadRequestException(
+      'No hay tipos de proyecto disponibles para crear el proyecto. Crea al menos uno e intenta nuevamente.',
+    );
+  }
+
+  async create(data: DeepPartial<Proyecto>, user?: any): Promise<Proyecto> {
+    const hasTipoProyectoId = await this.tableHasTipoProyectoColumn();
+    const tipoProyectoId = hasTipoProyectoId ? await this.resolveTipoProyectoId(data, user) : null;
+
+    const proyectoTipo =
+      (data as any)?.proyectoTipo != null ? String((data as any).proyectoTipo).toLowerCase() : null;
+    const proyectoTipologiaTerreno =
+      (data as any)?.proyectoTipologiaTerreno != null
+        ? String((data as any).proyectoTipologiaTerreno).toUpperCase()
+        : null;
+
+    if (proyectoTipo && !['inversion', 'mantenimiento'].includes(proyectoTipo)) {
+      throw new BadRequestException('proyectoTipo debe ser "inversion" o "mantenimiento".');
+    }
+    if (proyectoTipologiaTerreno && !['ZV', 'ACO', 'CO'].includes(proyectoTipologiaTerreno)) {
+      throw new BadRequestException('proyectoTipologiaTerreno debe ser "ZV", "ACO" o "CO".');
+    }
+
+    const values: any = {
+      proyectoNombre: data.proyectoNombre,
+      proyectoDescripcion: data.proyectoDescripcion || null,
+      proyectoCodigo: data.proyectoCodigo || null,
+      proyectoEstado: data.proyectoEstado !== undefined ? data.proyectoEstado : true,
+      proyectoTipo: proyectoTipo || null,
+      proyectoTipologiaTerreno: proyectoTipologiaTerreno || null,
+      usuarioRegistra: user?.usuarioId || null,
+    };
+    if (hasTipoProyectoId) {
+      values.tipoProyectoId = tipoProyectoId;
+    }
+
     // Usar QueryBuilder para tener control total sobre los campos insertados
     const insertResult = await this.proyectosRepository
       .createQueryBuilder()
       .insert()
       .into(Proyecto)
-      .values({
-        proyectoNombre: data.proyectoNombre,
-        proyectoDescripcion: data.proyectoDescripcion || null,
-        proyectoCodigo: data.proyectoCodigo || null,
-        proyectoEstado: data.proyectoEstado !== undefined ? data.proyectoEstado : true,
-        usuarioRegistra: usuarioId || null,
-      })
+      .values(values)
       .execute();
 
     const proyectoId = insertResult.identifiers[0].proyectoId;
@@ -36,6 +126,8 @@ export class ProyectosService {
         'proyecto.proyectoDescripcion',
         'proyecto.proyectoCodigo',
         'proyecto.proyectoEstado',
+        'proyecto.proyectoTipo',
+        'proyecto.proyectoTipologiaTerreno',
         'proyecto.usuarioRegistra',
         'proyecto.fechaCreacion',
         'proyecto.fechaActualizacion',
@@ -201,6 +293,23 @@ export class ProyectosService {
       updateData.proyectoDescripcion = data.proyectoDescripcion || null;
     if (data.proyectoCodigo !== undefined) updateData.proyectoCodigo = data.proyectoCodigo || null;
     if (data.proyectoEstado !== undefined) updateData.proyectoEstado = data.proyectoEstado;
+    if (data.proyectoTipo !== undefined) {
+      const val = data.proyectoTipo == null ? null : String(data.proyectoTipo).toLowerCase();
+      if (val && !['inversion', 'mantenimiento'].includes(val)) {
+        throw new BadRequestException('proyectoTipo debe ser "inversion" o "mantenimiento".');
+      }
+      updateData.proyectoTipo = val;
+    }
+    if (data.proyectoTipologiaTerreno !== undefined) {
+      const val =
+        data.proyectoTipologiaTerreno == null
+          ? null
+          : String(data.proyectoTipologiaTerreno).toUpperCase();
+      if (val && !['ZV', 'ACO', 'CO'].includes(val)) {
+        throw new BadRequestException('proyectoTipologiaTerreno debe ser "ZV", "ACO" o "CO".');
+      }
+      updateData.proyectoTipologiaTerreno = val;
+    }
 
     Object.assign(proyecto, updateData);
     return this.proyectosRepository.save(proyecto);

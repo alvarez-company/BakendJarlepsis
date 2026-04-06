@@ -7,8 +7,9 @@ import {
   forwardRef,
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Repository } from 'typeorm';
+import { In, Repository } from 'typeorm';
 import { Instalacion, EstadoInstalacion } from './instalacion.entity';
+import { esEstadoInstalacionCanonico, normalizarEstadoInstalacionCodigo } from './estado-instalacion.codes';
 import { CreateInstalacionDto } from './dto/create-instalacion.dto';
 import { UpdateInstalacionDto } from './dto/update-instalacion.dto';
 import { ChatGateway } from '../chat/chat.gateway';
@@ -30,6 +31,7 @@ import { InventarioTecnicoService } from '../inventario-tecnico/inventario-tecni
 import { UsersService } from '../users/users.service';
 import { NumerosMedidorService } from '../numeros-medidor/numeros-medidor.service';
 import { BodegasService } from '../bodegas/bodegas.service';
+import { ProyectosRedesService } from '../proyectos-redes/proyectos-redes.service';
 
 @Injectable()
 export class InstalacionesService {
@@ -68,7 +70,131 @@ export class InstalacionesService {
     private numerosMedidorService: NumerosMedidorService,
     @Inject(forwardRef(() => BodegasService))
     private bodegasService: BodegasService,
+    private readonly proyectosRedesService: ProyectosRedesService,
   ) {}
+
+  /** True si el cliente envió proyectos/actividades que deben rechazarse en instalaciones internas. */
+  private instalacionProyectosPayloadNoVacio(raw: any): boolean {
+    if (raw == null) return false;
+    if (Array.isArray(raw)) return raw.length > 0;
+    if (typeof raw === 'object') return Object.keys(raw).length > 0;
+    return Boolean(raw);
+  }
+
+  /**
+   * Valida y persiste el contrato redes_v2 (solo filas fijas en proyectos_redes + actividades + metrajes ZV/ACO/CO).
+   */
+  private async normalizarInstalacionProyectosRedes(raw: any): Promise<{
+    version: 'redes_v2';
+    proyectoRedesId: number;
+    proyectoRedesCodigo: string;
+    metrajePorTipologia: { ZV: number; ACO: number; CO: number };
+    actividadIds: number[];
+  }> {
+    if (raw == null) {
+      // Compatibilidad: permitir instalaciones de redes sin payload y asignar Inversión por defecto.
+      const tipo = await this.proyectosRedesService.findByCodigo('inversion');
+      if (!tipo) {
+        throw new BadRequestException(
+          'No se encontró el tipo por defecto de proyecto de redes (inversion). Ejecute la migración de proyectos_redes.',
+        );
+      }
+      return {
+        version: 'redes_v2',
+        proyectoRedesId: tipo.proyectoRedesId,
+        proyectoRedesCodigo: tipo.codigo,
+        metrajePorTipologia: { ZV: 0, ACO: 0, CO: 0 },
+        actividadIds: [],
+      };
+    }
+    if (Array.isArray(raw)) {
+      throw new BadRequestException(
+        'El formato de proyectos por combinación (lista) ya no está soportado. Use el objeto de proyecto de redes: tipo inversión/mantenimiento, metrajes por tipología (ZV, ACO, CO) e IDs de actividades.',
+      );
+    }
+    if (typeof raw !== 'object') {
+      throw new BadRequestException('instalacionProyectos inválido.');
+    }
+    const version = (raw as any).version;
+    if (version != null && version !== 'redes_v2') {
+      throw new BadRequestException(`Versión de instalacionProyectos no soportada: ${String(version)}.`);
+    }
+
+    let proyectoRedesId: number | undefined =
+      (raw as any).proyectoRedesId != null ? Number((raw as any).proyectoRedesId) : undefined;
+    const codigoRaw = (
+      (raw as any).proyectoRedesCodigo ||
+      (raw as any).proyectoTipoRedes ||
+      (raw as any).codigo ||
+      ''
+    )
+      .toString()
+      .trim()
+      .toLowerCase();
+
+    if (proyectoRedesId == null || Number.isNaN(proyectoRedesId)) {
+      if (!codigoRaw) {
+        throw new BadRequestException(
+          'Debe indicar el tipo de proyecto de redes (inversión o mantenimiento).',
+        );
+      }
+      const porCodigo = await this.proyectosRedesService.findByCodigo(codigoRaw);
+      if (!porCodigo) {
+        throw new BadRequestException(`Tipo de proyecto de redes '${codigoRaw}' no encontrado.`);
+      }
+      proyectoRedesId = porCodigo.proyectoRedesId;
+    }
+
+    const tipoRow = await this.proyectosRedesService.findTipoById(proyectoRedesId);
+
+    const metSrc =
+      (raw as any).metrajePorTipologia || (raw as any).terrenos || (raw as any).metrajes;
+    if (!metSrc || typeof metSrc !== 'object') {
+      throw new BadRequestException('Debe enviar metrajePorTipologia con ZV, ACO y CO.');
+    }
+
+    const leerMetraje = (k: string) => {
+      const v =
+        (metSrc as any)[k] ??
+        (metSrc as any)[k.toLowerCase()] ??
+        (metSrc as any)[k.toUpperCase()];
+      if (v === '' || v == null) return 0;
+      const n = Number(v);
+      if (Number.isNaN(n) || n < 0) {
+        throw new BadRequestException(`El metraje ${k} debe ser un número mayor o igual a 0.`);
+      }
+      return n;
+    };
+
+    const metrajePorTipologia = {
+      ZV: leerMetraje('ZV'),
+      ACO: leerMetraje('ACO'),
+      CO: leerMetraje('CO'),
+    };
+
+    let actividadIds: number[] = [];
+    if ((raw as any).actividadIds != null) {
+      if (!Array.isArray((raw as any).actividadIds)) {
+        throw new BadRequestException('actividadIds debe ser un arreglo.');
+      }
+      actividadIds = ((raw as any).actividadIds as any[])
+        .map((x) => Number(x))
+        .filter((n) => !Number.isNaN(n));
+    }
+
+    await this.proyectosRedesService.assertActividadesPertenecen(
+      tipoRow.proyectoRedesId,
+      actividadIds,
+    );
+
+    return {
+      version: 'redes_v2',
+      proyectoRedesId: tipoRow.proyectoRedesId,
+      proyectoRedesCodigo: tipoRow.codigo,
+      metrajePorTipologia,
+      actividadIds,
+    };
+  }
 
   private async generarIdentificadorUnico(): Promise<string> {
     try {
@@ -120,6 +246,16 @@ export class InstalacionesService {
       );
     }
 
+    // Proyectos/actividades SOLO aplican para redes
+    if (
+      tipo === 'internas' &&
+      this.instalacionProyectosPayloadNoVacio((instalacionData as any)?.instalacionProyectos)
+    ) {
+      throw new BadRequestException(
+        'La selección de proyectos/actividades solo aplica para instalaciones de tipo redes.',
+      );
+    }
+
     if (user) {
       const userRole = user?.usuarioRol?.rolTipo || user?.role;
 
@@ -164,35 +300,40 @@ export class InstalacionesService {
       }
     }
 
-    // Determinar el estado inicial: pendiente si no hay técnicos asignados
-    let estadoInicial = EstadoInstalacion.PENDIENTE;
+    /** PPC sin técnicos; AAT con técnicos (códigos v2). */
+    let estadoInicial = EstadoInstalacion.PPC;
     let estadoInstalacionId: number | null = null;
 
     if (usuariosAsignados && usuariosAsignados.length > 0) {
-      // Si hay técnicos asignados, buscar el estado "asignacion" o usar "en_proceso"
       try {
-        const estadoAsignacion = await this.estadosInstalacionService.findByCodigo('asignacion');
-        estadoInstalacionId = estadoAsignacion.estadoInstalacionId;
-        estadoInicial = EstadoInstalacion.ASIGNACION;
+        const estadoRow = await this.estadosInstalacionService.findByCodigo('aat');
+        estadoInstalacionId = estadoRow.estadoInstalacionId;
+        estadoInicial = EstadoInstalacion.AAT;
       } catch {
-        // Si no existe el estado asignacion, usar pendiente
         try {
-          const estadoPendiente = await this.estadosInstalacionService.findByCodigo('pendiente');
-          estadoInstalacionId = estadoPendiente.estadoInstalacionId;
-          estadoInicial = EstadoInstalacion.PENDIENTE;
+          const estadoRow = await this.estadosInstalacionService.findByCodigo('ppc');
+          estadoInstalacionId = estadoRow.estadoInstalacionId;
+          estadoInicial = EstadoInstalacion.PPC;
         } catch (_e) {
-          // Si no existe ningún estado, dejar null y usar el enum por defecto
+          /* sin catálogo */
         }
       }
     } else {
-      // Si no hay técnicos asignados, establecer estado pendiente
       try {
-        const estadoPendiente = await this.estadosInstalacionService.findByCodigo('pendiente');
-        estadoInstalacionId = estadoPendiente.estadoInstalacionId;
-        estadoInicial = EstadoInstalacion.PENDIENTE;
+        const estadoRow = await this.estadosInstalacionService.findByCodigo('ppc');
+        estadoInstalacionId = estadoRow.estadoInstalacionId;
+        estadoInicial = EstadoInstalacion.PPC;
       } catch {
-        // Si no existe el estado pendiente, usar el enum por defecto
+        /* sin catálogo */
       }
+    }
+
+    if (tipo === 'redes') {
+      (instalacionData as any).instalacionProyectos = await this.normalizarInstalacionProyectosRedes(
+        (instalacionData as any).instalacionProyectos,
+      );
+    } else {
+      (instalacionData as any).instalacionProyectos = null;
     }
 
     const instalacion = this.instalacionesRepository.create({
@@ -840,8 +981,14 @@ export class InstalacionesService {
             typeof inst.instalacionProyectos === 'string'
               ? JSON.parse(inst.instalacionProyectos)
               : inst.instalacionProyectos;
-          const arr = Array.isArray(proy) ? proy : proy?.items ? [proy] : [];
-          codProyecto = arr[0]?.proyectoId?.toString() || arr[0]?.codigo || '';
+          if (proy && typeof proy === 'object' && proy.version === 'redes_v2') {
+            codProyecto =
+              (proy.proyectoRedesCodigo && String(proy.proyectoRedesCodigo)) ||
+              (proy.proyectoRedesId != null ? String(proy.proyectoRedesId) : '');
+          } else {
+            const arr = Array.isArray(proy) ? proy : proy?.items ? [proy] : [];
+            codProyecto = arr[0]?.proyectoId?.toString() || arr[0]?.codigo || '';
+          }
         } catch (_e) {
           codProyecto = '';
         }
@@ -1188,6 +1335,21 @@ export class InstalacionesService {
       (instalacionData as any).instalacionTipo = tipo as 'internas' | 'redes';
     }
 
+    // Proyectos/actividades SOLO aplican para redes (en update usamos el tipo final)
+    const tipoFinal = String(
+      (instalacionData as any).instalacionTipo ?? (instalacion as any).instalacionTipo ?? '',
+    ).toLowerCase();
+    if (
+      tipoFinal === 'internas' &&
+      updateInstalacionDto &&
+      Object.prototype.hasOwnProperty.call(updateInstalacionDto as object, 'instalacionProyectos') &&
+      this.instalacionProyectosPayloadNoVacio((updateInstalacionDto as any).instalacionProyectos)
+    ) {
+      throw new BadRequestException(
+        'La selección de proyectos/actividades solo aplica para instalaciones de tipo redes.',
+      );
+    }
+
     // Validar permisos
     if (user) {
       const rolTipo = user.usuarioRol?.rolTipo || user.role;
@@ -1268,6 +1430,22 @@ export class InstalacionesService {
       }
     }
 
+    if (tipoFinal === 'internas') {
+      (instalacionData as any).instalacionProyectos = null;
+    } else if (
+      tipoFinal === 'redes' &&
+      updateInstalacionDto &&
+      Object.prototype.hasOwnProperty.call(updateInstalacionDto as object, 'instalacionProyectos')
+    ) {
+      const raw = (updateInstalacionDto as any).instalacionProyectos;
+      if (raw == null) {
+        (instalacionData as any).instalacionProyectos = null;
+      } else {
+        (instalacionData as any).instalacionProyectos =
+          await this.normalizarInstalacionProyectosRedes(raw);
+      }
+    }
+
     Object.assign(instalacion, instalacionData);
     const _savedInstalacion = await this.instalacionesRepository.save(instalacion);
 
@@ -1278,7 +1456,8 @@ export class InstalacionesService {
     // Si los materiales cambiaron y la instalación está completada, actualizar las salidas
     if (
       materialesCambiaron &&
-      (estadoAnterior === EstadoInstalacion.COMPLETADA ||
+      (estadoAnterior === EstadoInstalacion.FACT ||
+        estadoAnterior === EstadoInstalacion.COMPLETADA ||
         estadoAnterior === EstadoInstalacion.FINALIZADA) &&
       usuarioId
     ) {
@@ -1313,18 +1492,17 @@ export class InstalacionesService {
       let nuevoEstadoInstalacionId: number | null = null;
 
       if (usuariosAsignados.length > 0) {
-        // Si hay técnicos asignados, buscar el estado "asignacion" o usar "en_proceso"
         try {
-          const estadoAsignacion = await this.estadosInstalacionService.findByCodigo('asignacion');
-          nuevoEstadoInstalacionId = estadoAsignacion.estadoInstalacionId;
-          nuevoEstado = EstadoInstalacion.ASIGNACION;
+          const estadoRow = await this.estadosInstalacionService.findByCodigo('aat');
+          nuevoEstadoInstalacionId = estadoRow.estadoInstalacionId;
+          nuevoEstado = EstadoInstalacion.AAT;
         } catch {
           try {
-            const estadoPendiente = await this.estadosInstalacionService.findByCodigo('pendiente');
-            nuevoEstadoInstalacionId = estadoPendiente.estadoInstalacionId;
-            nuevoEstado = EstadoInstalacion.PENDIENTE;
+            const estadoRow = await this.estadosInstalacionService.findByCodigo('ppc');
+            nuevoEstadoInstalacionId = estadoRow.estadoInstalacionId;
+            nuevoEstado = EstadoInstalacion.PPC;
           } catch {
-            // Si no existe ningún estado, mantener el estado actual
+            /* mantener estado */
           }
         }
 
@@ -1335,13 +1513,12 @@ export class InstalacionesService {
         }));
         await this.instalacionesUsuariosService.asignarUsuarios(id, usuariosParaAsignar);
       } else {
-        // Si no hay técnicos asignados, establecer estado pendiente
         try {
-          const estadoPendiente = await this.estadosInstalacionService.findByCodigo('pendiente');
-          nuevoEstadoInstalacionId = estadoPendiente.estadoInstalacionId;
-          nuevoEstado = EstadoInstalacion.PENDIENTE;
+          const estadoRow = await this.estadosInstalacionService.findByCodigo('ppc');
+          nuevoEstadoInstalacionId = estadoRow.estadoInstalacionId;
+          nuevoEstado = EstadoInstalacion.PPC;
         } catch {
-          // Si no existe el estado pendiente, mantener el estado actual
+          /* mantener estado */
         }
       }
 
@@ -1526,6 +1703,7 @@ export class InstalacionesService {
     nuevoEstado: EstadoInstalacion,
     usuarioId: number,
     user?: any,
+    extras?: { numeroActa?: string; observacionNovedad?: string },
   ): Promise<Instalacion> {
     // Validar que almacenista no pueda cambiar estado de instalaciones
     if (user) {
@@ -1537,71 +1715,85 @@ export class InstalacionesService {
     const instalacion = await this.findOne(instalacionId, user);
     const estadoAnterior = instalacion.estado;
 
-    // Mapear estados legacy a los nuevos estados
-    let estadoNormalizado: EstadoInstalacion = nuevoEstado;
+    let estadoNormalizado = normalizarEstadoInstalacionCodigo(String(nuevoEstado));
     if (nuevoEstado === EstadoInstalacion.FINALIZADA) {
-      estadoNormalizado = EstadoInstalacion.COMPLETADA;
+      estadoNormalizado = EstadoInstalacion.FACT;
     } else if (nuevoEstado === EstadoInstalacion.CANCELADA) {
-      estadoNormalizado = EstadoInstalacion.ANULADA;
+      estadoNormalizado = EstadoInstalacion.DEV;
+    } else if (nuevoEstado === EstadoInstalacion.COMPLETADA) {
+      estadoNormalizado = EstadoInstalacion.FACT;
     } else if (nuevoEstado === EstadoInstalacion.EN_PROCESO) {
-      // EN_PROCESO se mapea a ASIGNACION si hay técnicos, sino a PENDIENTE
-      if (instalacion.usuariosAsignados && instalacion.usuariosAsignados.length > 0) {
-        estadoNormalizado = EstadoInstalacion.ASIGNACION;
-      } else {
-        estadoNormalizado = EstadoInstalacion.PENDIENTE;
-      }
+      estadoNormalizado =
+        instalacion.usuariosAsignados && instalacion.usuariosAsignados.length > 0
+          ? EstadoInstalacion.AAT
+          : EstadoInstalacion.PPC;
     }
 
-    // Validar que el estado sea uno de los valores válidos del enum
-    const estadosValidos = Object.values(EstadoInstalacion);
-    if (!estadosValidos.includes(estadoNormalizado)) {
-      throw new Error(
-        `Estado inválido: ${estadoNormalizado}. Valores válidos: ${estadosValidos.join(', ')}`,
-      );
+    if (!esEstadoInstalacionCanonico(estadoNormalizado)) {
+      throw new BadRequestException(`Estado inválido: ${estadoNormalizado}`);
+    }
+
+    if (estadoNormalizado === EstadoInstalacion.FACT) {
+      const prev = normalizarEstadoInstalacionCodigo(String(estadoAnterior));
+      if (prev !== EstadoInstalacion.CERT) {
+        throw new BadRequestException(
+          'Solo puede pasar a facturación cuando la instalación está certificada.',
+        );
+      }
+      const acta = (extras?.numeroActa ?? '').trim();
+      if (!acta) {
+        throw new BadRequestException('Debe indicar el número de acta para facturación.');
+      }
     }
 
     instalacion.estado = estadoNormalizado;
 
-    // Sincronizar estadoInstalacionId con el estado enum (usar el estado normalizado)
     const estadoInstalacion = await this.estadosInstalacionService.findByCodigo(estadoNormalizado);
     if (estadoInstalacion) {
       instalacion.estadoInstalacionId = estadoInstalacion.estadoInstalacionId;
     }
 
-    // Establecer fechas específicas según el estado (usar el estado normalizado)
     const ahora = new Date();
 
-    if (estadoNormalizado === EstadoInstalacion.ASIGNACION && !instalacion.fechaAsignacion) {
+    if (estadoNormalizado === EstadoInstalacion.AAT && !instalacion.fechaAsignacion) {
       instalacion.fechaAsignacion = ahora as any;
     }
 
-    if (estadoNormalizado === EstadoInstalacion.CONSTRUCCION) {
+    if (estadoNormalizado === EstadoInstalacion.AVAN) {
       if (!instalacion.fechaConstruccion) {
         instalacion.fechaConstruccion = ahora as any;
       }
-      // Actualizar fecha de instalación si no está establecida
       if (!instalacion.instalacionFecha) {
         instalacion.instalacionFecha = ahora as any;
       }
     }
 
-    if (estadoNormalizado === EstadoInstalacion.CERTIFICACION && !instalacion.fechaCertificacion) {
+    if (estadoNormalizado === EstadoInstalacion.CONS && !instalacion.fechaConstruida) {
+      instalacion.fechaConstruida = ahora as any;
+    }
+
+    if (estadoNormalizado === EstadoInstalacion.CERT && !instalacion.fechaCertificacion) {
       instalacion.fechaCertificacion = ahora as any;
-
-      // NO descontar aquí - los materiales ya se descontaron cuando el técnico los registró
-      // Esto evita descuentos duplicados que causan que el inventario quede en 0 incorrectamente
     }
 
-    if (estadoNormalizado === EstadoInstalacion.NOVEDAD && !instalacion.fechaNovedad) {
-      instalacion.fechaNovedad = ahora as any;
+    if (estadoNormalizado === EstadoInstalacion.FACT) {
+      if (!instalacion.fechaFacturacion) instalacion.fechaFacturacion = ahora as any;
+      if (!instalacion.fechaFinalizacion) instalacion.fechaFinalizacion = ahora as any;
+      instalacion.instalacionNumeroActa = (extras?.numeroActa ?? '').trim();
     }
 
-    if (estadoNormalizado === EstadoInstalacion.ANULADA && !instalacion.fechaAnulacion) {
-      instalacion.fechaAnulacion = ahora as any;
+    if (estadoNormalizado === EstadoInstalacion.NOVE) {
+      if (!instalacion.fechaNovedad) instalacion.fechaNovedad = ahora as any;
+      if (extras?.observacionNovedad != null) {
+        const o = String(extras.observacionNovedad).trim();
+        instalacion.observacionNovedad = o || null;
+      }
     }
 
-    if (estadoNormalizado === EstadoInstalacion.COMPLETADA && !instalacion.fechaFinalizacion) {
-      instalacion.fechaFinalizacion = ahora as any;
+    if (estadoNormalizado === EstadoInstalacion.DEV) {
+      if (!instalacion.fechaDevolucion) {
+        instalacion.fechaDevolucion = (instalacion.fechaAnulacion as any) || (ahora as any);
+      }
     }
 
     const instalacionActualizada = await this.instalacionesRepository.save(instalacion);
@@ -1613,19 +1805,17 @@ export class InstalacionesService {
     if (instalacionCompleta.clienteId) {
       let nuevoEstadoCliente: EstadoCliente;
 
-      // Determinar el estado del cliente según el estado de la instalación (usar estadoNormalizado)
-      if (estadoNormalizado === EstadoInstalacion.ASIGNACION) {
+      const terminalesCliente = new Set([EstadoInstalacion.FACT, EstadoInstalacion.DEV]);
+
+      if (estadoNormalizado === EstadoInstalacion.AAT) {
         nuevoEstadoCliente = EstadoCliente.INSTALACION_ASIGNADA;
       } else if (
-        estadoNormalizado === EstadoInstalacion.CONSTRUCCION ||
-        estadoNormalizado === EstadoInstalacion.CERTIFICACION
+        estadoNormalizado === EstadoInstalacion.AVAN ||
+        estadoNormalizado === EstadoInstalacion.CONS ||
+        estadoNormalizado === EstadoInstalacion.CERT
       ) {
         nuevoEstadoCliente = EstadoCliente.REALIZANDO_INSTALACION;
-      } else if (
-        estadoNormalizado === EstadoInstalacion.COMPLETADA ||
-        estadoNormalizado === EstadoInstalacion.ANULADA
-      ) {
-        // Verificar si hay otras instalaciones activas
+      } else if (terminalesCliente.has(estadoNormalizado)) {
         const instalacionesClienteRaw = await this.instalacionesRepository.query(
           `SELECT instalacionId, estado FROM instalaciones WHERE clienteId = ?`,
           [instalacionCompleta.clienteId],
@@ -1634,18 +1824,13 @@ export class InstalacionesService {
         const tieneOtrasInstalacionesActivas = instalacionesClienteRaw.some(
           (inst: any) =>
             inst.instalacionId !== instalacionId &&
-            (inst.estado === EstadoInstalacion.PENDIENTE ||
-              inst.estado === EstadoInstalacion.ASIGNACION ||
-              inst.estado === EstadoInstalacion.CONSTRUCCION ||
-              inst.estado === EstadoInstalacion.CERTIFICACION),
+            !terminalesCliente.has(normalizarEstadoInstalacionCodigo(String(inst.estado))),
         );
 
-        // Si no tiene otras instalaciones activas, cambiar el estado del cliente a ACTIVO
         nuevoEstadoCliente = tieneOtrasInstalacionesActivas
           ? EstadoCliente.REALIZANDO_INSTALACION
           : EstadoCliente.ACTIVO;
       } else {
-        // Para otros estados (PENDIENTE, NOVEDAD), mantener el estado actual o usar ACTIVO
         nuevoEstadoCliente = EstadoCliente.ACTIVO;
       }
 
@@ -1685,12 +1870,16 @@ export class InstalacionesService {
       }
     }
 
-    // Marcar números de medidor como instalados cuando la instalación se completa o certifica
-    const estadosFinales = [EstadoInstalacion.COMPLETADA, EstadoInstalacion.CERTIFICACION];
+    const estadosFinalesMedidor = [
+      EstadoInstalacion.FACT,
+      EstadoInstalacion.CERT,
+      EstadoInstalacion.COMPLETADA,
+      EstadoInstalacion.CERTIFICACION,
+    ];
 
     if (
-      estadosFinales.includes(estadoNormalizado) &&
-      !estadosFinales.includes(estadoAnterior as any)
+      estadosFinalesMedidor.includes(estadoNormalizado) &&
+      !estadosFinalesMedidor.includes(estadoAnterior as any)
     ) {
       try {
         await this.numerosMedidorService.marcarComoInstalados(instalacionId);
@@ -1706,9 +1895,11 @@ export class InstalacionesService {
     // Enviar notificaciones según el estado (usar estadoNormalizado)
     // Usar switch para mejor inferencia de tipos de TypeScript
     switch (estadoNormalizado) {
+      case EstadoInstalacion.FACT:
       case EstadoInstalacion.COMPLETADA: {
-        // Si cambia a COMPLETADA, crear salidas automáticas si no existen (y completarlas inmediatamente)
+        // Facturación (antes completada): salidas automáticas e inventario
         if (
+          estadoAnterior !== EstadoInstalacion.FACT &&
           estadoAnterior !== EstadoInstalacion.COMPLETADA &&
           estadoAnterior !== EstadoInstalacion.FINALIZADA
         ) {
@@ -1744,16 +1935,13 @@ export class InstalacionesService {
           }
         }
 
-        // Actualizar materiales cuando la instalación se completa
-        // Solo actualizar si el estado anterior no era COMPLETADA para evitar duplicados
         if (
+          estadoAnterior !== EstadoInstalacion.FACT &&
           estadoAnterior !== EstadoInstalacion.COMPLETADA &&
           estadoAnterior !== EstadoInstalacion.FINALIZADA
         ) {
           await this.actualizarMaterialesInstalacion(instalacionId);
         }
-
-        // El estado del cliente ya se actualizó arriba según el estado de la instalación
 
         // Notificar al usuario que completó la instalación
         const clienteNombreCompleto = instalacionCompleta.cliente
@@ -1784,13 +1972,12 @@ export class InstalacionesService {
           if (grupo && grupo.grupoActivo) {
             await this.gruposService.crearMensajeSistema(
               grupo.grupoId,
-              `✅ La instalación ha sido completada. El chat de esta instalación se cerrará automáticamente.`,
+              `✅ La instalación ha sido facturada (cierre operativo). El chat de esta instalación se cerrará automáticamente.`,
             );
-            // Cerrar el chat
             await this.gruposService.cerrarChat(
               TipoGrupo.INSTALACION,
               instalacionId,
-              'Chat cerrado: La instalación ha sido completada.',
+              'Chat cerrado: Instalación facturada.',
             );
           }
         } catch (error) {
@@ -1801,8 +1988,9 @@ export class InstalacionesService {
         }
         break;
       }
+      case EstadoInstalacion.PPC:
       case EstadoInstalacion.PENDIENTE: {
-        // Notificar cuando cambia a pendiente (EN_PROCESO sin técnicos se mapea a PENDIENTE)
+        // Pendiente por construir
         const clienteNombreCompleto = instalacionCompleta.cliente
           ? instalacionCompleta.cliente.nombreUsuario || 'Cliente sin nombre'
           : 'Cliente';
@@ -1837,8 +2025,9 @@ export class InstalacionesService {
         }
         break;
       }
+      case EstadoInstalacion.AAT:
       case EstadoInstalacion.ASIGNACION: {
-        // Notificar a los usuarios asignados cuando cambia a asignación
+        // Asignada al técnico
         const clienteNombreCompleto = instalacionCompleta.cliente
           ? instalacionCompleta.cliente.nombreUsuario || 'Cliente sin nombre'
           : 'Cliente';
@@ -1879,8 +2068,9 @@ export class InstalacionesService {
         }
         break;
       }
+      case EstadoInstalacion.CONS:
+      case EstadoInstalacion.AVAN:
       case EstadoInstalacion.CONSTRUCCION: {
-        // Notificar a los usuarios asignados cuando cambia a construcción
         const clienteNombreCompleto = instalacionCompleta.cliente
           ? instalacionCompleta.cliente.nombreUsuario || 'Cliente sin nombre'
           : 'Cliente';
@@ -1889,7 +2079,8 @@ export class InstalacionesService {
           ? `${usuarioQueCambia.usuarioNombre || ''} ${usuarioQueCambia.usuarioApellido || ''}`.trim()
           : 'Técnico';
 
-        // Crear notificaciones para todos los usuarios asignados
+        const esConstruida = estadoNormalizado === EstadoInstalacion.CONS;
+
         for (const usuarioIdAsignado of usuariosIds) {
           await this.notificacionesService.crearNotificacionInstalacionConstruccion(
             usuarioIdAsignado,
@@ -1899,14 +2090,13 @@ export class InstalacionesService {
           );
         }
 
-        // Si un técnico o soldador cambió el estado, notificar a supervisores/admins
         if (esTecnicoOSoldador && supervisoresIds.length > 0) {
           for (const supervisorId of supervisoresIds) {
             await this.notificacionesService.crearNotificacion(
               supervisorId,
               'instalacion_construccion' as any,
-              'Instalación en Construcción',
-              `El técnico ${tecnicoNombre} cambió la instalación ${instalacionCompleta.identificadorUnico || `INST-${instalacionId}`} del cliente ${clienteNombreCompleto} a estado de construcción.`,
+              esConstruida ? 'Instalación construida' : 'Instalación en avance',
+              `El técnico ${tecnicoNombre} actualizó la instalación ${instalacionCompleta.identificadorUnico || `INST-${instalacionId}`} del cliente ${clienteNombreCompleto} (${esConstruida ? 'construida' : 'en avance'}).`,
               {
                 instalacionId,
                 instalacionCodigo:
@@ -1925,7 +2115,6 @@ export class InstalacionesService {
           clienteNombre: clienteNombreCompleto,
         });
 
-        // Enviar mensaje automático al chat de la instalación
         try {
           const grupo = await this.gruposService.obtenerGrupoPorEntidad(
             TipoGrupo.INSTALACION,
@@ -1934,7 +2123,9 @@ export class InstalacionesService {
           if (grupo && grupo.grupoActivo) {
             await this.gruposService.crearMensajeSistema(
               grupo.grupoId,
-              `🔨 La instalación está en construcción.`,
+              esConstruida
+                ? `✅ La instalación está construida (obra lista).`
+                : `🔨 La instalación está en avance de obra.`,
             );
           }
         } catch (error) {
@@ -1945,8 +2136,9 @@ export class InstalacionesService {
         }
         break;
       }
+      case EstadoInstalacion.CERT:
       case EstadoInstalacion.CERTIFICACION: {
-        // Notificar a los usuarios asignados cuando cambia a certificación
+        // Certificada
         const clienteNombreCompleto = instalacionCompleta.cliente
           ? instalacionCompleta.cliente.nombreUsuario || 'Cliente sin nombre'
           : 'Cliente';
@@ -2011,8 +2203,8 @@ export class InstalacionesService {
         }
         break;
       }
+      case EstadoInstalacion.NOVE:
       case EstadoInstalacion.NOVEDAD: {
-        // Notificar a los usuarios asignados cuando hay una novedad técnica
         const clienteNombreCompleto = instalacionCompleta.cliente
           ? instalacionCompleta.cliente.nombreUsuario || 'Cliente sin nombre'
           : 'Cliente';
@@ -2021,8 +2213,10 @@ export class InstalacionesService {
           ? `${usuarioQueCambia.usuarioNombre || ''} ${usuarioQueCambia.usuarioApellido || ''}`.trim()
           : 'Técnico';
 
-        // Obtener motivo de novedad de las observaciones si está disponible
-        const motivoNovedad = instalacionCompleta.instalacionObservaciones || undefined;
+        const motivoNovedad =
+          instalacionCompleta.observacionNovedad ||
+          instalacionCompleta.instalacionObservaciones ||
+          undefined;
 
         // Crear notificaciones para todos los usuarios asignados
         for (const usuarioIdAsignado of usuariosIds) {
@@ -2120,34 +2314,7 @@ export class InstalacionesService {
         }
         break;
       }
-      case EstadoInstalacion.ANULADA: {
-        // Notificar a los usuarios asignados cuando se anula la instalación
-        const clienteNombreCompleto = instalacionCompleta.cliente
-          ? instalacionCompleta.cliente.nombreUsuario || 'Cliente sin nombre'
-          : 'Cliente';
-
-        // Obtener motivo de anulación de las observaciones si está disponible
-        const motivoAnulacion = instalacionCompleta.instalacionObservaciones || undefined;
-
-        // Crear notificaciones para todos los usuarios asignados
-        for (const usuarioId of usuariosIds) {
-          await this.notificacionesService.crearNotificacionInstalacionAnulada(
-            usuarioId,
-            instalacionId,
-            instalacionCompleta.identificadorUnico || `INST-${instalacionId}`,
-            clienteNombreCompleto,
-            motivoAnulacion,
-          );
-        }
-
-        this.chatGateway.emitirEventoInstalacion(usuariosIds, 'instalacion_anulada', {
-          instalacionId,
-          instalacionCodigo: instalacionCompleta.identificadorUnico || `INST-${instalacionId}`,
-          clienteNombre: clienteNombreCompleto,
-          motivo: motivoAnulacion,
-        });
-
-        // Enviar mensaje automático al chat de la instalación y cerrarlo
+      case EstadoInstalacion.APM: {
         try {
           const grupo = await this.gruposService.obtenerGrupoPorEntidad(
             TipoGrupo.INSTALACION,
@@ -2156,13 +2323,54 @@ export class InstalacionesService {
           if (grupo && grupo.grupoActivo) {
             await this.gruposService.crearMensajeSistema(
               grupo.grupoId,
-              `❌ La instalación ha sido anulada. El chat de esta instalación se cerrará automáticamente.${motivoAnulacion ? ` Motivo: ${motivoAnulacion}` : ''}`,
+              `📌 Instalación en etapa Metrogas (asignación registrada).`,
             );
-            // Cerrar el chat
+          }
+        } catch (error) {
+          console.error(
+            `[InstalacionesService] Error al enviar mensaje para instalación ${instalacionId}:`,
+            error,
+          );
+        }
+        break;
+      }
+      case EstadoInstalacion.DEV: {
+        const clienteNombreCompleto = instalacionCompleta.cliente
+          ? instalacionCompleta.cliente.nombreUsuario || 'Cliente sin nombre'
+          : 'Cliente';
+        const motivoDevolucion = instalacionCompleta.instalacionObservaciones || undefined;
+
+        for (const uid of usuariosIds) {
+          await this.notificacionesService.crearNotificacionInstalacionDevuelta(
+            uid,
+            instalacionId,
+            instalacionCompleta.identificadorUnico || `INST-${instalacionId}`,
+            clienteNombreCompleto,
+            motivoDevolucion,
+          );
+        }
+
+        this.chatGateway.emitirEventoInstalacion(usuariosIds, 'instalacion_devuelta', {
+          instalacionId,
+          instalacionCodigo: instalacionCompleta.identificadorUnico || `INST-${instalacionId}`,
+          clienteNombre: clienteNombreCompleto,
+          motivo: motivoDevolucion,
+        });
+
+        try {
+          const grupo = await this.gruposService.obtenerGrupoPorEntidad(
+            TipoGrupo.INSTALACION,
+            instalacionId,
+          );
+          if (grupo && grupo.grupoActivo) {
+            await this.gruposService.crearMensajeSistema(
+              grupo.grupoId,
+              `↩️ La instalación ha sido marcada como devuelta.${motivoDevolucion ? ` Motivo: ${motivoDevolucion}` : ''} El chat se cerrará automáticamente.`,
+            );
             await this.gruposService.cerrarChat(
               TipoGrupo.INSTALACION,
               instalacionId,
-              'Chat cerrado: La instalación ha sido anulada.',
+              'Chat cerrado: instalación devuelta.',
             );
           }
         } catch (error) {
@@ -2182,13 +2390,21 @@ export class InstalacionesService {
           );
           if (grupo && grupo.grupoActivo) {
             const estadoLabels: Record<string, string> = {
-              pendiente: 'Pendiente',
-              asignacion: 'Asignación',
-              construccion: 'Construcción',
-              certificacion: 'Certificación',
+              apm: 'Asignada por Metrogas',
+              ppc: 'Pendiente por construir',
+              aat: 'Asignada al técnico',
+              avan: 'Avance',
+              cons: 'Construida',
+              cert: 'Certificada',
+              fact: 'Facturación',
+              nove: 'Novedad',
+              dev: 'Devuelta',
+              pendiente: 'Pendiente por construir',
+              asignacion: 'Asignada al técnico',
+              construccion: 'Avance',
+              certificacion: 'Certificada',
               novedad: 'Novedad',
-              anulada: 'Anulada',
-              completada: 'Completada',
+              completada: 'Facturación',
             };
             const estadoTexto = estadoLabels[estadoNormalizado] || estadoNormalizado;
             await this.gruposService.crearMensajeSistema(
@@ -2245,7 +2461,14 @@ export class InstalacionesService {
             ? JSON.parse(instalacion.instalacionProyectos)
             : instalacion.instalacionProyectos;
 
-        if (Array.isArray(proyectos)) {
+        if (
+          proyectos &&
+          typeof proyectos === 'object' &&
+          !Array.isArray(proyectos) &&
+          proyectos.version === 'redes_v2'
+        ) {
+          // Catálogo redes_v2 no incluye ítems de inventario; siguen materialesInstalados / otros flujos
+        } else if (Array.isArray(proyectos)) {
           for (const proyecto of proyectos) {
             if (proyecto.items && Array.isArray(proyecto.items)) {
               for (const item of proyecto.items) {
@@ -2361,7 +2584,7 @@ export class InstalacionesService {
     const cantidadFinalizadas = await this.instalacionesRepository.count({
       where: {
         clienteId,
-        estado: EstadoInstalacion.COMPLETADA,
+        estado: In([EstadoInstalacion.FACT, EstadoInstalacion.COMPLETADA]),
       },
     });
 
@@ -2407,50 +2630,48 @@ export class InstalacionesService {
         movimiento.movimientoTipo === TipoMovimiento.SALIDA &&
         movimiento.movimientoEstado === EstadoMovimiento.PENDIENTE
       ) {
-        // Actualizar estado a completada
+        const cantidadUtilizada = materialesUtilizados.get(movimiento.materialId);
+        const tieneCantidadUtilizada =
+          typeof cantidadUtilizada === 'number' && !Number.isNaN(cantidadUtilizada);
+        const cantidadFinal = tieneCantidadUtilizada
+          ? Number(cantidadUtilizada)
+          : Number(movimiento.movimientoCantidad);
+
+        // Si la cantidad realmente utilizada difiere de la planificada, actualizar el movimiento
+        // ANTES de completarlo, para que el ajuste de stock se haga con la cantidad correcta.
+        if (
+          tieneCantidadUtilizada &&
+          Number(movimiento.movimientoCantidad) !== cantidadFinal
+        ) {
+          await this.movimientosService.update(movimiento.movimientoId, {
+            materiales: [
+              {
+                materialId: movimiento.materialId,
+                movimientoCantidad: cantidadFinal,
+                movimientoPrecioUnitario: movimiento.movimientoPrecioUnitario,
+              } as any,
+            ],
+            inventarioId: movimiento.inventarioId,
+          } as any);
+        }
+
+        // Completar el movimiento. Este método ya aplica el ajuste de stock (una sola vez)
+        // según el tipo de movimiento y el inventario/bodega.
         await this.movimientosService.actualizarEstado(
           movimiento.movimientoId,
           EstadoMovimiento.COMPLETADA,
         );
 
-        // Si hay materiales utilizados registrados, ajustar la cantidad si es diferente
-        const cantidadUtilizada = materialesUtilizados.get(movimiento.materialId);
-        if (
-          cantidadUtilizada !== undefined &&
-          cantidadUtilizada !== movimiento.movimientoCantidad
-        ) {
-          // La cantidad realmente utilizada es diferente a la planificada
-          // Se ajustará automáticamente cuando se procese el movimiento con ajustarStockMovimiento
-          // Solo necesitamos actualizar la cantidad del movimiento si es necesario
-        }
-
-        // Obtener el material para ajustar inventario
-        const material = await this.materialesService.findOne(movimiento.materialId);
-        const cantidadFinal =
-          cantidadUtilizada !== undefined ? cantidadUtilizada : movimiento.movimientoCantidad;
-
-        // Obtener inventario/bodega del movimiento
-        if (movimiento.inventarioId) {
-          const inventario = await this.inventariosService.findOne(movimiento.inventarioId);
-          const bodegaId = inventario.bodegaId || inventario.bodega?.bodegaId;
-
-          if (bodegaId) {
-            // Ajustar stock según la cantidad realmente utilizada
-            await this.materialesService.ajustarStock(
+        // Actualizar precio si viene en el movimiento (no tocar stock aquí para evitar dobles descuentos)
+        if (movimiento.movimientoPrecioUnitario) {
+          const material = await this.materialesService.findOne(movimiento.materialId);
+          if (material.inventarioId) {
+            await this.materialesService.actualizarInventarioYPrecio(
               movimiento.materialId,
-              -cantidadFinal,
-              bodegaId,
+              material.inventarioId,
+              movimiento.movimientoPrecioUnitario,
             );
           }
-        }
-
-        // Actualizar precio si viene en el movimiento
-        if (material.inventarioId && movimiento.movimientoPrecioUnitario) {
-          await this.materialesService.actualizarInventarioYPrecio(
-            movimiento.materialId,
-            material.inventarioId,
-            movimiento.movimientoPrecioUnitario,
-          );
         }
       }
     }

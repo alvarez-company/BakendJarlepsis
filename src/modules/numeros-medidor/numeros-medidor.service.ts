@@ -6,10 +6,11 @@ import {
   forwardRef,
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Repository, In } from 'typeorm';
+import { Brackets, In, Repository } from 'typeorm';
 import { NumeroMedidor, EstadoNumeroMedidor } from './numero-medidor.entity';
 import { CreateNumeroMedidorDto, UpdateNumeroMedidorDto } from './dto/create-numero-medidor.dto';
 import { MaterialesService } from '../materiales/materiales.service';
+import { BodegasService } from '../bodegas/bodegas.service';
 
 @Injectable()
 export class NumerosMedidorService {
@@ -18,7 +19,58 @@ export class NumerosMedidorService {
     private numerosMedidorRepository: Repository<NumeroMedidor>,
     @Inject(forwardRef(() => MaterialesService))
     private materialesService: MaterialesService,
+    @Inject(forwardRef(() => BodegasService))
+    private readonly bodegasService: BodegasService,
   ) {}
+
+  /** Sede del usuario: explícita o inferida desde su bodega asignada (sin filtrar permisos en findOne de bodega). */
+  private async resolveUsuarioSedeScope(user?: any): Promise<number | null> {
+    if (!user) return null;
+    const rolTipo = (user.usuarioRol?.rolTipo || user.role || '').toLowerCase();
+    if (rolTipo === 'superadmin' || rolTipo === 'gerencia') return null;
+    if (user.usuarioSede != null && user.usuarioSede !== '') {
+      const n = Number(user.usuarioSede);
+      if (!Number.isNaN(n) && n > 0) return n;
+    }
+    if (user.usuarioBodega != null && user.usuarioBodega !== '') {
+      try {
+        const b = await this.bodegasService.findOne(Number(user.usuarioBodega));
+        if (b?.sedeId != null) return Number(b.sedeId);
+      } catch {
+        /* ignorar */
+      }
+    }
+    return null;
+  }
+
+  private async sincronizarStockMaterialMedidor(materialId: number): Promise<void> {
+    try {
+      await this.materialesService.sincronizarStock(materialId);
+    } catch (err) {
+      console.error(`No se pudo sincronizar stock del material ${materialId}:`, err);
+    }
+  }
+
+  /** Misma regla que el listado por centro: bodega del centro, técnico del centro, o disponible sin bodega/técnico. */
+  filtrarPorCentroOperativo(numeros: NumeroMedidor[], sedeId: number): NumeroMedidor[] {
+    return this.filterBySede(numeros, sedeId);
+  }
+
+  /** Todos los seriales de un material (sincronización de stock / inventario). */
+  async findAllByMaterialForSync(materialId: number): Promise<NumeroMedidor[]> {
+    return this.numerosMedidorRepository.find({
+      where: { materialId },
+      relations: ['bodega', 'usuario'],
+    });
+  }
+
+  async findNumerosByMaterialIds(materialIds: number[]): Promise<NumeroMedidor[]> {
+    if (!materialIds.length) return [];
+    return this.numerosMedidorRepository.find({
+      where: { materialId: In(materialIds) },
+      relations: ['bodega', 'usuario'],
+    });
+  }
 
   async create(createDto: CreateNumeroMedidorDto): Promise<NumeroMedidor> {
     // Normalizar el número de medidor (trim y lowercase) para comparación
@@ -49,7 +101,9 @@ export class NumerosMedidorService {
     }
 
     const numeroMedidor = this.numerosMedidorRepository.create(createDto);
-    return this.numerosMedidorRepository.save(numeroMedidor);
+    const saved = await this.numerosMedidorRepository.save(numeroMedidor);
+    await this.sincronizarStockMaterialMedidor(saved.materialId);
+    return saved;
   }
 
   async crearMultiples(
@@ -109,15 +163,18 @@ export class NumerosMedidorService {
       );
     }
 
+    if (resultados.length > 0) {
+      await this.sincronizarStockMaterialMedidor(materialId);
+    }
     return resultados;
   }
 
   /** Filtra números de medidor por centro operativo (sede): bodega del centro, técnicos del centro, o disponibles sin bodega (asignables desde el centro) */
   private filterBySede(numeros: NumeroMedidor[], sedeId: number): NumeroMedidor[] {
+    const sid = Number(sedeId);
     return numeros.filter((n: any) => {
-      if (n.bodega?.sedeId === sedeId) return true;
-      if (n.usuario?.usuarioSede === sedeId) return true;
-      // Números disponibles sin bodega ni técnico: visibles para el centro (se pueden asignar desde cualquier bodega del centro)
+      if (n.bodega?.sedeId != null && Number(n.bodega.sedeId) === sid) return true;
+      if (n.usuario?.usuarioSede != null && Number(n.usuario.usuarioSede) === sid) return true;
       if (!n.bodegaId && !n.usuarioId) return true;
       return false;
     });
@@ -131,7 +188,11 @@ export class NumerosMedidorService {
     const limit = paginationDto?.limit || 10;
     const skip = (page - 1) * limit;
 
-    const queryBuilder = this.numerosMedidorRepository
+    const rolTipo = (user?.usuarioRol?.rolTipo || user?.role || '').toLowerCase();
+    const esSuperadminOGerencia = rolTipo === 'superadmin' || rolTipo === 'gerencia';
+    const sedeScope = esSuperadminOGerencia ? null : await this.resolveUsuarioSedeScope(user);
+
+    const qb = this.numerosMedidorRepository
       .createQueryBuilder('numero')
       .leftJoinAndSelect('numero.material', 'material')
       .leftJoinAndSelect('material.categoria', 'categoria')
@@ -140,20 +201,22 @@ export class NumerosMedidorService {
       .leftJoinAndSelect('numero.instalacionMaterial', 'instalacionMaterial')
       .leftJoinAndSelect('numero.bodega', 'bodega')
       .leftJoinAndSelect('bodega.sede', 'bodegaSede')
-      .orderBy('numero.fechaCreacion', 'DESC')
-      .skip(skip)
-      .take(limit);
+      .orderBy('numero.fechaCreacion', 'DESC');
 
-    let [data, total] = await queryBuilder.getManyAndCount();
-    
-    // Superadmin y gerencia ven todo independientemente de si tienen sede asignada
-    const rolTipo = (user?.usuarioRol?.rolTipo || user?.role || '').toLowerCase();
-    const esSuperadminOGerencia = rolTipo === 'superadmin' || rolTipo === 'gerencia';
-    
-    if (user?.usuarioSede && !esSuperadminOGerencia) {
-      data = this.filterBySede(data, user.usuarioSede);
-      total = data.length;
+    if (sedeScope != null) {
+      qb.andWhere(
+        new Brackets((w) => {
+          w.where('bodega.sedeId = :sedeScope', { sedeScope }).orWhere(
+            'usuario.usuarioSede = :sedeScope',
+            { sedeScope },
+          ).orWhere('(numero.bodegaId IS NULL AND numero.usuarioId IS NULL)');
+        }),
+      );
     }
+
+    const total = await qb.clone().getCount();
+    const data = await qb.clone().skip(skip).take(limit).getMany();
+
     return {
       data,
       total,
@@ -184,13 +247,13 @@ export class NumerosMedidorService {
         'bodega.sede',
       ],
     });
-    
-    // Superadmin y gerencia ven todo independientemente de si tienen sede asignada
+
     const rolTipo = (user?.usuarioRol?.rolTipo || user?.role || '').toLowerCase();
     const esSuperadminOGerencia = rolTipo === 'superadmin' || rolTipo === 'gerencia';
-    
-    if (user?.usuarioSede && !esSuperadminOGerencia) {
-      numeros = this.filterBySede(numeros, user.usuarioSede);
+    const sedeScope = esSuperadminOGerencia ? null : await this.resolveUsuarioSedeScope(user);
+
+    if (sedeScope != null) {
+      numeros = this.filterBySede(numeros, sedeScope);
     }
     return numeros;
   }
@@ -267,13 +330,13 @@ export class NumerosMedidorService {
         'bodega.sede',
       ],
     });
-    
-    // Superadmin y gerencia ven todo independientemente de si tienen sede asignada
+
     const rolTipo = (user?.usuarioRol?.rolTipo || user?.role || '').toLowerCase();
     const esSuperadminOGerencia = rolTipo === 'superadmin' || rolTipo === 'gerencia';
-    
-    if (user?.usuarioSede && !esSuperadminOGerencia) {
-      numeros = this.filterBySede(numeros, user.usuarioSede);
+    const sedeScope = esSuperadminOGerencia ? null : await this.resolveUsuarioSedeScope(user);
+
+    if (sedeScope != null) {
+      numeros = this.filterBySede(numeros, sedeScope);
     }
     return numeros;
   }
@@ -318,19 +381,25 @@ export class NumerosMedidorService {
   async update(id: number, updateDto: UpdateNumeroMedidorDto): Promise<NumeroMedidor> {
     const numeroMedidor = await this.findOne(id);
 
-    // Si se actualiza el número, verificar que sea único
     if (updateDto.numeroMedidor && updateDto.numeroMedidor !== numeroMedidor.numeroMedidor) {
-      const existente = await this.numerosMedidorRepository.findOne({
-        where: { numeroMedidor: updateDto.numeroMedidor },
-      });
-
-      if (existente) {
-        throw new BadRequestException(`El número de medidor ${updateDto.numeroMedidor} ya existe`);
+      const nuevoNorm = updateDto.numeroMedidor.trim().toLowerCase();
+      const actuales = await this.numerosMedidorRepository.find();
+      const duplicado = actuales.some(
+        (n) =>
+          n.numeroMedidorId !== id &&
+          n.numeroMedidor.trim().toLowerCase() === nuevoNorm,
+      );
+      if (duplicado) {
+        throw new BadRequestException(
+          `El número de medidor "${updateDto.numeroMedidor}" ya existe (comparación sin distinguir mayúsculas).`,
+        );
       }
     }
 
     Object.assign(numeroMedidor, updateDto);
-    return this.numerosMedidorRepository.save(numeroMedidor);
+    const saved = await this.numerosMedidorRepository.save(numeroMedidor);
+    await this.sincronizarStockMaterialMedidor(saved.materialId);
+    return saved;
   }
 
   async asignarATecnico(
@@ -354,6 +423,9 @@ export class NumerosMedidorService {
       resultados.push(await this.numerosMedidorRepository.save(numero));
     }
 
+    if (resultados.length > 0) {
+      await this.sincronizarStockMaterialMedidor(resultados[0].materialId);
+    }
     return resultados;
   }
 
@@ -381,6 +453,9 @@ export class NumerosMedidorService {
       resultados.push(await this.numerosMedidorRepository.save(numero));
     }
 
+    if (resultados.length > 0) {
+      await this.sincronizarStockMaterialMedidor(resultados[0].materialId);
+    }
     return resultados;
   }
 
@@ -408,6 +483,10 @@ export class NumerosMedidorService {
       resultados.push(await this.numerosMedidorRepository.save(numero));
     }
 
+    const materialIds = [...new Set(resultados.map((r) => r.materialId))];
+    for (const mid of materialIds) {
+      await this.sincronizarStockMaterialMedidor(mid);
+    }
     return resultados;
   }
 
@@ -440,6 +519,10 @@ export class NumerosMedidorService {
       resultados.push(await this.numerosMedidorRepository.save(numero));
     }
 
+    const materialIds = [...new Set(resultados.map((r) => r.materialId))];
+    for (const mid of materialIds) {
+      await this.sincronizarStockMaterialMedidor(mid);
+    }
     return resultados;
   }
 
@@ -459,12 +542,18 @@ export class NumerosMedidorService {
       }
     }
 
+    const materialIds = [...new Set(resultados.map((r) => r.materialId))];
+    for (const mid of materialIds) {
+      await this.sincronizarStockMaterialMedidor(mid);
+    }
     return resultados;
   }
 
   async remove(id: number): Promise<void> {
     const numeroMedidor = await this.findOne(id);
+    const materialId = numeroMedidor.materialId;
     await this.numerosMedidorRepository.remove(numeroMedidor);
+    await this.sincronizarStockMaterialMedidor(materialId);
   }
 
   /**

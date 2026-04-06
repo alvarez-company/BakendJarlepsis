@@ -12,6 +12,7 @@ import { InstalacionUsuario } from '../instalaciones-usuarios/instalacion-usuari
 import { Municipio } from '../municipios/municipio.entity';
 import { Categoria } from '../categorias/categoria.entity';
 import { InventarioTecnico } from '../inventario-tecnico/inventario-tecnico.entity';
+import { esDepartamentoZonaOperacion } from '../../common/constants/departamentos-operacion.constants';
 
 export interface DashboardStats {
   totalMateriales: number;
@@ -35,6 +36,16 @@ export interface DashboardStats {
   instalacionesPorEstado?: { estado: string; cantidad: number }[];
   tecnicosConMasInstalaciones?: { tecnico: string; cantidad: number }[];
   instalacionesPorMunicipio?: { municipio: string; cantidad: number }[];
+  /** Listado completo con códigos DANE y departamento (mapas / agregados) */
+  instalacionesPorMunicipioDetalle?: {
+    municipio: string;
+    cantidad: number;
+    municipioId: number;
+    municipioCodigo: string | null;
+    departamentoId: number;
+    departamentoNombre: string;
+    departamentoCodigo: string | null;
+  }[];
   ultimasInstalaciones?: {
     instalacionId: number;
     codigo: string;
@@ -240,7 +251,7 @@ export class StatsService {
               },
             }));
           }),
-        this.municipiosRepository.find(),
+        this.municipiosRepository.find({ relations: ['departamento'] }),
       ]);
 
       // Filtrar por centro operativo (sede): cuando el usuario tiene rol con filtro por bodega
@@ -475,6 +486,9 @@ export class StatsService {
           if (cliente && cliente.municipioId) {
             const municipioId = cliente.municipioId;
             const municipio = municipios.find((m) => m.municipioId === municipioId);
+            if (!esDepartamentoZonaOperacion(municipio?.departamento?.departamentoNombre)) {
+              return;
+            }
             const nombreMunicipio = municipio?.municipioNombre || `Municipio ${municipioId}`;
 
             if (!municipiosMap.has(municipioId)) {
@@ -485,10 +499,25 @@ export class StatsService {
           }
         }
       });
-      const instalacionesPorMunicipio = Array.from(municipiosMap.values())
-        .sort((a, b) => b.cantidad - a.cantidad)
+      const instalacionesPorMunicipioDetalle = Array.from(municipiosMap.entries())
+        .map(([municipioId, row]) => {
+          const mun = municipios.find((m) => m.municipioId === municipioId);
+          const depNombre = mun?.departamento?.departamentoNombre ?? '';
+          return {
+            municipio: row.nombre,
+            cantidad: row.cantidad,
+            municipioId,
+            municipioCodigo: mun?.municipioCodigo ?? null,
+            departamentoId: mun?.departamentoId ?? 0,
+            departamentoNombre: depNombre,
+            departamentoCodigo: mun?.departamento?.departamentoCodigo ?? null,
+          };
+        })
+        .sort((a, b) => b.cantidad - a.cantidad);
+
+      const instalacionesPorMunicipio = instalacionesPorMunicipioDetalle
         .slice(0, 10)
-        .map((m) => ({ municipio: m.nombre, cantidad: m.cantidad }));
+        .map((m) => ({ municipio: m.municipio, cantidad: m.cantidad }));
 
       // Obtener últimas instalaciones (últimas 10)
       const ultimasInstalaciones = instalacionesParaStats.slice(0, 10).map((inst: any) => {
@@ -550,6 +579,7 @@ export class StatsService {
         instalacionesPorEstado,
         tecnicosConMasInstalaciones,
         instalacionesPorMunicipio,
+        instalacionesPorMunicipioDetalle,
         ultimasInstalaciones,
         instalacionesPorMes,
       };
@@ -581,6 +611,7 @@ export class StatsService {
         instalacionesPorEstado: [],
         tecnicosConMasInstalaciones: [],
         instalacionesPorMunicipio: [],
+        instalacionesPorMunicipioDetalle: [],
         ultimasInstalaciones: [],
         instalacionesPorMes: [],
       };

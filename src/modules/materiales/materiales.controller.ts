@@ -26,6 +26,7 @@ import { ImpersonationGuard } from '../auth/guards/impersonation.guard';
 import {
   ROLES_ALMACENISTA,
   ROLES_VER_MATERIALES_INVENTARIO,
+  ROLES_VER_SEDES,
   ROLES_SUPERADMIN_GERENCIA,
   ROLES_ASIGNAR_MATERIAL,
 } from '../../common/constants/roles.constants';
@@ -48,11 +49,25 @@ export class MaterialesController {
     return this.materialesService.create(createMaterialDto, req.user.usuarioId);
   }
 
+  @Get('stock-por-sede')
+  @Roles(...ROLES_VER_SEDES)
+  @ApiOperation({ summary: 'Stock acumulado por centro operativo (bodegas + técnicos)' })
+  getStockPorSede(@Request() req) {
+    return this.materialesService.getStockAcumuladoPorSede(req.user);
+  }
+
   @Get()
   @Roles(...ROLES_VER_MATERIALES_INVENTARIO)
   @ApiOperation({ summary: 'Get all materiales' })
-  findAll(@Request() req) {
-    return this.materialesService.findAll(req.user);
+  @ApiQuery({ name: 'vistaCentroOperativo', required: false, type: Number })
+  findAll(
+    @Request() req,
+    @Query('vistaCentroOperativo') vistaCentroOperativo?: string,
+  ) {
+    const raw = vistaCentroOperativo?.trim();
+    const id = raw ? Number(raw) : NaN;
+    const vista = Number.isFinite(id) && id > 0 ? id : undefined;
+    return this.materialesService.findAll(req.user, vista);
   }
 
   @Get(':id')

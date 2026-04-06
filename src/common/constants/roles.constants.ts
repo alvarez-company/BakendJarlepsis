@@ -85,6 +85,7 @@ export const ROLES_GESTION_SEDES = ['superadmin', 'gerencia'] as const;
 /** Roles que pueden ver sedes */
 export const ROLES_VER_SEDES = [
   'superadmin',
+  'gerencia',
   'admin',
   'admin-internas',
   'admin-redes',
@@ -101,6 +102,7 @@ export const ROLES_GESTION_BODEGAS = [
 /** Roles que pueden ver bodegas */
 export const ROLES_VER_BODEGAS = [
   'superadmin',
+  'gerencia',
   'admin',
   'admin-internas',
   'admin-redes',

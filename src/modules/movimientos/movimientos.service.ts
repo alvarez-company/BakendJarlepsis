@@ -165,8 +165,23 @@ export class MovimientosService {
     const obtenerContextoInventario = async (
       material: any,
     ): Promise<{ inventarioId: number | null; bodegaId: number | null }> => {
+      // Entrada con inventarioId null ("a sede"): asignar bodega/inventario del centro del usuario que registra
+      // para que el movimiento y el stock aparezcan en Empresa / historial por sede.
+      if (
+        createMovimientoDto.inventarioId === null &&
+        createMovimientoDto.movimientoTipo === TipoMovimiento.ENTRADA &&
+        createMovimientoDto.origenTipo !== 'tecnico' &&
+        createMovimientoDto.usuarioId
+      ) {
+        const desdeCentro = await this.resolverInventarioEntradaDesdeCentroUsuario(
+          createMovimientoDto.usuarioId,
+        );
+        if (desdeCentro) {
+          return desdeCentro;
+        }
+      }
       // PRIORIDAD 1: Preferencia explícita del DTO (siempre usar este si está presente)
-      // Si inventarioId es explícitamente null, retornar null (va a sede)
+      // Si inventarioId es explícitamente null y no hubo resolución por centro, va a sede sin bodega (legacy)
       if (createMovimientoDto.inventarioId === null) {
         return { inventarioId: null, bodegaId: null };
       }
@@ -811,6 +826,49 @@ export class MovimientosService {
         error,
       );
       throw error;
+    }
+  }
+
+  /**
+   * Para entradas sin inventario/bodega elegidos: usa el primer inventario activo de una bodega del centro del usuario.
+   */
+  private async resolverInventarioEntradaDesdeCentroUsuario(
+    usuarioId: number,
+  ): Promise<{ inventarioId: number; bodegaId: number } | null> {
+    try {
+      const user = await this.usersService.findOne(usuarioId);
+      let sedeId: number | null = null;
+      if (user.usuarioSede != null && String(user.usuarioSede).trim() !== '') {
+        const n = Number(user.usuarioSede);
+        if (Number.isFinite(n) && n > 0) sedeId = n;
+      }
+      if (sedeId == null && user.bodega?.sedeId != null) {
+        const n = Number(user.bodega.sedeId);
+        if (Number.isFinite(n) && n > 0) sedeId = n;
+      }
+      if (sedeId == null) return null;
+
+      const rows = await this.movimientosRepository.query(
+        `SELECT bodegaId FROM bodegas
+         WHERE sedeId = ? AND bodegaEstado = 1
+         ORDER BY
+           CASE bodegaTipo WHEN 'internas' THEN 0 WHEN 'redes' THEN 1 ELSE 2 END,
+           bodegaId ASC
+         LIMIT 1`,
+        [sedeId],
+      );
+      if (!rows?.length) return null;
+      const bodegaId = Number(rows[0].bodegaId);
+      if (!Number.isFinite(bodegaId) || bodegaId <= 0) return null;
+
+      const inv = await this.inventariosService.findByBodega(bodegaId);
+      if (!inv?.inventarioId) return null;
+      return {
+        inventarioId: inv.inventarioId,
+        bodegaId: inv.bodegaId ?? bodegaId,
+      };
+    } catch {
+      return null;
     }
   }
 
@@ -2157,35 +2215,26 @@ export class MovimientosService {
         return [];
       }
     }
-    // Obtener todas las bodegas de la sede
+    const sid = Number(sedeId);
+
     const bodegas = await this.movimientosRepository.query(
       `SELECT b.bodegaId 
          FROM bodegas b
          WHERE b.sedeId = ?`,
-      [sedeId],
+      [sid],
     );
-
-    if (bodegas.length === 0) {
-      return [];
-    }
-
     const bodegasIds = bodegas.map((b: any) => b.bodegaId);
 
-    // Obtener todos los inventarios de esas bodegas (filtrados por user si aplica)
-    const allInventarios = await this.inventariosService.findAll(user);
-    const inventarios = allInventarios.filter(
-      (inv) => bodegasIds.includes(inv.bodegaId) && inv.inventarioEstado,
-    );
-
-    if (inventarios.length === 0) {
-      return [];
-    }
-
-    const inventariosIds = inventarios.map((inv) => inv.inventarioId);
-
-    // Obtener todos los movimientos de esos inventarios
-    const rawMovimientos = await this.movimientosRepository.query(
-      `SELECT 
+    let rawPorInventario: any[] = [];
+    if (bodegasIds.length > 0) {
+      const allInventarios = await this.inventariosService.findAll(user);
+      const inventarios = allInventarios.filter(
+        (inv) => bodegasIds.includes(inv.bodegaId) && inv.inventarioEstado,
+      );
+      const inventariosIds = inventarios.map((inv) => inv.inventarioId);
+      if (inventariosIds.length > 0) {
+        rawPorInventario = await this.movimientosRepository.query(
+          `SELECT 
           m.movimientoId,
           m.materialId,
           m.movimientoTipo,
@@ -2205,13 +2254,54 @@ export class MovimientosService {
         FROM movimientos_inventario m
         WHERE m.inventarioId IN (${inventariosIds.map(() => '?').join(',')})
         ORDER BY m.fechaCreacion ASC`,
-      inventariosIds,
+          inventariosIds,
+        );
+      }
+    }
+
+    const selectCols = `m.movimientoId,
+          m.materialId,
+          m.movimientoTipo,
+          m.movimientoCantidad,
+          m.movimientoPrecioUnitario,
+          m.movimientoObservaciones,
+          m.instalacionId,
+          m.usuarioId,
+          m.proveedorId,
+          m.inventarioId,
+          m.movimientoCodigo,
+          m.movimientoEstado,
+          m.origenTipo,
+          m.tecnicoOrigenId,
+          m.fechaCreacion,
+          m.fechaActualizacion`;
+
+    const rawEntradaSinInventario = await this.movimientosRepository.query(
+      `SELECT ${selectCols}
+        FROM movimientos_inventario m
+        INNER JOIN usuarios u ON u.usuarioId = m.usuarioId
+        LEFT JOIN bodegas ub ON ub.bodegaId = u.usuarioBodega
+        WHERE m.inventarioId IS NULL
+          AND LOWER(CAST(m.movimientoTipo AS CHAR)) = 'entrada'
+          AND (u.usuarioSede = ? OR ub.sedeId = ?)
+        ORDER BY m.fechaCreacion ASC`,
+      [sid, sid],
     );
 
-    // Calcular stock antes y después para cada movimiento por material
-    const movimientosConStock = await this.calcularStockMovimientos(rawMovimientos);
+    const porId = new Map<number, any>();
+    for (const m of rawPorInventario) {
+      porId.set(Number(m.movimientoId), m);
+    }
+    for (const m of rawEntradaSinInventario) {
+      const id = Number(m.movimientoId);
+      if (!porId.has(id)) porId.set(id, m);
+    }
+    const merged = Array.from(porId.values());
+    if (merged.length === 0) {
+      return [];
+    }
 
-    // Ordenar por fecha descendente (más reciente primero)
+    const movimientosConStock = await this.calcularStockMovimientos(merged);
     const movimientosOrdenados = movimientosConStock.sort((a, b) => {
       const fechaA = new Date(a.fechaCreacion).getTime();
       const fechaB = new Date(b.fechaCreacion).getTime();
@@ -2391,6 +2481,9 @@ export class MovimientosService {
               usuarioNombre: usuario.usuarioNombre,
               usuarioApellido: usuario.usuarioApellido,
               usuarioCorreo: usuario.usuarioCorreo,
+              usuarioSede: usuario.usuarioSede ?? null,
+              usuarioBodega: usuario.usuarioBodega ?? null,
+              bodegaSedeId: usuario.bodega?.sedeId ?? null,
             };
           } catch (err) {
             // Error silencioso

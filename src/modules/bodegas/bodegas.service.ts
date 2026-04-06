@@ -190,21 +190,29 @@ export class BodegasService {
     }
   }
 
+  /** IDs de bodegas del centro (para cruzar materiales_bodegas aunque la relación bodega venga sin sedeId). */
+  async findBodegaIdsBySedeId(sedeId: number): Promise<number[]> {
+    const sid = Number(sedeId);
+    if (!Number.isFinite(sid) || sid <= 0) return [];
+    const rows = await this.bodegasRepository.find({
+      where: { sedeId: sid },
+      select: ['bodegaId'],
+    });
+    return rows.map((b) => b.bodegaId);
+  }
+
   async findAll(user?: any): Promise<Bodega[]> {
     const allBodegas = await this.bodegasRepository.find({ relations: ['sede'] });
 
-    // SuperAdmin y Gerencia ven todo
-    if (
-      user?.usuarioRol?.rolTipo === 'superadmin' ||
-      user?.role === 'superadmin' ||
-      user?.usuarioRol?.rolTipo === 'gerencia' ||
-      user?.role === 'gerencia'
-    ) {
+    const rolTipo = (user?.usuarioRol?.rolTipo || user?.role || '').toLowerCase();
+
+    // SuperAdmin y Gerencia ven todo (aunque tengan usuarioSede informado)
+    if (rolTipo === 'superadmin' || rolTipo === 'gerencia') {
       return allBodegas;
     }
 
     // Admin ve solo bodegas de su centro operativo
-    if (user?.usuarioRol?.rolTipo === 'admin' || user?.role === 'admin') {
+    if (rolTipo === 'admin') {
       const sedeId = user.usuarioSede ?? user.sede?.sedeId;
       if (sedeId != null) {
         return allBodegas.filter((bodega) => bodega.sedeId === sedeId);
@@ -213,7 +221,7 @@ export class BodegasService {
     }
 
     // Administrador de Internas - bodegas tipo internas y bodega de instalaciones de su sede
-    if (user?.usuarioRol?.rolTipo === 'admin-internas' || user?.role === 'admin-internas') {
+    if (rolTipo === 'admin-internas') {
       return allBodegas.filter(
         (bodega) =>
           bodega.sedeId === user.usuarioSede &&
@@ -222,7 +230,7 @@ export class BodegasService {
     }
 
     // Administrador de Redes - bodegas tipo redes y bodega de instalaciones de su sede
-    if (user?.usuarioRol?.rolTipo === 'admin-redes' || user?.role === 'admin-redes') {
+    if (rolTipo === 'admin-redes') {
       return allBodegas.filter(
         (bodega) =>
           bodega.sedeId === user.usuarioSede &&
@@ -233,7 +241,7 @@ export class BodegasService {
     const sedeId = user?.usuarioSede ?? user?.sede?.sedeId;
 
     // Bodega Internas - solo bodegas de su centro operativo y tipo internas (y su propia bodega si está asignada)
-    if (user?.usuarioRol?.rolTipo === 'bodega-internas' || user?.role === 'bodega-internas') {
+    if (rolTipo === 'bodega-internas') {
       return allBodegas.filter((bodega) => {
         if (sedeId != null && bodega.sedeId !== sedeId) return false;
         if (user.usuarioBodega && bodega.bodegaId === user.usuarioBodega) return true;
@@ -242,7 +250,7 @@ export class BodegasService {
     }
 
     // Bodega Redes - solo bodegas de su centro operativo y tipo redes (y su propia bodega si está asignada)
-    if (user?.usuarioRol?.rolTipo === 'bodega-redes' || user?.role === 'bodega-redes') {
+    if (rolTipo === 'bodega-redes') {
       return allBodegas.filter((bodega) => {
         if (sedeId != null && bodega.sedeId !== sedeId) return false;
         if (user.usuarioBodega && bodega.bodegaId === user.usuarioBodega) return true;
@@ -251,7 +259,7 @@ export class BodegasService {
     }
 
     // Almacenista: solo bodegas de su centro operativo
-    if (user?.usuarioRol?.rolTipo === 'almacenista' || user?.role === 'almacenista') {
+    if (rolTipo === 'almacenista') {
       if (sedeId != null) {
         return allBodegas.filter((bodega) => bodega.sedeId === sedeId);
       }
@@ -259,8 +267,7 @@ export class BodegasService {
     }
 
     // Técnico / Soldador: solo bodegas de su centro operativo
-    if (user?.usuarioRol?.rolTipo === 'tecnico' || user?.role === 'tecnico' ||
-        user?.usuarioRol?.rolTipo === 'soldador' || user?.role === 'soldador') {
+    if (rolTipo === 'tecnico' || rolTipo === 'soldador') {
       if (sedeId != null) {
         return allBodegas.filter((bodega) => bodega.sedeId === sedeId);
       }

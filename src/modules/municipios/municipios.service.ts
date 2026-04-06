@@ -1,7 +1,9 @@
-import { Injectable, NotFoundException } from '@nestjs/common';
+import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { Municipio } from './municipio.entity';
+import { Departamento } from '../departamentos/departamento.entity';
+import { esDepartamentoZonaOperacion } from '../../common/constants/departamentos-operacion.constants';
 import { CreateMunicipioDto } from './dto/create-municipio.dto';
 import { UpdateMunicipioDto } from './dto/update-municipio.dto';
 
@@ -10,9 +12,21 @@ export class MunicipiosService {
   constructor(
     @InjectRepository(Municipio)
     private municipiosRepository: Repository<Municipio>,
+    @InjectRepository(Departamento)
+    private departamentosRepository: Repository<Departamento>,
   ) {}
 
+  private async assertDepartamentoZonaOperacion(departamentoId: number): Promise<void> {
+    const dep = await this.departamentosRepository.findOne({ where: { departamentoId } });
+    if (!dep || !esDepartamentoZonaOperacion(dep.departamentoNombre)) {
+      throw new BadRequestException(
+        'Los municipios solo pueden pertenecer a Santander o Norte de Santander.',
+      );
+    }
+  }
+
   async create(createMunicipioDto: CreateMunicipioDto): Promise<Municipio> {
+    await this.assertDepartamentoZonaOperacion(createMunicipioDto.departamentoId);
     const municipio = this.municipiosRepository.create(createMunicipioDto);
     return this.municipiosRepository.save(municipio);
   }
@@ -35,6 +49,7 @@ export class MunicipiosService {
   async update(id: number, updateMunicipioDto: UpdateMunicipioDto): Promise<Municipio> {
     const municipio = await this.findOne(id);
     Object.assign(municipio, updateMunicipioDto);
+    await this.assertDepartamentoZonaOperacion(municipio.departamentoId);
     return this.municipiosRepository.save(municipio);
   }
 

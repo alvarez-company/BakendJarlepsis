@@ -24,6 +24,23 @@ export class Proyecto {
   @Column({ default: true })
   proyectoEstado: boolean;
 
+  /**
+   * Clasificación funcional del proyecto para Redes:
+   * - inversion
+   * - mantenimiento
+   */
+  @Column({ nullable: true })
+  proyectoTipo: string;
+
+  /**
+   * Tipología de terreno para Redes:
+   * - ZV (zona verde)
+   * - ACO (concreto andén)
+   * - CO (concreto vía)
+   */
+  @Column({ nullable: true })
+  proyectoTipologiaTerreno: string;
+
   @Column({ nullable: true })
   usuarioRegistra: number;
 

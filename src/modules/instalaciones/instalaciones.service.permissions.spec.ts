@@ -19,6 +19,7 @@ import { EstadosInstalacionService } from '../estados-instalacion/estados-instal
 import { InventarioTecnicoService } from '../inventario-tecnico/inventario-tecnico.service';
 import { NumerosMedidorService } from '../numeros-medidor/numeros-medidor.service';
 import { BodegasService } from '../bodegas/bodegas.service';
+import { ProyectosRedesService } from '../proyectos-redes/proyectos-redes.service';
 
 describe('InstalacionesService - Permisos', () => {
   let service: InstalacionesService;
@@ -90,6 +91,11 @@ describe('InstalacionesService - Permisos', () => {
     findByInstalacion: jest.fn().mockResolvedValue([]),
   };
   const mockBodegasService = {};
+  const mockProyectosRedesService = {
+    findByCodigo: jest.fn(),
+    findTipoById: jest.fn(),
+    assertActividadesPertenecen: jest.fn().mockResolvedValue(undefined),
+  };
 
   beforeEach(async () => {
     const module: TestingModule = await Test.createTestingModule({
@@ -162,6 +168,10 @@ describe('InstalacionesService - Permisos', () => {
         {
           provide: BodegasService,
           useValue: mockBodegasService,
+        },
+        {
+          provide: ProyectosRedesService,
+          useValue: mockProyectosRedesService,
         },
       ],
     }).compile();

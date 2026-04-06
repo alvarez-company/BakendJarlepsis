@@ -186,11 +186,11 @@ export class InstalacionesUsuariosService {
       }
 
       // Si la instalación no está en estado ASIGNACION, cambiarla y establecer fechaAsignacion
-      if (instalacion && instalacion.estado !== EstadoInstalacion.ASIGNACION) {
+      if (instalacion && instalacion.estado !== EstadoInstalacion.AAT) {
         await this.instalacionesService.actualizarEstado(
           instalacionId,
-          EstadoInstalacion.ASIGNACION,
-          usuariosUnicos[0].usuarioId, // Usar el primer usuario asignado como referencia
+          EstadoInstalacion.AAT,
+          usuariosUnicos[0].usuarioId,
         );
       }
     }

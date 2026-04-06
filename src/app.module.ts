@@ -20,6 +20,7 @@ import { TrasladosModule } from './modules/traslados/traslados.module';
 import { ClientesModule } from './modules/clientes/clientes.module';
 import { TiposInstalacionModule } from './modules/tipos-instalacion/tipos-instalacion.module';
 import { ProyectosModule } from './modules/proyectos/proyectos.module';
+import { ProyectosRedesModule } from './modules/proyectos-redes/proyectos-redes.module';
 import { TiposProyectoModule } from './modules/tipos-proyecto/tipos-proyecto.module';
 import { ItemsProyectoModule } from './modules/items-proyecto/items-proyecto.module';
 import { InstalacionesUsuariosModule } from './modules/instalaciones-usuarios/instalaciones-usuarios.module';
@@ -124,6 +125,7 @@ import { UploadModule } from './modules/upload/upload.module';
     ClientesModule,
     TiposInstalacionModule,
     ProyectosModule,
+    ProyectosRedesModule,
     TiposProyectoModule,
     ItemsProyectoModule,
     InstalacionesUsuariosModule,

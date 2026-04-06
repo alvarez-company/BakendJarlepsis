@@ -6,12 +6,39 @@ import { ChatGateway } from '../chat/chat.gateway';
 
 @Injectable()
 export class NotificacionesService {
+  private readonly listCacheTtlMs = 10_000;
+  private readonly countCacheTtlMs = 8_000;
+  private readonly listCache = new Map<string, { expiresAt: number; data: Notificacion[] }>();
+  private readonly countNoLeidasCache = new Map<number, { expiresAt: number; data: number }>();
+  private readonly countMensajesCache = new Map<number, { expiresAt: number; data: number }>();
+
   constructor(
     @InjectRepository(Notificacion)
     private notificacionesRepository: Repository<Notificacion>,
     @Inject(forwardRef(() => ChatGateway))
     private chatGateway: ChatGateway,
   ) {}
+
+  private getListCacheKey(usuarioId: number, limit: number, noLeidas?: boolean): string {
+    let estado = 'all';
+    if (noLeidas === true) estado = 'unread';
+    if (noLeidas === false) estado = 'read';
+    return `${usuarioId}|${limit}|${estado}`;
+  }
+
+  private invalidateUserCache(usuarioId: number) {
+    this.countNoLeidasCache.delete(usuarioId);
+    this.countMensajesCache.delete(usuarioId);
+    for (const key of this.listCache.keys()) {
+      if (key.startsWith(`${usuarioId}|`)) {
+        this.listCache.delete(key);
+      }
+    }
+  }
+
+  private invalidateManyUsersCache(usuariosIds: number[]) {
+    usuariosIds.forEach((id) => this.invalidateUserCache(id));
+  }
 
   async crearNotificacion(
     usuarioId: number,
@@ -34,6 +61,7 @@ export class NotificacionesService {
       });
 
       const saved = await this.notificacionesRepository.save(notificacion);
+      this.invalidateUserCache(usuarioId);
 
       // Emitir notificación por WebSocket si está habilitado
       if (emitirSocket) {
@@ -178,7 +206,7 @@ export class NotificacionesService {
     );
   }
 
-  async crearNotificacionInstalacionAnulada(
+  async crearNotificacionInstalacionDevuelta(
     tecnicoId: number,
     instalacionId: number,
     instalacionCodigo: string,
@@ -186,13 +214,13 @@ export class NotificacionesService {
     motivo?: string,
   ): Promise<Notificacion> {
     const contenido = motivo
-      ? `La instalación ${instalacionCodigo} para el cliente ${clienteNombre} ha sido anulada. Motivo: ${motivo}.`
-      : `La instalación ${instalacionCodigo} para el cliente ${clienteNombre} ha sido anulada.`;
+      ? `La instalación ${instalacionCodigo} para el cliente ${clienteNombre} ha sido devuelta. Motivo: ${motivo}.`
+      : `La instalación ${instalacionCodigo} para el cliente ${clienteNombre} ha sido devuelta.`;
 
     return this.crearNotificacion(
       tecnicoId,
-      TipoNotificacion.INSTALACION_ANULADA,
-      'Instalación Anulada',
+      TipoNotificacion.INSTALACION_DEVUELTA,
+      'Instalación devuelta',
       contenido,
       {
         instalacionId,
@@ -257,6 +285,7 @@ export class NotificacionesService {
       notificaciones.push(notificacion);
     }
 
+    this.invalidateManyUsersCache(usuariosIds);
     return notificaciones;
   }
 
@@ -265,6 +294,12 @@ export class NotificacionesService {
     limit: number = 50,
     noLeidas?: boolean,
   ): Promise<Notificacion[]> {
+    const cacheKey = this.getListCacheKey(usuarioId, limit, noLeidas);
+    const cached = this.listCache.get(cacheKey);
+    if (cached && cached.expiresAt > Date.now()) {
+      return cached.data;
+    }
+
     const maxRetries = 3;
     let lastError: any;
 
@@ -275,11 +310,16 @@ export class NotificacionesService {
           where.leida = !noLeidas;
         }
 
-        return await this.notificacionesRepository.find({
+        const data = await this.notificacionesRepository.find({
           where,
           order: { fechaCreacion: 'DESC' },
           take: limit,
         });
+        this.listCache.set(cacheKey, {
+          expiresAt: Date.now() + this.listCacheTtlMs,
+          data,
+        });
+        return data;
       } catch (error: any) {
         lastError = error;
         console.error(`[NotificacionesService] Error al obtener notificaciones (intento ${attempt}/${maxRetries}):`, error.message);
@@ -315,6 +355,7 @@ export class NotificacionesService {
     notificacion.fechaLectura = new Date();
 
     const notificacionActualizada = await this.notificacionesRepository.save(notificacion);
+    this.invalidateUserCache(usuarioId);
 
     // Emitir evento socket para actualizar el contador y la notificación actualizada
     this.chatGateway.emitirNotificacionActualizada(usuarioId, notificacionActualizada);
@@ -328,20 +369,31 @@ export class NotificacionesService {
       { usuarioId, leida: false },
       { leida: true, fechaLectura },
     );
+    this.invalidateUserCache(usuarioId);
 
     // Emitir evento socket para actualizar el contador en el frontend
     this.chatGateway.emitirNotificacionesTodasLeidas(usuarioId);
   }
 
   async contarNoLeidas(usuarioId: number): Promise<number> {
+    const cached = this.countNoLeidasCache.get(usuarioId);
+    if (cached && cached.expiresAt > Date.now()) {
+      return cached.data;
+    }
+
     const maxRetries = 3;
     let lastError: any;
 
     for (let attempt = 1; attempt <= maxRetries; attempt++) {
       try {
-        return await this.notificacionesRepository.count({
+        const count = await this.notificacionesRepository.count({
           where: { usuarioId, leida: false },
         });
+        this.countNoLeidasCache.set(usuarioId, {
+          expiresAt: Date.now() + this.countCacheTtlMs,
+          data: count,
+        });
+        return count;
       } catch (error: any) {
         lastError = error;
         console.error(`[NotificacionesService] Error al contar notificaciones no leídas (intento ${attempt}/${maxRetries}):`, error.message);
@@ -360,6 +412,11 @@ export class NotificacionesService {
   }
 
   async contarMensajesNoLeidos(usuarioId: number): Promise<number> {
+    const cached = this.countMensajesCache.get(usuarioId);
+    if (cached && cached.expiresAt > Date.now()) {
+      return cached.data;
+    }
+
     const maxRetries = 3;
     let lastError: any;
 
@@ -371,6 +428,10 @@ export class NotificacionesService {
             leida: false,
             tipoNotificacion: TipoNotificacion.MENSAJE_NUEVO,
           },
+        });
+        this.countMensajesCache.set(usuarioId, {
+          expiresAt: Date.now() + this.countCacheTtlMs,
+          data: count,
         });
         return count;
       } catch (error: any) {
@@ -404,6 +465,7 @@ export class NotificacionesService {
     if (result.affected === 0) {
       throw new Error('Notificación no encontrada');
     }
+    this.invalidateUserCache(usuarioId);
   }
 
   async obtenerNotificacionesPorGrupo(grupoId: number, usuarioId: number): Promise<Notificacion[]> {
@@ -431,6 +493,7 @@ export class NotificacionesService {
         fechaLectura,
       },
     );
+    this.invalidateUserCache(usuarioId);
 
     // Emitir evento socket para actualizar el contador en el frontend
     this.chatGateway.emitirNotificacionesTodasLeidas(usuarioId);

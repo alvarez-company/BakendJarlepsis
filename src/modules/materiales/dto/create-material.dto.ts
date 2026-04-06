@@ -8,7 +8,15 @@ import {
   ValidateIf,
   ValidateNested,
 } from 'class-validator';
-import { Type } from 'class-transformer';
+import { Transform, Type } from 'class-transformer';
+
+const parseDecimalValue = (value: unknown): number => {
+  if (typeof value === 'number') return value;
+  if (typeof value !== 'string') return Number(value);
+
+  const normalized = value.trim().replace(',', '.');
+  return Number(normalized);
+};
 
 export class MaterialBodegaInputDto {
   @ApiProperty({ example: 1 })
@@ -16,6 +24,7 @@ export class MaterialBodegaInputDto {
   bodegaId: number;
 
   @ApiProperty({ example: 50, required: false, default: 0 })
+  @Transform(({ value }) => parseDecimalValue(value))
   @IsNumber()
   @Min(0)
   stock?: number;
@@ -56,6 +65,7 @@ export class CreateMaterialDto {
   materialDescripcion?: string;
 
   @ApiProperty({ example: 100, default: 0 })
+  @Transform(({ value }) => parseDecimalValue(value))
   @IsNumber()
   @Min(0)
   materialStock: number;

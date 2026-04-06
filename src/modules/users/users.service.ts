@@ -341,8 +341,17 @@ export class UsersService {
     // Filtrar por roles permitidos
     queryBuilder.andWhere('rol.rolTipo IN (:...rolesPermitidos)', { rolesPermitidos });
 
-    // Usuarios no compartidos entre centros: quien tenga sede asignada solo ve usuarios de su centro operativo
-    if (requestingUser?.usuarioSede) {
+    const rolSolicitante = (
+      requestingUser?.usuarioRol?.rolTipo ||
+      requestingUser?.role ||
+      ''
+    ).toLowerCase();
+    const veUsuariosDeTodosLosCentros =
+      rolSolicitante === 'superadmin' || rolSolicitante === 'gerencia';
+
+    // Usuarios no compartidos entre centros: quien tenga sede asignada solo ve usuarios de su centro operativo.
+    // SuperAdmin y Gerencia deben ver todos los centros aunque tengan usuarioSede informado (p. ej. cuenta de prueba).
+    if (requestingUser?.usuarioSede && !veUsuariosDeTodosLosCentros) {
       queryBuilder.andWhere('user.usuarioSede = :sedeId', {
         sedeId: requestingUser.usuarioSede,
       });

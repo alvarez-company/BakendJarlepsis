@@ -109,6 +109,10 @@ export class InstalacionesController {
       updateEstadoDto.estado,
       req.user.usuarioId,
       req.user,
+      {
+        numeroActa: updateEstadoDto.numeroActa,
+        observacionNovedad: updateEstadoDto.observacionNovedad,
+      },
     );
   }
 

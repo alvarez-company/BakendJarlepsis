@@ -108,15 +108,15 @@ describe('NotificacionesService - Notificaciones de Instalaciones', () => {
     });
   });
 
-  describe('crearNotificacionInstalacionAnulada', () => {
-    it('should create cancelled notification with motivo', async () => {
+  describe('crearNotificacionInstalacionDevuelta', () => {
+    it('should create devuelta notification with motivo', async () => {
       const notificacion = {
         notificacionId: 1,
         usuarioId: 1,
-        tipoNotificacion: TipoNotificacion.INSTALACION_ANULADA,
-        titulo: 'Instalación Anulada',
+        tipoNotificacion: TipoNotificacion.INSTALACION_DEVUELTA,
+        titulo: 'Instalación devuelta',
         contenido:
-          'La instalación INST-001 para el cliente Test Client ha sido anulada. Motivo: Test motivo.',
+          'La instalación INST-001 para el cliente Test Client ha sido devuelta. Motivo: Test motivo.',
         datosAdicionales: {
           instalacionId: 1,
           instalacionCodigo: 'INST-001',
@@ -128,7 +128,7 @@ describe('NotificacionesService - Notificaciones de Instalaciones', () => {
       mockRepository.create.mockReturnValue(notificacion);
       mockRepository.save.mockResolvedValue(notificacion);
 
-      const result = await service.crearNotificacionInstalacionAnulada(
+      const result = await service.crearNotificacionInstalacionDevuelta(
         1,
         1,
         'INST-001',
@@ -136,22 +136,22 @@ describe('NotificacionesService - Notificaciones de Instalaciones', () => {
         'Test motivo',
       );
 
-      expect(result.tipoNotificacion).toBe(TipoNotificacion.INSTALACION_ANULADA);
+      expect(result.tipoNotificacion).toBe(TipoNotificacion.INSTALACION_DEVUELTA);
       expect(result.contenido).toContain('Test motivo');
     });
 
-    it('should create cancelled notification without motivo', async () => {
+    it('should create devuelta notification without motivo', async () => {
       const notificacion = {
         notificacionId: 1,
         usuarioId: 1,
-        tipoNotificacion: TipoNotificacion.INSTALACION_ANULADA,
-        contenido: 'La instalación INST-001 para el cliente Test Client ha sido anulada.',
+        tipoNotificacion: TipoNotificacion.INSTALACION_DEVUELTA,
+        contenido: 'La instalación INST-001 para el cliente Test Client ha sido devuelta.',
       };
 
       mockRepository.create.mockReturnValue(notificacion);
       mockRepository.save.mockResolvedValue(notificacion);
 
-      const result = await service.crearNotificacionInstalacionAnulada(
+      const result = await service.crearNotificacionInstalacionDevuelta(
         1,
         1,
         'INST-001',

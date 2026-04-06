@@ -44,23 +44,23 @@ export class NumerosMedidorController {
 
   @Get()
   findAll(
+    @Request() req: { user?: any },
     @Query('estado') estado?: EstadoNumeroMedidor,
     @Query() paginationDto?: PaginationDto,
-    @Request() req?: { user?: any },
   ) {
     if (estado) {
-      return this.numerosMedidorService.findByEstado(estado, req?.user);
+      return this.numerosMedidorService.findByEstado(estado, req.user);
     }
-    return this.numerosMedidorService.findAll(paginationDto, req?.user);
+    return this.numerosMedidorService.findAll(paginationDto, req.user);
   }
 
   @Get('material/:materialId')
   findByMaterial(
+    @Request() req: { user?: any },
     @Param('materialId') materialId: string,
     @Query('estado') estado?: EstadoNumeroMedidor,
-    @Request() req?: { user?: any },
   ) {
-    return this.numerosMedidorService.findByMaterial(+materialId, estado, req?.user);
+    return this.numerosMedidorService.findByMaterial(+materialId, estado, req.user);
   }
 
   @Get('usuario/:usuarioId')

@@ -11,17 +11,34 @@ import {
 import { EstadoInstalacionEntity } from '../estados-instalacion/estado-instalacion.entity';
 
 export enum EstadoInstalacion {
+  /** Asignada por Metrogas */
+  APM = 'apm',
+  /** Pendiente por construir */
+  PPC = 'ppc',
+  /** Asignada al técnico */
+  AAT = 'aat',
+  /** Avance (obra en ejecución) */
+  AVAN = 'avan',
+  /** Construida */
+  CONS = 'cons',
+  /** Certificada */
+  CERT = 'cert',
+  /** Facturación (cierra ciclo operativo) */
+  FACT = 'fact',
+  /** Novedad */
+  NOVE = 'nove',
+  /** Devuelta (reemplaza el antiguo estado anulada) */
+  DEV = 'dev',
+  /** Legacy — normalizar al persistir / API */
   PENDIENTE = 'pendiente',
+  NOVEDAD = 'novedad',
   ASIGNACION = 'asignacion',
   CONSTRUCCION = 'construccion',
   CERTIFICACION = 'certificacion',
-  NOVEDAD = 'novedad',
-  ANULADA = 'anulada',
   COMPLETADA = 'completada',
-  // Estados legacy (mantener por compatibilidad temporal)
   EN_PROCESO = 'en_proceso',
-  FINALIZADA = 'finalizada', // Mapear a 'completada'
-  CANCELADA = 'cancelada', // Mapear a 'anulada'
+  FINALIZADA = 'finalizada',
+  CANCELADA = 'cancelada',
 }
 
 @Entity('instalaciones')
@@ -67,8 +84,15 @@ export class Instalacion {
   @Column({ type: 'datetime', nullable: true })
   fechaConstruccion: Date;
 
+  /** Obra lista (construcción terminada). */
+  @Column({ type: 'datetime', nullable: true })
+  fechaConstruida: Date;
+
   @Column({ type: 'datetime', nullable: true })
   fechaCertificacion: Date;
+
+  @Column({ type: 'datetime', nullable: true })
+  fechaFacturacion: Date;
 
   @Column({ type: 'datetime', nullable: true })
   fechaAnulacion: Date;
@@ -78,6 +102,17 @@ export class Instalacion {
 
   @Column({ type: 'datetime', nullable: true })
   fechaFinalizacion: Date;
+
+  @Column({ type: 'datetime', nullable: true })
+  fechaDevolucion: Date;
+
+  /** Número de acta al pasar a facturación. */
+  @Column({ type: 'varchar', length: 120, nullable: true })
+  instalacionNumeroActa: string | null;
+
+  /** Motivo / detalle cuando el estado es novedad. */
+  @Column({ type: 'text', nullable: true })
+  observacionNovedad: string | null;
 
   @Column({ type: 'json', nullable: true })
   materialesInstalados: any;
@@ -95,12 +130,8 @@ export class Instalacion {
   @Column({ type: 'json', nullable: true })
   instalacionAnexos: string[] | null;
 
-  @Column({
-    type: 'enum',
-    enum: EstadoInstalacion,
-    default: EstadoInstalacion.PENDIENTE,
-  })
-  estado: EstadoInstalacion; // Mantener por compatibilidad
+  @Column({ type: 'varchar', length: 32, default: EstadoInstalacion.APM })
+  estado: EstadoInstalacion;
 
   @Column({ nullable: true })
   estadoInstalacionId: number;
