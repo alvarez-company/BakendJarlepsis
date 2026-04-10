@@ -51,4 +51,13 @@ export class CreateTrasladoDto {
   @IsString()
   @IsOptional()
   trasladoCodigo?: string; // Código para agrupar múltiples traslados
+
+  @ApiProperty({
+    required: false,
+    description: 'Número de orden (manual) asociado al traslado',
+    example: 'OT-12345',
+  })
+  @IsString()
+  @IsOptional()
+  numeroOrden?: string;
 }

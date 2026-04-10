@@ -42,8 +42,8 @@ export class MovimientosController {
   @Post()
   @Roles(...ROLES_ALMACENISTA)
   @ApiOperation({ summary: 'Create a new movimiento (Entrada, Salida o Devolución)' })
-  create(@Body() createMovimientoDto: CreateMovimientoDto) {
-    return this.movimientosService.create(createMovimientoDto);
+  create(@Body() createMovimientoDto: CreateMovimientoDto, @Request() req?: any) {
+    return this.movimientosService.create(createMovimientoDto, req?.user);
   }
 
   @Get()

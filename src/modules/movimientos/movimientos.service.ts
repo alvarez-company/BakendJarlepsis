@@ -22,9 +22,9 @@ import { TipoEntidad } from '../auditoria/auditoria.entity';
 import { AuditoriaInventarioService } from '../auditoria-inventario/auditoria-inventario.service';
 import { TipoCambioInventario } from '../auditoria-inventario/auditoria-inventario.entity';
 import { InventarioTecnicoService } from '../inventario-tecnico/inventario-tecnico.service';
+import { BodegasService } from '../bodegas/bodegas.service';
 import { NumerosMedidorService } from '../numeros-medidor/numeros-medidor.service';
 import { EstadoNumeroMedidor } from '../numeros-medidor/numero-medidor.entity';
-import { BodegasService } from '../bodegas/bodegas.service';
 import { PaginationDto } from '../../common/dto/pagination.dto';
 
 // Función auxiliar para obtener etiqueta del tipo de movimiento
@@ -44,6 +44,8 @@ export class MovimientosService {
     private materialesService: MaterialesService,
     @Inject(forwardRef(() => InventariosService))
     private inventariosService: InventariosService,
+    @Inject(forwardRef(() => BodegasService))
+    private bodegasService: BodegasService,
     @Inject(forwardRef(() => ProveedoresService))
     private proveedoresService: ProveedoresService,
     @Inject(forwardRef(() => UsersService))
@@ -55,8 +57,6 @@ export class MovimientosService {
     private inventarioTecnicoService: InventarioTecnicoService,
     @Inject(forwardRef(() => NumerosMedidorService))
     private numerosMedidorService: NumerosMedidorService,
-    @Inject(forwardRef(() => BodegasService))
-    private bodegasService: BodegasService,
   ) {}
 
   private async generarIdentificadorUnico(tipoMovimiento: TipoMovimiento): Promise<string> {
@@ -97,7 +97,18 @@ export class MovimientosService {
     return `${prefijo}-${siguienteNumero}`;
   }
 
-  async create(createMovimientoDto: CreateMovimientoDto): Promise<MovimientoInventario[]> {
+  async create(
+    createMovimientoDto: CreateMovimientoDto,
+    requestingUser?: any,
+  ): Promise<MovimientoInventario[]> {
+    // Seguridad: el usuario autenticado manda (evitar spoof de usuarioId)
+    if (requestingUser?.usuarioId != null) {
+      createMovimientoDto.usuarioId = Number(requestingUser.usuarioId);
+    }
+
+    const rolTipo = String(requestingUser?.usuarioRol?.rolTipo || requestingUser?.role || '').toLowerCase();
+    const isSuperadminOGerencia = rolTipo === 'superadmin' || rolTipo === 'gerencia';
+
     // Generar código único para agrupar los movimientos
     const movimientoCodigo =
       createMovimientoDto.movimientoCodigo ||
@@ -109,9 +120,37 @@ export class MovimientosService {
     const movimientosCreados: MovimientoInventario[] = [];
     const inventarioCache = new Map<number, { inventarioId: number; bodegaId: number | null }>();
     const bodegaCache = new Map<number, { inventarioId: number | null; bodegaId: number | null }>();
-    let defaultInventarioContext:
-      | { inventarioId: number | null; bodegaId: number | null }
-      | undefined;
+    const resolverInventarioPorUsuario = async (): Promise<{
+      inventarioId: number;
+      bodegaId: number;
+    } | null> => {
+      try {
+        const user = requestingUser?.usuarioId
+          ? requestingUser
+          : await this.usersService.findOne(createMovimientoDto.usuarioId);
+        // Preferir bodega explícita del usuario si existe
+        const bodegaIdDirecta =
+          user?.usuarioBodega != null ? Number(user.usuarioBodega) : user?.bodega?.bodegaId;
+        if (bodegaIdDirecta != null && Number.isFinite(Number(bodegaIdDirecta)) && Number(bodegaIdDirecta) > 0) {
+          const inv = await this.inventariosService.findOrCreateByBodega(Number(bodegaIdDirecta));
+          return { inventarioId: inv.inventarioId, bodegaId: inv.bodegaId };
+        }
+        // Si solo tiene sede, usar bodega especial del centro operativo
+        const sedeId =
+          user?.usuarioSede != null ? Number(user.usuarioSede) : user?.sede?.sedeId ?? user?.bodega?.sedeId;
+        if (sedeId != null && Number.isFinite(Number(sedeId)) && Number(sedeId) > 0) {
+          const bodegaCentro = await this.bodegasService.findOrCreateBodegaCentroOperativo(Number(sedeId));
+          const invCentro = await this.inventariosService.findOrCreateByBodega(bodegaCentro.bodegaId, {
+            inventarioNombre: `Inventario - Centro Operativo ${sedeId}`,
+            inventarioDescripcion: 'Inventario del centro operativo (stock no asignado a bodegas específicas)',
+          });
+          return { inventarioId: invCentro.inventarioId, bodegaId: invCentro.bodegaId };
+        }
+      } catch {
+        // ignore
+      }
+      return null;
+    };
 
     const cargarInventario = async (
       inventarioId?: number | null,
@@ -173,16 +212,15 @@ export class MovimientosService {
         createMovimientoDto.origenTipo !== 'tecnico' &&
         createMovimientoDto.usuarioId
       ) {
-        const desdeCentro = await this.resolverInventarioEntradaDesdeCentroUsuario(
-          createMovimientoDto.usuarioId,
-        );
-        if (desdeCentro) {
-          return desdeCentro;
-        }
+        const desdeCentro = await resolverInventarioPorUsuario();
+        if (desdeCentro) return desdeCentro;
       }
       // PRIORIDAD 1: Preferencia explícita del DTO (siempre usar este si está presente)
       // Si inventarioId es explícitamente null y no hubo resolución por centro, va a sede sin bodega (legacy)
       if (createMovimientoDto.inventarioId === null) {
+        // Para mantener inventarios separados por centro, resolvemos al inventario del centro operativo del usuario.
+        const ctx = await resolverInventarioPorUsuario();
+        if (ctx) return ctx;
         return { inventarioId: null, bodegaId: null };
       }
       // Si inventarioId tiene un valor, cargarlo
@@ -191,9 +229,32 @@ export class MovimientosService {
         if (!context) {
           throw new BadRequestException('El inventario seleccionado no existe.');
         }
+        // Permisos: si el usuario está registrado a bodega, solo puede registrar en esa bodega.
+        // Si está registrado a sede (sin bodega), solo puede registrar en la bodega centro de su sede.
+        if (requestingUser && !isSuperadminOGerencia) {
+          const inv = await this.inventariosService.findOne(context.inventarioId, requestingUser);
+          const bodegaTipo = String(inv?.bodega?.bodegaTipo || '').toLowerCase();
+          const userBodegaId = requestingUser?.usuarioBodega != null ? Number(requestingUser.usuarioBodega) : null;
+          const userSedeId = requestingUser?.usuarioSede != null ? Number(requestingUser.usuarioSede) : null;
+          if (userBodegaId != null && userBodegaId > 0) {
+            if (Number(inv.bodegaId) !== userBodegaId) {
+              throw new BadRequestException('No tienes permisos para registrar movimientos en otra bodega.');
+            }
+          } else if (userSedeId != null && userSedeId > 0) {
+            if (bodegaTipo !== 'centro' || Number(inv.bodega?.sedeId) !== userSedeId) {
+              throw new BadRequestException(
+                'No tienes permisos para registrar movimientos fuera del inventario del centro operativo.',
+              );
+            }
+          }
+        }
         // Si el inventario existe, retornarlo directamente sin buscar alternativas
         return context;
       }
+
+      // Si NO se especificó inventarioId, resolver por usuario (bodega del usuario o bodega centro de su sede)
+      const ctxPorUsuario = await resolverInventarioPorUsuario();
+      if (ctxPorUsuario) return ctxPorUsuario;
 
       // Inventario directo del material
       const materialInventario = await cargarInventario(
@@ -219,20 +280,11 @@ export class MovimientosService {
         return inventarioPorBodega;
       }
 
-      if (!defaultInventarioContext) {
-        const inventarios = await this.inventariosService.findAll();
-        if (inventarios.length > 0) {
-          const first = inventarios[0];
-          defaultInventarioContext = {
-            inventarioId: first.inventarioId,
-            bodegaId: first.bodegaId ?? first.bodega?.bodegaId ?? null,
-          };
-        } else {
-          defaultInventarioContext = { inventarioId: null, bodegaId: null };
-        }
-      }
-
-      return defaultInventarioContext;
+      // Ya no hacemos fallback al primer inventario global porque mezcla centros/bodegas.
+      // Si no hay contexto, forzar que el cliente especifique inventarioId.
+      throw new BadRequestException(
+        'No se pudo resolver el inventario destino. Seleccione una bodega/inventario.',
+      );
     };
 
     // oficinaId eliminado - las bodegas ahora pertenecen directamente a sedes
@@ -318,6 +370,7 @@ export class MovimientosService {
         usuarioId: createMovimientoDto.usuarioId,
         proveedorId: createMovimientoDto.proveedorId || null,
         movimientoCodigo: movimientoCodigo,
+        numeroOrden: createMovimientoDto.numeroOrden || null,
         identificadorUnico: identificadorUnicoMovimiento, // Identificador único autogenerado por movimiento
         numerosMedidor:
           materialDto.numerosMedidor && materialDto.numerosMedidor.length > 0
@@ -477,53 +530,47 @@ export class MovimientosService {
                 });
               }
             } else if (esSalida || esDevolucion) {
-              // SALIDA/DEVOLUCIÓN: Cambiar estado según el destino
-              if (!numeroMedidorEntity) {
-                // Si no existe, crear con estado según el destino
-                const estadoInicial =
-                  createMovimientoDto.origenTipo === 'tecnico'
-                    ? EstadoNumeroMedidor.ASIGNADO_TECNICO
-                    : EstadoNumeroMedidor.DISPONIBLE;
+              // SALIDA/DEVOLUCIÓN:
+              // En este sistema el DTO solo soporta `origenTipo` y `tecnicoOrigenId` (origen técnico),
+              // pero NO existe un "destino técnico" para asignaciones (bodega -> técnico).
+              // La asignación a técnico maneja los números desde `InventarioTecnicoService`.
+              // Por eso, aquí SOLO debemos tocar números cuando el ORIGEN es técnico; en caso contrario, no modificar.
+              const origenEsTecnico =
+                createMovimientoDto.origenTipo === 'tecnico' && Boolean(createMovimientoDto.tecnicoOrigenId);
+              if (!origenEsTecnico) {
+                continue;
+              }
 
+              // ORIGEN TÉCNICO: el número deja de estar asignado al técnico (pasa a disponible en bodega/centro o salida externa)
+              let bodegaIdDestino: number | null = null;
+              if (createMovimientoDto.inventarioId) {
+                try {
+                  const inv = await this.inventariosService.findOne(createMovimientoDto.inventarioId);
+                  if (inv?.bodegaId) bodegaIdDestino = inv.bodegaId;
+                } catch {
+                  // ignore
+                }
+              }
+
+              if (!numeroMedidorEntity) {
+                // Si no existe, crearlo como disponible (ya no pertenece al técnico)
                 await this.numerosMedidorService.create({
                   materialId: materialIdFinal,
                   numeroMedidor: numeroMedidor,
-                  estado: estadoInicial,
-                  usuarioId: createMovimientoDto.tecnicoOrigenId || null,
+                  estado: EstadoNumeroMedidor.DISPONIBLE,
+                  bodegaId: bodegaIdDestino ?? undefined,
+                  usuarioId: null,
                 });
               } else {
-                // Actualizar estado según el destino
-                if (
-                  createMovimientoDto.origenTipo === 'tecnico' &&
-                  createMovimientoDto.tecnicoOrigenId
-                ) {
-                  // Si va a técnico, obtener inventario técnico
-                  const inventarioTecnico = await this.inventarioTecnicoService.findByUsuario(
-                    createMovimientoDto.tecnicoOrigenId,
-                  );
-                  const inventarioItem = inventarioTecnico.find(
-                    (inv) =>
-                      inv.materialId === materialIdFinal &&
-                      inv.usuarioId === createMovimientoDto.tecnicoOrigenId,
-                  );
-
-                  await this.numerosMedidorService.update(numeroMedidorEntity.numeroMedidorId, {
-                    estado: EstadoNumeroMedidor.ASIGNADO_TECNICO,
-                    usuarioId: createMovimientoDto.tecnicoOrigenId,
-                    inventarioTecnicoId: inventarioItem?.inventarioTecnicoId || null,
-                    instalacionId: null,
-                    instalacionMaterialId: null,
-                  });
-                } else {
-                  // Si va a bodega/sede, cambiar a disponible
-                  await this.numerosMedidorService.update(numeroMedidorEntity.numeroMedidorId, {
-                    estado: EstadoNumeroMedidor.DISPONIBLE,
-                    instalacionId: null,
-                    instalacionMaterialId: null,
-                    usuarioId: null,
-                    inventarioTecnicoId: null,
-                  });
-                }
+                // Liberar del técnico y dejarlo disponible
+                await this.numerosMedidorService.update(numeroMedidorEntity.numeroMedidorId, {
+                  estado: EstadoNumeroMedidor.DISPONIBLE,
+                  bodegaId: bodegaIdDestino ?? undefined,
+                  instalacionId: null,
+                  instalacionMaterialId: null,
+                  usuarioId: null,
+                  inventarioTecnicoId: null,
+                });
               }
             }
           }
@@ -557,15 +604,7 @@ export class MovimientosService {
               createMovimientoDto.tecnicoOrigenId,
             );
             // Ajustar stock en sede/bodega destino
-            if (
-              createMovimientoDto.inventarioId === null ||
-              (!bodegaDestino && !createMovimientoDto.inventarioId)
-            ) {
-              await this.ajustarStockSedeMovimiento(
-                materialIdFinal,
-                materialDto.movimientoCantidad,
-              );
-            } else if (bodegaDestino) {
+            if (bodegaDestino) {
               await this.ajustarStockMovimiento(
                 materialIdFinal,
                 TipoMovimiento.ENTRADA,
@@ -583,13 +622,8 @@ export class MovimientosService {
           }
         }
         // Si es una ENTRADA sin bodega seleccionada y sin origen técnico, ajustar stock directamente en la sede
-        else if (
-          esEntrada &&
-          (createMovimientoDto.inventarioId === null ||
-            (!bodegaDestino && !createMovimientoDto.inventarioId))
-        ) {
-          await this.ajustarStockSedeMovimiento(materialIdFinal, materialDto.movimientoCantidad);
-        }
+        // Nota: entradas sin inventarioId se enrutan al inventario del centro operativo (bodegaTipo = 'centro')
+        // vía `obtenerContextoInventario`, por lo tanto aquí siempre debe existir bodegaDestino para ajustar stock.
         // Si el origen es bodega, ajustar stock de bodega
         else if (bodegaDestino) {
           if (esDevolucion) {
@@ -772,15 +806,6 @@ export class MovimientosService {
     // La sincronización ya se hace dentro de ajustarStock, pero la dejamos explícita aquí por claridad
   }
 
-  /**
-   * Ajusta el stock general del material (en sede) sin asignarlo a una bodega específica.
-   * Se usa para entradas sin bodega seleccionada.
-   */
-  private async ajustarStockSedeMovimiento(materialId: number, cantidad: number): Promise<void> {
-    const cantidadNumerica = Number(cantidad) || 0;
-    await this.materialesService.ajustarStockSede(materialId, cantidadNumerica);
-  }
-
   private async ajustarInventarioTecnicoMovimiento(
     materialId: number,
     tipo: TipoMovimiento,
@@ -826,49 +851,6 @@ export class MovimientosService {
         error,
       );
       throw error;
-    }
-  }
-
-  /**
-   * Para entradas sin inventario/bodega elegidos: usa el primer inventario activo de una bodega del centro del usuario.
-   */
-  private async resolverInventarioEntradaDesdeCentroUsuario(
-    usuarioId: number,
-  ): Promise<{ inventarioId: number; bodegaId: number } | null> {
-    try {
-      const user = await this.usersService.findOne(usuarioId);
-      let sedeId: number | null = null;
-      if (user.usuarioSede != null && String(user.usuarioSede).trim() !== '') {
-        const n = Number(user.usuarioSede);
-        if (Number.isFinite(n) && n > 0) sedeId = n;
-      }
-      if (sedeId == null && user.bodega?.sedeId != null) {
-        const n = Number(user.bodega.sedeId);
-        if (Number.isFinite(n) && n > 0) sedeId = n;
-      }
-      if (sedeId == null) return null;
-
-      const rows = await this.movimientosRepository.query(
-        `SELECT bodegaId FROM bodegas
-         WHERE sedeId = ? AND bodegaEstado = 1
-         ORDER BY
-           CASE bodegaTipo WHEN 'internas' THEN 0 WHEN 'redes' THEN 1 ELSE 2 END,
-           bodegaId ASC
-         LIMIT 1`,
-        [sedeId],
-      );
-      if (!rows?.length) return null;
-      const bodegaId = Number(rows[0].bodegaId);
-      if (!Number.isFinite(bodegaId) || bodegaId <= 0) return null;
-
-      const inv = await this.inventariosService.findByBodega(bodegaId);
-      if (!inv?.inventarioId) return null;
-      return {
-        inventarioId: inv.inventarioId,
-        bodegaId: inv.bodegaId ?? bodegaId,
-      };
-    } catch {
-      return null;
     }
   }
 

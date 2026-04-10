@@ -90,6 +90,7 @@ export class TrasladosService {
         trasladoObservaciones: createTrasladoDto.trasladoObservaciones,
         usuarioId: createTrasladoDto.usuarioId,
         trasladoCodigo: trasladoCodigo,
+        numeroOrden: createTrasladoDto.numeroOrden || null,
         identificadorUnico: identificadorUnico, // Identificador único autogenerado para cada traslado
         trasladoEstado: EstadoTraslado.PENDIENTE,
         numerosMedidor: materialDto.numerosMedidor || null, // Guardar números de medidor si se proporcionaron
@@ -456,47 +457,37 @@ export class TrasladosService {
         where: { trasladoCodigo: traslado.trasladoCodigo },
       });
 
-      // Obtener o crear inventarios de bodegas
-      let inventarioOrigen = await this.inventariosService.findByBodega(traslado.bodegaOrigenId);
-      let inventarioDestino = await this.inventariosService.findByBodega(traslado.bodegaDestinoId);
-
-      // Crear inventarios automáticamente si no existen
-      if (!inventarioOrigen) {
-        const bodegaOrigen = await this.bodegasService.findOne(traslado.bodegaOrigenId);
-        inventarioOrigen = await this.inventariosService.create({
-          inventarioNombre: `Inventario - ${bodegaOrigen.bodegaNombre || 'Bodega Origen'}`,
-          inventarioDescripcion: `Inventario creado automáticamente para traslados`,
-          bodegaId: traslado.bodegaOrigenId,
-          inventarioEstado: true,
-        });
-      }
-
-      if (!inventarioDestino) {
-        const bodegaDestino = await this.bodegasService.findOne(traslado.bodegaDestinoId);
-        inventarioDestino = await this.inventariosService.create({
-          inventarioNombre: `Inventario - ${bodegaDestino.bodegaNombre || 'Bodega Destino'}`,
-          inventarioDescripcion: `Inventario creado automáticamente para traslados`,
-          bodegaId: traslado.bodegaDestinoId,
-          inventarioEstado: true,
-        });
-      }
+      // Asegurar inventarios de bodegas (origen/destino)
+      const inventarioOrigen = await this.inventariosService.findOrCreateByBodega(
+        traslado.bodegaOrigenId,
+        { inventarioDescripcion: 'Inventario creado automáticamente para traslados' },
+      );
+      const inventarioDestino = await this.inventariosService.findOrCreateByBodega(
+        traslado.bodegaDestinoId,
+        { inventarioDescripcion: 'Inventario creado automáticamente para traslados' },
+      );
+      const codigoMovimiento = traslado.trasladoCodigo;
 
       // Procesar cada traslado del grupo
-      // NOTA: Las salidas solo se crean automáticamente para instalaciones, no para traslados
-      // Los traslados ajustan el stock directamente sin crear movimientos de salida
       for (const t of trasladosGrupo) {
         // Verificar que el material existe
         await this.materialesService.findOne(t.materialId);
 
-        // Ajustar stock en bodega origen (reducir) sin crear movimiento de salida
-        // Las salidas solo se crean automáticamente para instalaciones
-        if (inventarioOrigen && inventarioOrigen.bodegaId) {
-          await this.materialesService.ajustarStock(
-            t.materialId,
-            -Number(t.trasladoCantidad),
-            inventarioOrigen.bodegaId,
-          );
-        }
+        // Movimiento SALIDA (bodega origen)
+        await this.movimientosService.create({
+          materiales: [
+            {
+              materialId: t.materialId,
+              movimientoCantidad: t.trasladoCantidad,
+              numerosMedidor: t.numerosMedidor || undefined,
+            },
+          ],
+          movimientoTipo: TipoMovimiento.SALIDA,
+          usuarioId: t.usuarioId,
+          inventarioId: inventarioOrigen.inventarioId,
+          movimientoObservaciones: `Traslado hacia bodega ${t.bodegaDestinoId}`,
+          movimientoCodigo: codigoMovimiento,
+        });
 
         // Crear movimiento de entrada en bodega destino
         // Pasar números de medidor si están guardados en el traslado
@@ -512,7 +503,7 @@ export class TrasladosService {
           usuarioId: t.usuarioId,
           inventarioId: inventarioDestino.inventarioId,
           movimientoObservaciones: `Traslado desde bodega ${t.bodegaOrigenId}`,
-          movimientoCodigo: traslado.trasladoCodigo,
+          movimientoCodigo: codigoMovimiento,
         });
 
         // Actualizar estado del traslado
@@ -529,23 +520,32 @@ export class TrasladosService {
     // Verificar que el material existe
     await this.materialesService.findOne(traslado.materialId);
 
-    // Obtener inventarios de bodegas
-    const inventarioOrigen = await this.inventariosService.findByBodega(traslado.bodegaOrigenId);
-    const inventarioDestino = await this.inventariosService.findByBodega(traslado.bodegaDestinoId);
-
-    if (!inventarioOrigen || !inventarioDestino) {
-      throw new BadRequestException(
-        'No se encontraron inventarios activos para las bodegas seleccionadas.',
-      );
-    }
-
-    // Ajustar stock en bodega origen (reducir) sin crear movimiento de salida
-    // Las salidas solo se crean automáticamente para instalaciones
-    await this.materialesService.ajustarStock(
-      traslado.materialId,
-      -Number(traslado.trasladoCantidad),
-      inventarioOrigen.bodegaId,
+    // Asegurar inventarios de bodegas (origen/destino)
+    const inventarioOrigen = await this.inventariosService.findOrCreateByBodega(
+      traslado.bodegaOrigenId,
+      { inventarioDescripcion: 'Inventario creado automáticamente para traslados' },
     );
+    const inventarioDestino = await this.inventariosService.findOrCreateByBodega(
+      traslado.bodegaDestinoId,
+      { inventarioDescripcion: 'Inventario creado automáticamente para traslados' },
+    );
+    const codigoMovimiento = traslado.trasladoCodigo || traslado.identificadorUnico || `TRA-${traslado.trasladoId}`;
+
+    // Movimiento SALIDA (bodega origen)
+    await this.movimientosService.create({
+      materiales: [
+        {
+          materialId: traslado.materialId,
+          movimientoCantidad: traslado.trasladoCantidad,
+          numerosMedidor: traslado.numerosMedidor || undefined,
+        },
+      ],
+      movimientoTipo: TipoMovimiento.SALIDA,
+      usuarioId: traslado.usuarioId,
+      inventarioId: inventarioOrigen.inventarioId,
+      movimientoObservaciones: `Traslado hacia bodega ${traslado.bodegaDestinoId}`,
+      movimientoCodigo: codigoMovimiento,
+    });
 
     // Crear movimiento de entrada en bodega destino
     // Pasar números de medidor si están guardados en el traslado
@@ -561,7 +561,7 @@ export class TrasladosService {
       usuarioId: traslado.usuarioId,
       inventarioId: inventarioDestino.inventarioId,
       movimientoObservaciones: `Traslado desde bodega ${traslado.bodegaOrigenId}`,
-      movimientoCodigo: traslado.trasladoCodigo,
+      movimientoCodigo: codigoMovimiento,
     });
 
     // Actualizar estado del traslado
@@ -612,63 +612,26 @@ export class TrasladosService {
     // Si el traslado está completado, revertir todo
     if (traslado.trasladoEstado === EstadoTraslado.COMPLETADO) {
       try {
-        // 1. Revertir stock en bodega origen (sumar de vuelta)
-        // Los traslados ajustan el stock directamente sin crear movimiento de salida
-        // Entonces necesitamos revertir el stock en la bodega origen
+        // Revertir eliminando movimientos asociados (SALIDA + ENTRADA) del código del traslado.
+        const codigoMovimiento =
+          traslado.trasladoCodigo || traslado.identificadorUnico || `TRA-${traslado.trasladoId}`;
         try {
-          const inventarioOrigen = await this.inventariosService.findByBodega(
-            traslado.bodegaOrigenId,
-          );
-          if (inventarioOrigen && inventarioOrigen.bodegaId) {
-            // Verificar que el material existe
-            const material = await this.materialesService.findOne(traslado.materialId);
-
-            if (material) {
-              // Revertir stock en bodega origen (sumar la cantidad trasladada)
-              await this.materialesService.ajustarStock(
-                traslado.materialId,
-                Number(traslado.trasladoCantidad),
-                inventarioOrigen.bodegaId,
+          const movimientosAsociados = await this.movimientosService.findByCodigo(codigoMovimiento);
+          for (const movimiento of movimientosAsociados) {
+            try {
+              await this.movimientosService.remove(movimiento.movimientoId, usuarioId);
+            } catch (error) {
+              console.error(
+                `Error al eliminar movimiento ${movimiento.movimientoId} asociado a traslado ${id}:`,
+                error,
               );
             }
           }
         } catch (error) {
-          console.error('Error al revertir stock en bodega origen:', error);
+          console.error('Error al buscar y eliminar movimientos asociados al traslado:', error);
         }
 
-        // 2. Buscar y eliminar movimientos de entrada asociados
-        // Esto revertirá el stock en la bodega destino
-        if (traslado.trasladoCodigo) {
-          try {
-            const movimientosAsociados = await this.movimientosService.findByCodigo(
-              traslado.trasladoCodigo,
-            );
-
-            // Eliminar cada movimiento de entrada (esto revertirá los stocks en destino automáticamente)
-            for (const movimiento of movimientosAsociados) {
-              try {
-                // Verificar que el movimiento corresponde a este traslado
-                if (
-                  movimiento.materialId === traslado.materialId &&
-                  Math.abs(
-                    Number(movimiento.movimientoCantidad) - Number(traslado.trasladoCantidad),
-                  ) < 0.01
-                ) {
-                  await this.movimientosService.remove(movimiento.movimientoId, usuarioId);
-                }
-              } catch (error) {
-                console.error(
-                  `Error al eliminar movimiento ${movimiento.movimientoId} asociado a traslado ${id}:`,
-                  error,
-                );
-              }
-            }
-          } catch (error) {
-            console.error('Error al buscar y eliminar movimientos asociados al traslado:', error);
-          }
-        }
-
-        // 3. Revertir números de medidor a la bodega de origen si el material es medidor
+        // Revertir números de medidor a la bodega de origen si el material es medidor
         try {
           const material = await this.materialesService.findOne(traslado.materialId);
           if (material && material.materialEsMedidor && traslado.numerosMedidor) {

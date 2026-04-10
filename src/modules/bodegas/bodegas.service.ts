@@ -51,6 +51,26 @@ export class BodegasService {
     return this.bodegasRepository.save(bodega);
   }
 
+  /**
+   * Bodega especial por centro operativo (sede) para stock "del centro" (no asignado a bodegas internas/redes).
+   * Esta bodega permite mantener inventario separado por centro operativo usando la misma infraestructura
+   * de inventarios por bodega (materiales_bodegas + inventarios).
+   */
+  async findOrCreateBodegaCentroOperativo(sedeId: number): Promise<Bodega> {
+    const existing = await this.bodegasRepository.findOne({
+      where: { sedeId, bodegaTipo: 'centro' },
+    });
+    if (existing) return existing;
+    const bodega = this.bodegasRepository.create({
+      bodegaNombre: 'Bodega centro operativo',
+      bodegaDescripcion: 'Stock del centro operativo (no asignado a bodegas específicas)',
+      bodegaTipo: 'centro',
+      sedeId,
+      bodegaEstado: true,
+    });
+    return this.bodegasRepository.save(bodega);
+  }
+
   async create(createBodegaDto: CreateBodegaDto, user?: any): Promise<Bodega> {
     const tipo = (createBodegaDto.bodegaTipo || '').toLowerCase();
     if (tipo !== 'internas' && tipo !== 'redes') {

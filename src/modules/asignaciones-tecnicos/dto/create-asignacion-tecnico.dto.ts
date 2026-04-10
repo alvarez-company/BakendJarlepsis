@@ -23,6 +23,15 @@ export class CreateAsignacionTecnicoDto {
   @IsOptional()
   asignacionCodigo?: string;
 
+  @ApiProperty({
+    required: false,
+    description: 'Número de orden (manual) asociado a la asignación',
+    example: 'OT-12345',
+  })
+  @IsString()
+  @IsOptional()
+  numeroOrden?: string;
+
   @ApiProperty({ example: 1 })
   @IsNumber()
   usuarioId: number;

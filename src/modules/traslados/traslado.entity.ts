@@ -53,6 +53,9 @@ export class Traslado {
   @Column({ nullable: true })
   trasladoCodigo: string; // Código para agrupar múltiples traslados
 
+  @Column({ nullable: true })
+  numeroOrden: string; // Número de orden (manual)
+
   @Column({ nullable: true, unique: true })
   identificadorUnico: string; // TRA-1, TRA-2, etc.
 

@@ -121,6 +121,61 @@ export class AsignacionesTecnicosService {
     }
   }
 
+  /**
+   * Crea una asignación y aplica el efecto de inventario:
+   * - Resta stock del inventario/bodega origen (movimiento SALIDA)
+   * - Suma stock al inventario del técnico (inventario_tecnicos)
+   * - Registra la asignación con los materiales
+   *
+   * Esta ruta es la que debe usarse desde el controlador.
+   *
+   * Nota: `create()` se mantiene como "solo registro" porque es usado internamente
+   * por `InventarioTecnicoService.asignarMateriales()` para persistir el documento de asignación.
+   */
+  async createWithStock(
+    createDto: CreateAsignacionTecnicoDto,
+    user?: any,
+  ): Promise<AsignacionTecnico> {
+    // Validar que bodega-internas y bodega-redes no puedan asignar material
+    if (user) {
+      const rolTipo = user.usuarioRol?.rolTipo || user.role;
+      if (rolTipo === 'bodega-internas' || rolTipo === 'bodega-redes') {
+        throw new BadRequestException(
+          'Los roles de Bodega Internas y Bodega Redes no pueden asignar material',
+        );
+      }
+    }
+
+    // Delegar a InventarioTecnicoService: crea movimientos, asigna medidores (si aplica) y registra la asignación
+    await this.inventarioTecnicoService.asignarMateriales(createDto.usuarioId, {
+      inventarioId: createDto.inventarioId,
+      usuarioAsignadorId: createDto.usuarioAsignadorId,
+      observaciones: createDto.observaciones,
+      materiales: createDto.materiales.map((m) => ({
+        materialId: m.materialId,
+        cantidad: m.cantidad,
+      })),
+    });
+
+    // Buscar y retornar la asignación creada más reciente para ese técnico e inventario
+    // (InventarioTecnicoService crea el registro usando `create()` de este servicio).
+    const latest = await this.asignacionesRepository.findOne({
+      where: {
+        usuarioId: createDto.usuarioId,
+        inventarioId: createDto.inventarioId,
+        usuarioAsignadorId: createDto.usuarioAsignadorId,
+      } as any,
+      order: { fechaCreacion: 'DESC' } as any,
+      relations: ['usuario', 'inventario', 'inventario.bodega', 'inventario.bodega.sede', 'usuarioAsignador'],
+    });
+
+    if (!latest) {
+      // Fallback: si por alguna razón no se creó registro, crearlo (solo registro)
+      return this.create(createDto, user);
+    }
+    return latest;
+  }
+
   async findAll(
     paginationDto?: any,
     user?: any,

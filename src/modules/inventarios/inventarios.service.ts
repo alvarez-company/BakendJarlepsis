@@ -91,6 +91,26 @@ export class InventariosService {
     return inventarios.length > 0 ? inventarios[0] : null;
   }
 
+  /**
+   * Asegura que una bodega tenga inventario activo (crea uno si no existe).
+   * Útil para bodegas especiales (centro/instalaciones) y para operaciones de stock.
+   */
+  async findOrCreateByBodega(
+    bodegaId: number,
+    opts?: { inventarioNombre?: string; inventarioDescripcion?: string },
+  ): Promise<Inventario> {
+    const existing = await this.findByBodega(bodegaId);
+    if (existing) return existing;
+    // Validar que la bodega existe (y respeta permisos si aplica en el flujo llamante)
+    await this.bodegasService.findOne(bodegaId);
+    return this.create({
+      bodegaId,
+      inventarioNombre: opts?.inventarioNombre || `Inventario - Bodega ${bodegaId}`,
+      inventarioDescripcion: opts?.inventarioDescripcion || 'Inventario creado automáticamente',
+      inventarioEstado: true,
+    } as any);
+  }
+
   async remove(id: number): Promise<void> {
     const inventario = await this.findOne(id);
 

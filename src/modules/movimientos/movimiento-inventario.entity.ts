@@ -89,6 +89,9 @@ export class MovimientoInventario {
   @Column({ nullable: true })
   movimientoCodigo: string; // Código para agrupar múltiples movimientos
 
+  @Column({ nullable: true })
+  numeroOrden: string; // Número de orden (manual)
+
   @Column({ nullable: true, unique: true })
   identificadorUnico: string; // SAL-1, ENT-1, DEV-1, etc.
 

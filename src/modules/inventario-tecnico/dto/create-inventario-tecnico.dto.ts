@@ -68,6 +68,11 @@ export class AssignMaterialesToTecnicoDto {
   @IsOptional()
   usuarioAsignadorId?: number;
 
+  @ApiProperty({ required: false, description: 'Número de orden (manual) asociado a la asignación' })
+  @IsString()
+  @IsOptional()
+  numeroOrden?: string;
+
   @ApiProperty({ required: false, description: 'Observaciones para el movimiento de salida' })
   @IsString()
   @IsOptional()

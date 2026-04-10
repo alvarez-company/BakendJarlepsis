@@ -4,6 +4,11 @@ import { Type } from 'class-transformer';
 import { MaterialAsignacionDto } from './create-asignacion-tecnico.dto';
 
 export class UpdateAsignacionTecnicoDto {
+  @ApiProperty({ required: false })
+  @IsString()
+  @IsOptional()
+  numeroOrden?: string;
+
   @ApiProperty({ enum: ['pendiente', 'aprobada', 'rechazada'], required: false })
   @IsEnum(['pendiente', 'aprobada', 'rechazada'])
   @IsOptional()

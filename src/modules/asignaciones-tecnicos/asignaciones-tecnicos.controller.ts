@@ -44,7 +44,7 @@ export class AsignacionesTecnicosController {
   @Roles(...ROLES_ASIGNACIONES_TECNICOS)
   @ApiOperation({ summary: 'Crear una nueva asignación' })
   create(@Body() createDto: CreateAsignacionTecnicoDto, @Request() req) {
-    return this.service.create(createDto, req.user);
+    return this.service.createWithStock(createDto, req.user);
   }
 
   @Get()

@@ -16,6 +16,9 @@ export class AsignacionTecnico {
   @Column({ unique: true })
   asignacionCodigo: string; // Código único de la asignación (ASIG-1, ASIG-2, etc.)
 
+  @Column({ nullable: true })
+  numeroOrden: string; // Número de orden (manual)
+
   @Column()
   usuarioId: number; // Técnico al que se le asignó
 

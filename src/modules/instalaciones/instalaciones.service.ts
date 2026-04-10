@@ -1707,13 +1707,15 @@ export class InstalacionesService {
   ): Promise<Instalacion> {
     // Validar que almacenista no pueda cambiar estado de instalaciones
     if (user) {
-      const rolTipo = user.usuarioRol?.rolTipo || user.role;
+      const rolTipo = String(user.usuarioRol?.rolTipo || user.role || '').toLowerCase();
       if (rolTipo === 'almacenista') {
         throw new BadRequestException('No tienes permisos para cambiar el estado de instalaciones');
       }
     }
     const instalacion = await this.findOne(instalacionId, user);
     const estadoAnterior = instalacion.estado;
+    const rolTipo = String(user?.usuarioRol?.rolTipo || user?.role || '').toLowerCase();
+    const esSuperadmin = rolTipo === 'superadmin';
 
     let estadoNormalizado = normalizarEstadoInstalacionCodigo(String(nuevoEstado));
     if (nuevoEstado === EstadoInstalacion.FINALIZADA) {
@@ -1733,7 +1735,7 @@ export class InstalacionesService {
       throw new BadRequestException(`Estado inválido: ${estadoNormalizado}`);
     }
 
-    if (estadoNormalizado === EstadoInstalacion.FACT) {
+    if (estadoNormalizado === EstadoInstalacion.FACT && !esSuperadmin) {
       const prev = normalizarEstadoInstalacionCodigo(String(estadoAnterior));
       if (prev !== EstadoInstalacion.CERT) {
         throw new BadRequestException(
@@ -1779,7 +1781,8 @@ export class InstalacionesService {
     if (estadoNormalizado === EstadoInstalacion.FACT) {
       if (!instalacion.fechaFacturacion) instalacion.fechaFacturacion = ahora as any;
       if (!instalacion.fechaFinalizacion) instalacion.fechaFinalizacion = ahora as any;
-      instalacion.instalacionNumeroActa = (extras?.numeroActa ?? '').trim();
+      const acta = (extras?.numeroActa ?? '').trim();
+      instalacion.instalacionNumeroActa = acta || instalacion.instalacionNumeroActa || null;
     }
 
     if (estadoNormalizado === EstadoInstalacion.NOVE) {

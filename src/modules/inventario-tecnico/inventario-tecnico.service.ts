@@ -2,6 +2,7 @@ import {
   Injectable,
   NotFoundException,
   ForbiddenException,
+  BadRequestException,
   Inject,
   forwardRef,
 } from '@nestjs/common';
@@ -65,6 +66,7 @@ export class InventarioTecnicoService {
   async asignarMateriales(
     usuarioId: number,
     dto: AssignMaterialesToTecnicoDto,
+    requestingUser?: any,
   ): Promise<InventarioTecnico[]> {
     const resultados: InventarioTecnico[] = [];
 
@@ -77,7 +79,41 @@ export class InventarioTecnicoService {
 
     if (dto.inventarioId) {
       try {
-        const inventario = await this.inventariosService.findOne(dto.inventarioId);
+        // Permisos por registro:
+        // - Usuario registrado a bodega: solo puede asignar desde el inventario de SU bodega.
+        // - Usuario registrado a sede (sin bodega): solo puede asignar desde el inventario "centro" de SU sede.
+        // - Además, solo puede asignar a técnicos de SU sede (si aplica).
+        const inventario = await this.inventariosService.findOne(dto.inventarioId, requestingUser);
+        if (requestingUser) {
+          const rolTipo = String(requestingUser?.usuarioRol?.rolTipo || requestingUser?.role || '').toLowerCase();
+          const isSuperadminOGerencia = rolTipo === 'superadmin' || rolTipo === 'gerencia';
+          if (!isSuperadminOGerencia) {
+            const userBodegaId = requestingUser?.usuarioBodega != null ? Number(requestingUser.usuarioBodega) : null;
+            const userSedeId = requestingUser?.usuarioSede != null ? Number(requestingUser.usuarioSede) : null;
+            const bodegaTipo = String(inventario?.bodega?.bodegaTipo || '').toLowerCase();
+            if (userBodegaId != null && userBodegaId > 0) {
+              if (Number(inventario.bodegaId) !== userBodegaId) {
+                throw new BadRequestException(
+                  'No tienes permisos para asignar materiales desde otra bodega.',
+                );
+              }
+            } else if (userSedeId != null && userSedeId > 0) {
+              if (bodegaTipo !== 'centro' || Number(inventario?.bodega?.sedeId) !== userSedeId) {
+                throw new BadRequestException(
+                  'No tienes permisos para asignar materiales fuera del inventario del centro operativo.',
+                );
+              }
+            }
+
+            // Técnico destino debe ser del mismo centro operativo
+            const tecnico = await this.usersService.findOne(usuarioId, requestingUser).catch(() => null);
+            if (userSedeId != null && tecnico?.usuarioSede != null && Number(tecnico.usuarioSede) !== userSedeId) {
+              throw new BadRequestException(
+                'Solo puedes asignar materiales a técnicos de tu mismo centro operativo.',
+              );
+            }
+          }
+        }
         const bodegaId = inventario.bodegaId ?? inventario.bodega?.bodegaId;
 
         if (bodegaId) {
@@ -100,7 +136,7 @@ export class InventarioTecnicoService {
                 movimientoObservaciones:
                   dto.observaciones || `Asignación de material a técnico ${usuarioId}`,
                 movimientoCodigo: salidaCodigo,
-              });
+              }, requestingUser);
 
               // Completar automáticamente el movimiento para que se reste el stock
               if (movimientosCreados && movimientosCreados.length > 0) {
@@ -322,6 +358,7 @@ export class InventarioTecnicoService {
 
         asignacionCreada = await this.asignacionesTecnicosService.create({
           asignacionCodigo: asignacionCodigo, // undefined = se generará automáticamente
+          numeroOrden: dto.numeroOrden,
           usuarioId,
           inventarioId: dto.inventarioId,
           usuarioAsignadorId: usuarioAsignador,

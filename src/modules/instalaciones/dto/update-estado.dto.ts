@@ -1,6 +1,6 @@
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 import { Transform } from 'class-transformer';
-import { IsEnum, IsNotEmpty, IsOptional, IsString, ValidateIf } from 'class-validator';
+import { IsEnum, IsNotEmpty, IsOptional, IsString } from 'class-validator';
 import { EstadoInstalacion } from '../instalacion.entity';
 
 export class UpdateEstadoInstalacionDto {
@@ -23,13 +23,7 @@ export class UpdateEstadoInstalacionDto {
   estado: EstadoInstalacion;
 
   @ApiPropertyOptional({ description: 'Obligatorio al pasar a facturación (fact / legacy completada)' })
-  @ValidateIf(
-    (o) =>
-      o.estado === EstadoInstalacion.FACT ||
-      o.estado === EstadoInstalacion.COMPLETADA ||
-      o.estado === EstadoInstalacion.FINALIZADA,
-  )
-  @IsNotEmpty({ message: 'El número de acta es obligatorio para facturación.' })
+  @IsOptional()
   @IsString()
   numeroActa?: string;
 

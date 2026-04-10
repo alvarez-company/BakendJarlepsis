@@ -80,6 +80,15 @@ export class CreateMovimientoDto {
 
   @ApiProperty({
     required: false,
+    description: 'Número de orden (manual) asociado al movimiento',
+    example: 'OT-12345',
+  })
+  @IsString()
+  @IsOptional()
+  numeroOrden?: string;
+
+  @ApiProperty({
+    required: false,
     description: 'Asignar materiales directamente a técnicos (solo para entradas)',
   })
   @IsArray()

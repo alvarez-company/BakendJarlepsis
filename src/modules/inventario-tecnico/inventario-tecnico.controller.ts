@@ -44,8 +44,9 @@ export class InventarioTecnicoController {
   asignarMateriales(
     @Param('usuarioId') usuarioId: string,
     @Body() dto: AssignMaterialesToTecnicoDto,
+    @Request() req: { user?: any },
   ) {
-    return this.service.asignarMateriales(+usuarioId, dto);
+    return this.service.asignarMateriales(+usuarioId, dto, req?.user);
   }
 
   @Get()
