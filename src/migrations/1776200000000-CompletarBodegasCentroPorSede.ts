@@ -1,11 +1,15 @@
 import { MigrationInterface, QueryRunner } from 'typeorm';
 
-export class EnsureCentroOperativoInventarios1776000000000 implements MigrationInterface {
-  name = 'EnsureCentroOperativoInventarios1776000000000';
+/**
+ * Idempotente: asegura 1 bodega `bodegaTipo = 'centro'` por cada sede y su inventario activo.
+ * Corrige entornos donde la migración anterior referenciaba `oficinaId` (columna ya no existe).
+ */
+export class CompletarBodegasCentroPorSede1776200000000 implements MigrationInterface {
+  name = 'CompletarBodegasCentroPorSede1776200000000';
 
   public async up(queryRunner: QueryRunner): Promise<void> {
-    // 1) Crear bodega tipo 'centro' por sede si no existe
-    // Sin oficinaId: esa columna se eliminó en esquemas actuales (bodegas pertenecen a sedeId).
+    await queryRunner.query('SET FOREIGN_KEY_CHECKS = 0');
+
     await queryRunner.query(`
       INSERT INTO bodegas (
         bodegaNombre,
@@ -39,7 +43,6 @@ export class EnsureCentroOperativoInventarios1776000000000 implements MigrationI
       )
     `);
 
-    // 2) Crear inventario activo para esa bodega si no existe
     await queryRunner.query(`
       INSERT INTO inventarios (
         inventarioNombre,
@@ -60,10 +63,11 @@ export class EnsureCentroOperativoInventarios1776000000000 implements MigrationI
           WHERE i.bodegaId = b.bodegaId AND i.inventarioEstado = 1
         )
     `);
+
+    await queryRunner.query('SET FOREIGN_KEY_CHECKS = 1');
   }
 
   public async down(_queryRunner: QueryRunner): Promise<void> {
-    // No revertimos: estas bodegas/inventarios son infraestructura requerida.
+    // No revertimos: infraestructura requerida por sede.
   }
 }
-
