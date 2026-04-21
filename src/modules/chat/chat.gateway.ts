@@ -147,6 +147,18 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect {
     }
   }
 
+  isUserConnected(usuarioId: number): boolean {
+    return this.users.has(usuarioId);
+  }
+
+  isUserInGrupo(usuarioId: number, grupoId: number): boolean {
+    const socketId = this.users.get(usuarioId);
+    if (!socketId) return false;
+    const socket = this.server?.sockets?.sockets?.get(socketId);
+    if (!socket) return false;
+    return socket.rooms?.has?.(`grupo_${grupoId}`) ?? false;
+  }
+
   emitirEventoInstalacion(usuariosIds: number[], evento: string, datos: any) {
     usuariosIds.forEach((userId) => {
       const socketId = this.users.get(userId);

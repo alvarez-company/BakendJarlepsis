@@ -1703,7 +1703,7 @@ export class InstalacionesService {
     nuevoEstado: EstadoInstalacion,
     usuarioId: number,
     user?: any,
-    extras?: { numeroActa?: string; observacionNovedad?: string },
+    extras?: { numeroActa?: string; observacionNovedad?: string; fechaConstruida?: string },
   ): Promise<Instalacion> {
     // Validar que almacenista no pueda cambiar estado de instalaciones
     if (user) {
@@ -1770,8 +1770,20 @@ export class InstalacionesService {
       }
     }
 
-    if (estadoNormalizado === EstadoInstalacion.CONS && !instalacion.fechaConstruida) {
-      instalacion.fechaConstruida = ahora as any;
+    if (estadoNormalizado === EstadoInstalacion.CONS) {
+      const manual = extras?.fechaConstruida != null ? String(extras.fechaConstruida).trim() : '';
+      if (manual) {
+        const parsed = new Date(manual);
+        if (!Number.isNaN(parsed.getTime())) {
+          instalacion.fechaConstruida = parsed as any;
+          // Mantener compatibilidad con UI legacy que muestra instalacionFecha
+          if (!instalacion.instalacionFecha) {
+            instalacion.instalacionFecha = parsed as any;
+          }
+        }
+      } else if (!instalacion.fechaConstruida) {
+        instalacion.fechaConstruida = ahora as any;
+      }
     }
 
     if (estadoNormalizado === EstadoInstalacion.CERT && !instalacion.fechaCertificacion) {

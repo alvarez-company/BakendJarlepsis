@@ -8,6 +8,8 @@ import { AuthModule } from '../auth/auth.module';
 import { GruposModule } from '../grupos/grupos.module';
 import { UsersModule } from '../users/users.module';
 import { RolesModule } from '../roles/roles.module';
+import { BodegasModule } from '../bodegas/bodegas.module';
+import { InventariosModule } from '../inventarios/inventarios.module';
 
 @Module({
   imports: [
@@ -16,6 +18,8 @@ import { RolesModule } from '../roles/roles.module';
     forwardRef(() => GruposModule),
     forwardRef(() => UsersModule),
     RolesModule,
+    forwardRef(() => BodegasModule),
+    forwardRef(() => InventariosModule),
   ],
   controllers: [SedesController],
   providers: [SedesService],

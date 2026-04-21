@@ -51,6 +51,53 @@ export class NumerosMedidorService {
     }
   }
 
+  private normalizeNumero(value: string): string {
+    return String(value || '').trim().toLowerCase();
+  }
+
+  /**
+   * Busca números existentes usando comparación case-insensitive (LOWER()).
+   * Devuelve un Map indexado por el número normalizado (trim+lowercase).
+   */
+  async findExistingByNumeros(numeros: string[]): Promise<Map<string, NumeroMedidor>> {
+    const normalized = Array.from(
+      new Set(numeros.map((n) => this.normalizeNumero(n)).filter(Boolean)),
+    );
+    if (!normalized.length) return new Map();
+
+    const rows = await this.numerosMedidorRepository
+      .createQueryBuilder('n')
+      .where('LOWER(TRIM(n.numeroMedidor)) IN (:...nums)', { nums: normalized })
+      .getMany();
+
+    const map = new Map<string, NumeroMedidor>();
+    for (const r of rows) {
+      map.set(this.normalizeNumero(r.numeroMedidor), r);
+    }
+    return map;
+  }
+
+  async bulkSetDisponible(params: {
+    numeroMedidorIds: number[];
+    bodegaId: number | null;
+    materialIdToSync: number;
+  }): Promise<void> {
+    const ids = Array.from(new Set(params.numeroMedidorIds.filter((n) => Number(n) > 0)));
+    if (!ids.length) return;
+    await this.numerosMedidorRepository.update(
+      { numeroMedidorId: In(ids) },
+      {
+        estado: EstadoNumeroMedidor.DISPONIBLE,
+        bodegaId: params.bodegaId,
+        usuarioId: null,
+        inventarioTecnicoId: null,
+        instalacionId: null,
+        instalacionMaterialId: null,
+      },
+    );
+    await this.sincronizarStockMaterialMedidor(params.materialIdToSync);
+  }
+
   /** Misma regla que el listado por centro: bodega del centro, técnico del centro, o disponible sin bodega/técnico. */
   filtrarPorCentroOperativo(numeros: NumeroMedidor[], sedeId: number): NumeroMedidor[] {
     return this.filterBySede(numeros, sedeId);
@@ -73,17 +120,18 @@ export class NumerosMedidorService {
   }
 
   async create(createDto: CreateNumeroMedidorDto): Promise<NumeroMedidor> {
-    // Normalizar el número de medidor (trim y lowercase) para comparación
-    const numeroNormalizado = createDto.numeroMedidor.trim().toLowerCase();
+    const numeroNormalizado = this.normalizeNumero(createDto.numeroMedidor);
+    if (!numeroNormalizado) {
+      throw new BadRequestException('El número de medidor es requerido');
+    }
 
-    // Verificar que el número de medidor sea único (comparación case-insensitive)
-    // Los números de medidor NUNCA se repiten, incluso si ya salieron o fueron instalados
-    const existentes = await this.numerosMedidorRepository.find();
-    const existe = existentes.some(
-      (n) => n.numeroMedidor.trim().toLowerCase() === numeroNormalizado,
-    );
+    // Verificar unicidad case-insensitive sin cargar toda la tabla
+    const existe = await this.numerosMedidorRepository
+      .createQueryBuilder('n')
+      .where('LOWER(TRIM(n.numeroMedidor)) = :num', { num: numeroNormalizado })
+      .getCount();
 
-    if (existe) {
+    if (existe > 0) {
       throw new BadRequestException(
         `El número de medidor "${createDto.numeroMedidor}" ya existe en el sistema. Los números de medidor son únicos y nunca se repiten, incluso si ya salieron de inventario o fueron instalados.`,
       );
@@ -121,52 +169,48 @@ export class NumerosMedidorService {
       await this.materialesService.update(materialId, { materialEsMedidor: true });
     }
 
-    const resultados: NumeroMedidor[] = [];
-    const errores: string[] = [];
+    const normalizedInRequest = items
+      .map((i) => ({ raw: i.numeroMedidor, norm: this.normalizeNumero(i.numeroMedidor), bodegaId: i.bodegaId }))
+      .filter((x) => x.norm);
 
-    for (const item of items) {
-      const numero = item.numeroMedidor;
-      try {
-        // Normalizar el número (trim y lowercase) para comparación
-        const numeroNormalizado = numero.trim().toLowerCase();
+    if (!normalizedInRequest.length) return [];
 
-        // Verificar si ya existe (comparación case-insensitive)
-        // Los números de medidor NUNCA se repiten, incluso si ya salieron o fueron instalados
-        const todosExistentes = await this.numerosMedidorRepository.find();
-        const existe = todosExistentes.some(
-          (n) => n.numeroMedidor.trim().toLowerCase() === numeroNormalizado,
-        );
-
-        if (existe) {
-          errores.push(`El número ${numero} ya existe`);
-          continue;
-        }
-
-        const nuevo = this.numerosMedidorRepository.create({
-          materialId,
-          numeroMedidor: numero,
-          estado: EstadoNumeroMedidor.DISPONIBLE,
-          bodegaId: item.bodegaId ?? null, // Si no se asigna bodega, queda en centro operativo
-        });
-
-        resultados.push(await this.numerosMedidorRepository.save(nuevo));
-      } catch (error) {
-        errores.push(`Error al crear número ${numero}: ${error.message}`);
-      }
+    // Duplicados dentro del mismo request
+    const seen = new Set<string>();
+    const duplicates: string[] = [];
+    for (const x of normalizedInRequest) {
+      if (seen.has(x.norm)) duplicates.push(x.raw);
+      seen.add(x.norm);
     }
-
-    // Si hay errores (números duplicados), RECHAZAR completamente
-    // Los números de medidor NUNCA se repiten, incluso si ya salieron o fueron instalados
-    if (errores.length > 0) {
+    if (duplicates.length) {
       throw new BadRequestException(
-        `Error al crear números de medidor: ${errores.join(', ')}. Los números de medidor son únicos y nunca se repiten, incluso si ya salieron de inventario o fueron instalados.`,
+        `Error al crear números de medidor: duplicados en el request (${duplicates.slice(0, 10).join(', ')}${duplicates.length > 10 ? ', ...' : ''}). Los números de medidor son únicos y nunca se repiten.`,
       );
     }
 
-    if (resultados.length > 0) {
+    // Existentes en BD (case-insensitive)
+    const existing = await this.findExistingByNumeros(normalizedInRequest.map((x) => x.norm));
+    if (existing.size > 0) {
+      const sample = Array.from(existing.keys()).slice(0, 10).join(', ');
+      throw new BadRequestException(
+        `Error al crear números de medidor: ya existen (${sample}${existing.size > 10 ? ', ...' : ''}). Los números de medidor son únicos y nunca se repiten, incluso si ya salieron de inventario o fueron instalados.`,
+      );
+    }
+
+    const entities = normalizedInRequest.map((x) =>
+      this.numerosMedidorRepository.create({
+        materialId,
+        numeroMedidor: x.raw,
+        estado: EstadoNumeroMedidor.DISPONIBLE,
+        bodegaId: x.bodegaId ?? null,
+      }),
+    );
+
+    const saved = await this.numerosMedidorRepository.save(entities);
+    if (saved.length > 0) {
       await this.sincronizarStockMaterialMedidor(materialId);
     }
-    return resultados;
+    return saved;
   }
 
   /** Filtra números de medidor por centro operativo (sede): bodega del centro, técnicos del centro, o disponibles sin bodega (asignables desde el centro) */

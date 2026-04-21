@@ -296,6 +296,16 @@ export class MovimientosService {
       let materialIdFinal = materialDto.materialId;
       const precioUnitario = materialDto.movimientoPrecioUnitario;
 
+      // Regla: si el material es medidor y vienen seriales, cada serial equivale a 1 unidad.
+      // Para evitar inconsistencias, forzamos la cantidad al tamaño del arreglo.
+      const numerosMedidorInput = Array.isArray(materialDto.numerosMedidor)
+        ? materialDto.numerosMedidor.filter((x) => String(x || '').trim())
+        : [];
+      const cantidadMovimiento =
+        material?.materialEsMedidor && numerosMedidorInput.length > 0
+          ? numerosMedidorInput.length
+          : materialDto.movimientoCantidad;
+
       const inventarioContexto = await obtenerContextoInventario(material);
       // Permitir movimientos sin inventarioId (se asignará después desde la lista)
       const inventarioDestino = inventarioContexto?.inventarioId || null;
@@ -363,7 +373,7 @@ export class MovimientosService {
       const movimientoData: any = {
         movimientoTipo: createMovimientoDto.movimientoTipo,
         materialId: materialIdFinal,
-        movimientoCantidad: materialDto.movimientoCantidad,
+        movimientoCantidad: cantidadMovimiento,
         movimientoPrecioUnitario: precioUnitario,
         movimientoObservaciones: createMovimientoDto.movimientoObservaciones,
         instalacionId: createMovimientoDto.instalacionId || null,
@@ -373,8 +383,7 @@ export class MovimientosService {
         numeroOrden: createMovimientoDto.numeroOrden || null,
         identificadorUnico: identificadorUnicoMovimiento, // Identificador único autogenerado por movimiento
         numerosMedidor:
-          materialDto.numerosMedidor && materialDto.numerosMedidor.length > 0
-            ? materialDto.numerosMedidor
+          numerosMedidorInput.length > 0 ? numerosMedidorInput
             : null, // Guardar números de medidor en el movimiento
       };
 
@@ -439,12 +448,12 @@ export class MovimientosService {
             materialId: materialIdFinal,
             tipoCambio,
             usuarioId: createMovimientoDto.usuarioId,
-            descripcion: `${getTipoLabel(tipoMovimiento)}: ${materialDto.movimientoCantidad} unidades`,
-            cantidadNueva: materialDto.movimientoCantidad,
+            descripcion: `${getTipoLabel(tipoMovimiento)}: ${cantidadMovimiento} unidades`,
+            cantidadNueva: cantidadMovimiento,
             diferencia:
               tipoMovimiento === TipoMovimiento.ENTRADA
-                ? materialDto.movimientoCantidad
-                : -materialDto.movimientoCantidad,
+                ? cantidadMovimiento
+                : -cantidadMovimiento,
             bodegaId,
             movimientoId: movimientoGuardado.movimientoId,
             observaciones:
@@ -480,53 +489,53 @@ export class MovimientosService {
 
       // Manejar números de medidor si se proporcionan
       try {
-        const _material = await this.materialesService.findOne(materialIdFinal);
-
         // Si se proporcionan números de medidor, procesarlos (el servicio marcará automáticamente el material como medidor)
-        if (materialDto.numerosMedidor && materialDto.numerosMedidor.length > 0) {
+        if (numerosMedidorInput.length > 0) {
           const tipoMovimiento = createMovimientoDto.movimientoTipo;
           const esEntrada = tipoMovimiento === TipoMovimiento.ENTRADA;
           const esSalida = tipoMovimiento === TipoMovimiento.SALIDA;
           const esDevolucion = tipoMovimiento === TipoMovimiento.DEVOLUCION;
 
-          for (const numeroMedidor of materialDto.numerosMedidor) {
-            // Buscar si ya existe este número de medidor
-            const numeroMedidorEntity =
-              await this.numerosMedidorService.findByNumero(numeroMedidor);
+          const numeros = numerosMedidorInput;
+          const existingMap = await this.numerosMedidorService.findExistingByNumeros(numeros);
 
             if (esEntrada) {
               // ENTRADA: crear números nuevos o actualizar existentes (ej. traslado: números que se mueven a bodega destino)
-              if (!numeroMedidorEntity) {
-                // Crear nuevo número de medidor (entrada desde proveedor)
-                let bodegaIdEntrada: number | null = null;
-                if (createMovimientoDto.inventarioId) {
-                  const inv = await this.inventariosService.findOne(
-                    createMovimientoDto.inventarioId,
-                  );
-                  if (inv?.bodegaId) bodegaIdEntrada = inv.bodegaId;
-                }
-                await this.numerosMedidorService.create({
-                  materialId: materialIdFinal,
-                  numeroMedidor: numeroMedidor,
-                  estado: EstadoNumeroMedidor.DISPONIBLE,
-                  bodegaId: bodegaIdEntrada ?? undefined,
-                });
-              } else {
-                // Número ya existe: actualizar ubicación (ej. traslado completado - asignar a bodega destino)
-                let bodegaIdDestino: number | null = null;
-                if (createMovimientoDto.inventarioId) {
-                  const inv = await this.inventariosService.findOne(
-                    createMovimientoDto.inventarioId,
-                  );
+              // Resolver bodega destino una vez
+              let bodegaIdDestino: number | null = null;
+              if (createMovimientoDto.inventarioId) {
+                try {
+                  const inv = await this.inventariosService.findOne(createMovimientoDto.inventarioId);
                   if (inv?.bodegaId) bodegaIdDestino = inv.bodegaId;
+                } catch {
+                  // ignore
                 }
-                await this.numerosMedidorService.update(numeroMedidorEntity.numeroMedidorId, {
-                  estado: EstadoNumeroMedidor.DISPONIBLE,
-                  bodegaId: bodegaIdDestino ?? undefined,
-                  usuarioId: undefined,
-                  inventarioTecnicoId: undefined,
-                  instalacionId: undefined,
-                  instalacionMaterialId: undefined,
+              }
+
+              const nuevos: string[] = [];
+              const existentes: Array<{ id: number }> = [];
+              for (const n of numeros) {
+                const norm = String(n || '').trim().toLowerCase();
+                if (!norm) continue;
+                const found = existingMap.get(norm);
+                if (!found) nuevos.push(n);
+                else existentes.push({ id: found.numeroMedidorId });
+              }
+
+              if (nuevos.length > 0) {
+                // Crear nuevo número de medidor (entrada desde proveedor)
+                // Usar crearMultiples (bulk + 1 sync stock)
+                await this.numerosMedidorService.crearMultiples(
+                  materialIdFinal,
+                  nuevos.map((num) => ({ numeroMedidor: num, bodegaId: bodegaIdDestino ?? undefined })),
+                );
+              }
+
+              if (existentes.length > 0) {
+                await this.numerosMedidorService.bulkSetDisponible({
+                  numeroMedidorIds: existentes.map((e) => e.id),
+                  bodegaId: bodegaIdDestino,
+                  materialIdToSync: materialIdFinal,
                 });
               }
             } else if (esSalida || esDevolucion) {
@@ -552,7 +561,11 @@ export class MovimientosService {
                 }
               }
 
-              if (!numeroMedidorEntity) {
+              for (const numeroMedidor of numeros) {
+                const norm = String(numeroMedidor || '').trim().toLowerCase();
+                if (!norm) continue;
+                const numeroMedidorEntity = existingMap.get(norm);
+                if (!numeroMedidorEntity) {
                 // Si no existe, crearlo como disponible (ya no pertenece al técnico)
                 await this.numerosMedidorService.create({
                   materialId: materialIdFinal,
@@ -561,7 +574,7 @@ export class MovimientosService {
                   bodegaId: bodegaIdDestino ?? undefined,
                   usuarioId: null,
                 });
-              } else {
+                } else {
                 // Liberar del técnico y dejarlo disponible
                 await this.numerosMedidorService.update(numeroMedidorEntity.numeroMedidorId, {
                   estado: EstadoNumeroMedidor.DISPONIBLE,
@@ -571,9 +584,9 @@ export class MovimientosService {
                   usuarioId: null,
                   inventarioTecnicoId: null,
                 });
+                }
               }
             }
-          }
         }
       } catch (error) {
         console.error(`Error al manejar números de medidor en movimiento:`, error);
@@ -600,7 +613,7 @@ export class MovimientosService {
             await this.ajustarInventarioTecnicoMovimiento(
               materialIdFinal,
               TipoMovimiento.SALIDA, // Usar SALIDA para reducir inventario técnico
-              materialDto.movimientoCantidad,
+              cantidadMovimiento,
               createMovimientoDto.tecnicoOrigenId,
             );
             // Ajustar stock en sede/bodega destino
@@ -608,7 +621,7 @@ export class MovimientosService {
               await this.ajustarStockMovimiento(
                 materialIdFinal,
                 TipoMovimiento.ENTRADA,
-                materialDto.movimientoCantidad,
+                cantidadMovimiento,
                 bodegaDestino,
               );
             }
@@ -616,7 +629,7 @@ export class MovimientosService {
             await this.ajustarInventarioTecnicoMovimiento(
               materialIdFinal,
               tipoMovimiento,
-              materialDto.movimientoCantidad,
+              cantidadMovimiento,
               createMovimientoDto.tecnicoOrigenId,
             );
           }
@@ -631,14 +644,14 @@ export class MovimientosService {
             await this.ajustarStockMovimiento(
               materialIdFinal,
               TipoMovimiento.DEVOLUCION, // Forzar el enum correcto
-              materialDto.movimientoCantidad,
+              cantidadMovimiento,
               bodegaDestino,
             );
           } else {
             await this.ajustarStockMovimiento(
               materialIdFinal,
               createMovimientoDto.movimientoTipo,
-              materialDto.movimientoCantidad,
+              cantidadMovimiento,
               bodegaDestino,
             );
           }

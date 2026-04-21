@@ -112,6 +112,7 @@ export class InstalacionesController {
       {
         numeroActa: updateEstadoDto.numeroActa,
         observacionNovedad: updateEstadoDto.observacionNovedad,
+        fechaConstruida: updateEstadoDto.fechaConstruida,
       },
     );
   }

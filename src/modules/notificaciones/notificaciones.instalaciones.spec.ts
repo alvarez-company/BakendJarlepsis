@@ -3,11 +3,13 @@ import { getRepositoryToken } from '@nestjs/typeorm';
 import { NotificacionesService } from './notificaciones.service';
 import { Notificacion, TipoNotificacion } from './notificacion.entity';
 import { ChatGateway } from '../chat/chat.gateway';
+import { PushService } from '../push/push.service';
 
 describe('NotificacionesService - Notificaciones de Instalaciones', () => {
   let service: NotificacionesService;
   let mockRepository: any;
   let mockChatGateway: any;
+  let mockPushService: any;
 
   beforeEach(async () => {
     mockRepository = {
@@ -23,6 +25,12 @@ describe('NotificacionesService - Notificaciones de Instalaciones', () => {
     mockChatGateway = {
       emitirNotificacion: jest.fn(),
       emitirEventoInstalacion: jest.fn(),
+      isUserConnected: jest.fn().mockReturnValue(true),
+      isUserInGrupo: jest.fn().mockReturnValue(false),
+    };
+
+    mockPushService = {
+      sendToUser: jest.fn(),
     };
 
     const module: TestingModule = await Test.createTestingModule({
@@ -35,6 +43,10 @@ describe('NotificacionesService - Notificaciones de Instalaciones', () => {
         {
           provide: ChatGateway,
           useValue: mockChatGateway,
+        },
+        {
+          provide: PushService,
+          useValue: mockPushService,
         },
       ],
     }).compile();

@@ -1,6 +1,6 @@
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 import { Transform } from 'class-transformer';
-import { IsEnum, IsNotEmpty, IsOptional, IsString } from 'class-validator';
+import { IsDateString, IsEnum, IsNotEmpty, IsOptional, IsString } from 'class-validator';
 import { EstadoInstalacion } from '../instalacion.entity';
 
 export class UpdateEstadoInstalacionDto {
@@ -31,4 +31,13 @@ export class UpdateEstadoInstalacionDto {
   @IsOptional()
   @IsString()
   observacionNovedad?: string;
+
+  @ApiPropertyOptional({
+    description:
+      'Fecha/hora manual de construcción terminada (solo aplica cuando estado es cons). ISO string.',
+    example: '2026-04-20T15:30:00.000Z',
+  })
+  @IsOptional()
+  @IsDateString()
+  fechaConstruida?: string;
 }

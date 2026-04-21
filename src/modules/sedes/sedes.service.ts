@@ -17,6 +17,8 @@ import { GruposService } from '../grupos/grupos.service';
 import { TipoGrupo } from '../grupos/grupo.entity';
 import { UsersService } from '../users/users.service';
 import { RolesService } from '../roles/roles.service';
+import { BodegasService } from '../bodegas/bodegas.service';
+import { InventariosService } from '../inventarios/inventarios.service';
 
 @Injectable()
 export class SedesService {
@@ -30,6 +32,10 @@ export class SedesService {
     @Inject(forwardRef(() => UsersService))
     private usersService: UsersService,
     private rolesService: RolesService,
+    @Inject(forwardRef(() => BodegasService))
+    private bodegasService: BodegasService,
+    @Inject(forwardRef(() => InventariosService))
+    private inventariosService: InventariosService,
   ) {}
 
   private async assertDepartamentoZonaOperacion(departamentoId: number): Promise<void> {
@@ -45,6 +51,23 @@ export class SedesService {
     await this.assertDepartamentoZonaOperacion(createSedeDto.departamentoId);
     const sede = this.sedesRepository.create(createSedeDto);
     const savedSede = await this.sedesRepository.save(sede);
+
+    // Asegurar bodega/inventario "centro" (oculta en UI, usada para stock por centro operativo).
+    try {
+      const bodegaCentro = await this.bodegasService.findOrCreateBodegaCentroOperativo(
+        savedSede.sedeId,
+      );
+      await this.inventariosService.findOrCreateByBodega(bodegaCentro.bodegaId, {
+        inventarioNombre: `Inventario - Centro Operativo ${savedSede.sedeNombre}`,
+        inventarioDescripcion: 'Inventario del centro operativo (bodega tipo centro)',
+      });
+    } catch (error) {
+      console.error(
+        `[SedesService] ❌ Error al asegurar bodega/inventario centro para sede ${savedSede.sedeNombre}:`,
+        error,
+      );
+      // No lanzar error para no interrumpir la creación de la sede
+    }
 
     // Crear grupo de chat automáticamente
     try {

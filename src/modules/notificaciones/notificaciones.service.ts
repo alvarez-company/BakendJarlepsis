@@ -3,6 +3,7 @@ import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { Notificacion, TipoNotificacion } from './notificacion.entity';
 import { ChatGateway } from '../chat/chat.gateway';
+import { PushService } from '../push/push.service';
 
 @Injectable()
 export class NotificacionesService {
@@ -17,6 +18,7 @@ export class NotificacionesService {
     private notificacionesRepository: Repository<Notificacion>,
     @Inject(forwardRef(() => ChatGateway))
     private chatGateway: ChatGateway,
+    private readonly pushService: PushService,
   ) {}
 
   private getListCacheKey(usuarioId: number, limit: number, noLeidas?: boolean): string {
@@ -74,6 +76,26 @@ export class NotificacionesService {
           );
           // No lanzar error, la notificación ya se guardó en la BD
         }
+      }
+
+      // Push (solo si el usuario NO está conectado al socket)
+      try {
+        const shouldPush = !this.chatGateway.isUserConnected(usuarioId);
+        if (shouldPush) {
+          await this.pushService.sendToUser(usuarioId, {
+            title: titulo,
+            body: contenido,
+            data: {
+              notificacionId: String(saved.notificacionId),
+              tipoNotificacion: String(saved.tipoNotificacion),
+              grupoId: saved.grupoId != null ? String(saved.grupoId) : '',
+              instalacionId: saved.instalacionId != null ? String(saved.instalacionId) : '',
+              mensajeId: saved.mensajeId != null ? String(saved.mensajeId) : '',
+            },
+          });
+        }
+      } catch (pushError) {
+        console.error('[NotificacionesService] Error al enviar push:', pushError);
       }
 
       return saved;
@@ -283,6 +305,27 @@ export class NotificacionesService {
         true, // emitirSocket
       );
       notificaciones.push(notificacion);
+
+      // Push: si está conectado y está dentro del chat, no spamear.
+      // Si NO está conectado o no está en el grupo, enviar push.
+      try {
+        const connected = this.chatGateway.isUserConnected(usuarioId);
+        const inGrupo = connected ? this.chatGateway.isUserInGrupo(usuarioId, grupoId) : false;
+        if (!connected || !inGrupo) {
+          await this.pushService.sendToUser(usuarioId, {
+            title: `Nuevo mensaje en ${grupoNombre}`,
+            body: `${remitenteNombre} envió un nuevo mensaje`,
+            data: {
+              notificacionId: String(notificacion.notificacionId),
+              tipoNotificacion: String(notificacion.tipoNotificacion),
+              grupoId: String(grupoId),
+              mensajeId: String(mensajeId),
+            },
+          });
+        }
+      } catch (pushError) {
+        console.error('[NotificacionesService] Error al enviar push de mensaje:', pushError);
+      }
     }
 
     this.invalidateManyUsersCache(usuariosIds);

@@ -10,7 +10,7 @@ export class CreateInstalacionUsuarioDto {
   @IsNumber()
   usuarioId: number;
 
-  @ApiProperty({ example: 'tecnico', enum: ['tecnico', 'empleado', 'supervisor'] })
+  @ApiProperty({ example: 'tecnico', enum: ['tecnico', 'soldador', 'empleado', 'supervisor'] })
   @IsString()
   rolEnInstalacion: string;
 

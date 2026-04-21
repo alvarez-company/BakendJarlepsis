@@ -53,9 +53,9 @@ export class InstalacionesUsuariosService {
     instalacionId: number,
     usuarios: { usuarioId: number; rolEnInstalacion: string }[],
   ): Promise<InstalacionUsuario[]> {
-    // Validar que solo se asigne un técnico
+    // Validar que solo se asigne un técnico o soldador
     if (usuarios.length > 1) {
-      throw new BadRequestException('Solo se puede asignar un técnico por instalación');
+      throw new BadRequestException('Solo se puede asignar un técnico o soldador por instalación');
     }
 
     // Validar que todos los usuarios sean técnicos

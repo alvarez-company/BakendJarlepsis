@@ -49,6 +49,7 @@ import { NumerosMedidorModule } from './modules/numeros-medidor/numeros-medidor.
 import { SearchModule } from './modules/search/search.module';
 import { AuditoriaInventarioModule } from './modules/auditoria-inventario/auditoria-inventario.module';
 import { UploadModule } from './modules/upload/upload.module';
+import { PushTokensModule } from './modules/push-tokens/push-tokens.module';
 
 @Module({
   imports: [
@@ -153,6 +154,7 @@ import { UploadModule } from './modules/upload/upload.module';
     SearchModule,
     AuditoriaInventarioModule,
     UploadModule,
+    PushTokensModule,
   ],
 })
 export class AppModule {}
