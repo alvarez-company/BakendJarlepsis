@@ -52,8 +52,8 @@ export class Instalacion {
   @Column({ nullable: true })
   instalacionCodigo: string | null; // Código de instalación (opcional; en redes no siempre hay código)
 
-  @Column()
-  tipoInstalacionId: number;
+  @Column({ nullable: true })
+  tipoInstalacionId: number | null;
 
   /** Tipo de instalación: 'internas' | 'redes'. Define si la instalación es de internas o de redes. */
   @Column({ type: 'varchar', length: 20, nullable: true })
@@ -74,8 +74,8 @@ export class Instalacion {
   @Column({ type: 'date', nullable: true })
   instalacionFecha: Date; // Opcional
 
-  @Column({ type: 'date', nullable: false })
-  fechaAsignacionMetrogas: Date; // Obligatorio
+  @Column({ type: 'date', nullable: true })
+  fechaAsignacionMetrogas: Date | null; // Opcional
 
   // Fechas de estados legacy
   @Column({ type: 'datetime', nullable: true })

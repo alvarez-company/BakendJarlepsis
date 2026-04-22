@@ -77,6 +77,13 @@ import { PushTokensModule } from './modules/push-tokens/push-tokens.module';
 
         // Database configuration
 
+        const nodeEnv = (configService.get<string>('NODE_ENV') || '').toLowerCase();
+        const migrationsRunEnv = configService.get<string>('DB_MIGRATIONS_RUN', '');
+        const migrationsRun =
+          migrationsRunEnv !== ''
+            ? migrationsRunEnv === 'true'
+            : nodeEnv !== 'production';
+
         const config = {
           type: 'mysql' as const,
           host,
@@ -86,6 +93,8 @@ import { PushTokensModule } from './modules/push-tokens/push-tokens.module';
           database,
           autoLoadEntities: true,
           synchronize: false,
+          migrations: [__dirname + '/migrations/*{.ts,.js}'],
+          migrationsRun,
           logging: false,
           retryAttempts: 3,
           retryDelay: 2000,

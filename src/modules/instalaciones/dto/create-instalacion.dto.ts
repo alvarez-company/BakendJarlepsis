@@ -4,6 +4,7 @@ import { IsString, IsNumber, IsOptional, IsDateString, IsArray, IsIn } from 'cla
 export class CreateInstalacionDto {
   @ApiProperty({ example: 1 })
   @IsNumber()
+  @IsOptional()
   tipoInstalacionId: number;
 
   @ApiProperty({
@@ -48,9 +49,10 @@ export class CreateInstalacionDto {
   @IsOptional()
   instalacionFecha?: string;
 
-  @ApiProperty({ description: 'Fecha de asignación Metrogas (obligatorio)' })
+  @ApiProperty({ required: false, description: 'Fecha de asignación Metrogas (opcional)' })
   @IsDateString()
-  fechaAsignacionMetrogas: string;
+  @IsOptional()
+  fechaAsignacionMetrogas?: string;
 
   @ApiProperty({ required: false, description: 'JSON con materiales instalados' })
   @IsOptional()
