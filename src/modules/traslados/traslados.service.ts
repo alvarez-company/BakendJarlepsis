@@ -18,6 +18,7 @@ import { TipoMovimiento } from '../movimientos/movimiento-inventario.entity';
 import { AuditoriaService } from '../auditoria/auditoria.service';
 import { TipoEntidad } from '../auditoria/auditoria.entity';
 import { NumerosMedidorService } from '../numeros-medidor/numeros-medidor.service';
+import { Bodega } from '../bodegas/bodega.entity';
 
 @Injectable()
 export class TrasladosService {
@@ -59,10 +60,45 @@ export class TrasladosService {
     return `TRA-${siguienteNumero}`;
   }
 
+  /** Carga bodegas y valida mismo centro operativo (sede). */
+  private async validarBodegasTrasladoMismaSede(
+    bodegaOrigenId: number,
+    bodegaDestinoId: number,
+  ): Promise<{ bodegaOrigen: Bodega; bodegaDestino: Bodega }> {
+    const bodegaOrigen = await this.bodegasService.findOne(bodegaOrigenId);
+    const bodegaDestino = await this.bodegasService.findOne(bodegaDestinoId);
+    const sedeOrigen = bodegaOrigen?.sedeId != null ? Number(bodegaOrigen.sedeId) : NaN;
+    const sedeDestino = bodegaDestino?.sedeId != null ? Number(bodegaDestino.sedeId) : NaN;
+    if (!Number.isFinite(sedeOrigen) || !Number.isFinite(sedeDestino) || sedeOrigen <= 0 || sedeDestino <= 0) {
+      throw new BadRequestException(
+        'Las bodegas de origen y destino deben tener centro operativo (sede) definido para poder trasladar.',
+      );
+    }
+    if (sedeOrigen !== sedeDestino) {
+      throw new BadRequestException(
+        'No se permite trasladar materiales entre centros operativos diferentes.',
+      );
+    }
+    return { bodegaOrigen, bodegaDestino };
+  }
+
   async create(createTrasladoDto: CreateTrasladoDto): Promise<Traslado[]> {
     // Validar que origen y destino sean diferentes
     if (createTrasladoDto.bodegaOrigenId === createTrasladoDto.bodegaDestinoId) {
       throw new BadRequestException('La bodega origen y destino no pueden ser la misma');
+    }
+
+    const { bodegaOrigen, bodegaDestino } = await this.validarBodegasTrasladoMismaSede(
+      createTrasladoDto.bodegaOrigenId,
+      createTrasladoDto.bodegaDestinoId,
+    );
+
+    const tipoOrigen = String(bodegaOrigen?.bodegaTipo || '').toLowerCase();
+    const tipoDestino = String(bodegaDestino?.bodegaTipo || '').toLowerCase();
+    if (tipoOrigen === 'instalaciones' || tipoDestino === 'instalaciones') {
+      throw new BadRequestException(
+        'La bodega de instalaciones no admite traslados ni movimientos de inventario; solo se usa para novedades de instalación.',
+      );
     }
 
     // Generar código único para agrupar los traslados
@@ -451,6 +487,8 @@ export class TrasladosService {
       throw new BadRequestException('Solo se pueden completar traslados pendientes o en tránsito');
     }
 
+    await this.validarBodegasTrasladoMismaSede(traslado.bodegaOrigenId, traslado.bodegaDestinoId);
+
     // Si tiene código, completar todos los traslados del mismo grupo
     if (traslado.trasladoCodigo) {
       const trasladosGrupo = await this.trasladosRepository.find({
@@ -578,6 +616,12 @@ export class TrasladosService {
     }
     
     Object.assign(traslado, updateTrasladoDto);
+
+    if (traslado.bodegaOrigenId === traslado.bodegaDestinoId) {
+      throw new BadRequestException('La bodega origen y destino no pueden ser la misma');
+    }
+    await this.validarBodegasTrasladoMismaSede(traslado.bodegaOrigenId, traslado.bodegaDestinoId);
+
     return this.trasladosRepository.save(traslado);
   }
 

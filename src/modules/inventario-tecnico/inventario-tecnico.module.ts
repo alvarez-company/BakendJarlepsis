@@ -10,6 +10,7 @@ import { MaterialesModule } from '../materiales/materiales.module';
 import { NotificacionesModule } from '../notificaciones/notificaciones.module';
 import { UsersModule } from '../users/users.module';
 import { NumerosMedidorModule } from '../numeros-medidor/numeros-medidor.module';
+import { TransferenciasTecnicosModule } from '../transferencias-tecnicos/transferencias-tecnicos.module';
 
 @Module({
   imports: [
@@ -21,6 +22,7 @@ import { NumerosMedidorModule } from '../numeros-medidor/numeros-medidor.module'
     forwardRef(() => NotificacionesModule),
     forwardRef(() => UsersModule),
     forwardRef(() => NumerosMedidorModule),
+    forwardRef(() => TransferenciasTecnicosModule),
   ],
   controllers: [InventarioTecnicoController],
   providers: [InventarioTecnicoService],

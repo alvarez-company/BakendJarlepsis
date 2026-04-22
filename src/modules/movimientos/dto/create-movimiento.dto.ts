@@ -10,7 +10,7 @@ import {
   IsIn,
 } from 'class-validator';
 import { Type } from 'class-transformer';
-import { TipoMovimiento } from '../movimiento-inventario.entity';
+import { EstadoMovimiento, TipoMovimiento } from '../movimiento-inventario.entity';
 
 export class MaterialMovimientoDto {
   @ApiProperty({ example: 1 })
@@ -119,4 +119,14 @@ export class CreateMovimientoDto {
   @IsString()
   @IsIn(['bodega', 'tecnico'])
   origenTipo?: 'bodega' | 'tecnico';
+
+  @ApiProperty({
+    required: false,
+    enum: EstadoMovimiento,
+    description:
+      'Si se envía, fija el estado inicial del movimiento. Útil para trazabilidad sin re-aplicar stock (p. ej. pendiente cuando el stock ya se ajustó en otro servicio).',
+  })
+  @IsEnum(EstadoMovimiento)
+  @IsOptional()
+  movimientoEstado?: EstadoMovimiento;
 }

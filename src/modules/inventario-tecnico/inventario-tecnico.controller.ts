@@ -15,6 +15,8 @@ import {
   CreateInventarioTecnicoDto,
   UpdateInventarioTecnicoDto,
   AssignMaterialesToTecnicoDto,
+  ReturnMaterialesToBodegaDto,
+  TransferMaterialesEntreTecnicosDto,
 } from './dto/create-inventario-tecnico.dto';
 import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard';
 import { RolesGuard } from '../../common/guards/roles.guard';
@@ -23,13 +25,17 @@ import {
   ROLES_INVENTARIO_TECNICO_EDITAR,
   ROLES_VER_INVENTARIO_TECNICO,
 } from '../../common/constants/roles.constants';
+import { TransferenciasTecnicosService } from '../transferencias-tecnicos/transferencias-tecnicos.service';
 
 @ApiTags('inventario-tecnico')
 @ApiBearerAuth()
 @Controller('inventario-tecnico')
 @UseGuards(JwtAuthGuard, RolesGuard)
 export class InventarioTecnicoController {
-  constructor(private readonly service: InventarioTecnicoService) {}
+  constructor(
+    private readonly service: InventarioTecnicoService,
+    private readonly transferenciasTecnicosService: TransferenciasTecnicosService,
+  ) {}
 
   @Post()
   @Roles(...ROLES_INVENTARIO_TECNICO_EDITAR)
@@ -47,6 +53,36 @@ export class InventarioTecnicoController {
     @Request() req: { user?: any },
   ) {
     return this.service.asignarMateriales(+usuarioId, dto, req?.user);
+  }
+
+  @Post('usuario/:usuarioId/retornar-bodega')
+  @Roles(...ROLES_INVENTARIO_TECNICO_EDITAR)
+  @ApiOperation({ summary: 'Retornar múltiples materiales de un técnico hacia una bodega (mismo centro operativo)' })
+  retornarABodega(
+    @Param('usuarioId') usuarioId: string,
+    @Body() dto: ReturnMaterialesToBodegaDto,
+    @Request() req: { user?: any },
+  ) {
+    return this.service.retornarMaterialesABodega(+usuarioId, dto, req?.user);
+  }
+
+  @Post('usuario/:usuarioId/transferir-tecnico')
+  @Roles(...ROLES_INVENTARIO_TECNICO_EDITAR)
+  @ApiOperation({ summary: 'Transferir múltiples materiales entre técnicos (mismo centro operativo)' })
+  transferirATecnico(
+    @Param('usuarioId') usuarioId: string,
+    @Body() dto: TransferMaterialesEntreTecnicosDto,
+    @Request() req: { user?: any },
+  ) {
+    return this.service.transferirMaterialesEntreTecnicos(+usuarioId, dto, req?.user);
+  }
+
+  @Delete('transferencias-tecnicos/:codigo')
+  @Roles(...ROLES_INVENTARIO_TECNICO_EDITAR)
+  @ApiOperation({ summary: 'Eliminar (revertir) una transferencia técnico↔técnico por código' })
+  eliminarTransferenciaTecnico(@Param('codigo') codigo: string, @Request() req: { user?: any }) {
+    const usuarioId = req?.user?.usuarioId || 0;
+    return this.transferenciasTecnicosService.removeByCodigo(codigo, usuarioId, req?.user);
   }
 
   @Get()

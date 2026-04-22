@@ -41,6 +41,7 @@ import { InventarioTecnicoModule } from './modules/inventario-tecnico/inventario
 import { AsignacionesTecnicosModule } from './modules/asignaciones-tecnicos/asignaciones-tecnicos.module';
 import { InstalacionesMaterialesModule } from './modules/instalaciones-materiales/instalaciones-materiales.module';
 import { EstadosInstalacionModule } from './modules/estados-instalacion/estados-instalacion.module';
+import { TransferenciasTecnicosModule } from './modules/transferencias-tecnicos/transferencias-tecnicos.module';
 import { EstadosClienteModule } from './modules/estados-cliente/estados-cliente.module';
 import { EstadosMovimientoModule } from './modules/estados-movimiento/estados-movimiento.module';
 import { EstadosTrasladoModule } from './modules/estados-traslado/estados-traslado.module';
@@ -155,6 +156,7 @@ import { PushTokensModule } from './modules/push-tokens/push-tokens.module';
     AsignacionesTecnicosModule,
     InstalacionesMaterialesModule,
     EstadosInstalacionModule,
+    TransferenciasTecnicosModule,
     EstadosClienteModule,
     EstadosMovimientoModule,
     EstadosTrasladoModule,

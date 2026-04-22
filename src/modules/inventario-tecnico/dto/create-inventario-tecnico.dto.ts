@@ -78,3 +78,57 @@ export class AssignMaterialesToTecnicoDto {
   @IsOptional()
   observaciones?: string;
 }
+
+export class ReturnMaterialesToBodegaDto {
+  @ApiProperty({ description: 'Array de materiales con cantidades', type: [MaterialAsignacionDto] })
+  @IsArray()
+  @ValidateNested({ each: true })
+  @Type(() => MaterialAsignacionDto)
+  materiales: MaterialAsignacionDto[];
+
+  @ApiProperty({ description: 'ID de la bodega destino' })
+  @IsNumber()
+  bodegaDestinoId: number;
+
+  @ApiProperty({ required: false, description: 'ID del usuario que realiza la operación' })
+  @IsNumber()
+  @IsOptional()
+  usuarioAsignadorId?: number;
+
+  @ApiProperty({ required: false, description: 'Número de orden (manual) asociado al traslado' })
+  @IsString()
+  @IsOptional()
+  numeroOrden?: string;
+
+  @ApiProperty({ required: false, description: 'Observaciones para los movimientos' })
+  @IsString()
+  @IsOptional()
+  observaciones?: string;
+}
+
+export class TransferMaterialesEntreTecnicosDto {
+  @ApiProperty({ description: 'ID del técnico destino' })
+  @IsNumber()
+  usuarioDestinoId: number;
+
+  @ApiProperty({ description: 'Array de materiales con cantidades', type: [MaterialAsignacionDto] })
+  @IsArray()
+  @ValidateNested({ each: true })
+  @Type(() => MaterialAsignacionDto)
+  materiales: MaterialAsignacionDto[];
+
+  @ApiProperty({ required: false, description: 'ID del usuario que realiza la operación' })
+  @IsNumber()
+  @IsOptional()
+  usuarioAsignadorId?: number;
+
+  @ApiProperty({ required: false, description: 'Número de orden (manual) asociado al traslado' })
+  @IsString()
+  @IsOptional()
+  numeroOrden?: string;
+
+  @ApiProperty({ required: false, description: 'Observaciones para los movimientos' })
+  @IsString()
+  @IsOptional()
+  observaciones?: string;
+}

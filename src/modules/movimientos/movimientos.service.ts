@@ -27,6 +27,9 @@ import { NumerosMedidorService } from '../numeros-medidor/numeros-medidor.servic
 import { EstadoNumeroMedidor } from '../numeros-medidor/numero-medidor.entity';
 import { PaginationDto } from '../../common/dto/pagination.dto';
 
+const MSG_BODEGA_INSTALACIONES_NO_MOVIMIENTOS =
+  'La bodega de instalaciones no admite movimientos de inventario (entradas, salidas, devoluciones ni traslados). Solo se usa para novedades de instalación.';
+
 // Función auxiliar para obtener etiqueta del tipo de movimiento
 function getTipoLabel(tipo: TipoMovimiento): string {
   if (tipo === TipoMovimiento.ENTRADA) return 'Entrada';
@@ -58,6 +61,25 @@ export class MovimientosService {
     @Inject(forwardRef(() => NumerosMedidorService))
     private numerosMedidorService: NumerosMedidorService,
   ) {}
+
+  /**
+   * La bodega tipo `instalaciones` es contenedor lógico para novedades; no debe alterarse vía movimientos.
+   */
+  private async assertBodegaNoEsSoloNovedades(
+    inventarioId: number | null | undefined,
+    bodegaIdHint: number | null | undefined,
+  ): Promise<void> {
+    let bodegaId = bodegaIdHint ?? null;
+    if (inventarioId) {
+      const inv = await this.inventariosService.findOne(inventarioId);
+      bodegaId = inv.bodegaId ?? inv.bodega?.bodegaId ?? bodegaId;
+    }
+    if (!bodegaId) return;
+    const bodega = await this.bodegasService.findOne(Number(bodegaId));
+    if (String(bodega?.bodegaTipo || '').toLowerCase() === 'instalaciones') {
+      throw new BadRequestException(MSG_BODEGA_INSTALACIONES_NO_MOVIMIENTOS);
+    }
+  }
 
   private async generarIdentificadorUnico(tipoMovimiento: TipoMovimiento): Promise<string> {
     // Determinar el prefijo según el tipo de movimiento
@@ -311,6 +333,8 @@ export class MovimientosService {
       const inventarioDestino = inventarioContexto?.inventarioId || null;
       const bodegaDestino = inventarioContexto?.bodegaId || null;
 
+      await this.assertBodegaNoEsSoloNovedades(inventarioDestino, bodegaDestino);
+
       // Si es una ENTRADA con proveedor diferente, crear o encontrar variante
       if (
         createMovimientoDto.movimientoTipo === TipoMovimiento.ENTRADA &&
@@ -385,6 +409,9 @@ export class MovimientosService {
         numerosMedidor:
           numerosMedidorInput.length > 0 ? numerosMedidorInput
             : null, // Guardar números de medidor en el movimiento
+        ...(createMovimientoDto.movimientoEstado != null
+          ? { movimientoEstado: createMovimientoDto.movimientoEstado }
+          : {}),
       };
 
       // Agregar información del origen (bodega o técnico) para salidas y devoluciones

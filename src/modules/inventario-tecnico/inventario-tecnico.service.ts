@@ -22,6 +22,7 @@ import { MaterialesService } from '../materiales/materiales.service';
 import { NotificacionesService } from '../notificaciones/notificaciones.service';
 import { UsersService } from '../users/users.service';
 import { NumerosMedidorService } from '../numeros-medidor/numeros-medidor.service';
+import { TransferenciasTecnicosService } from '../transferencias-tecnicos/transferencias-tecnicos.service';
 
 @Injectable()
 export class InventarioTecnicoService {
@@ -42,6 +43,8 @@ export class InventarioTecnicoService {
     private usersService: UsersService,
     @Inject(forwardRef(() => NumerosMedidorService))
     private numerosMedidorService: NumerosMedidorService,
+    @Inject(forwardRef(() => TransferenciasTecnicosService))
+    private transferenciasTecnicosService: TransferenciasTecnicosService,
   ) {}
 
   async create(createDto: CreateInventarioTecnicoDto): Promise<InventarioTecnico> {
@@ -84,6 +87,11 @@ export class InventarioTecnicoService {
         // - Usuario registrado a sede (sin bodega): solo puede asignar desde el inventario "centro" de SU sede.
         // - Además, solo puede asignar a técnicos de SU sede (si aplica).
         const inventario = await this.inventariosService.findOne(dto.inventarioId, requestingUser);
+        if (String(inventario?.bodega?.bodegaTipo || '').toLowerCase() === 'instalaciones') {
+          throw new BadRequestException(
+            'No se pueden asignar materiales desde la bodega de instalaciones; solo se usa para novedades de instalación.',
+          );
+        }
         if (requestingUser) {
           const rolTipo = String(requestingUser?.usuarioRol?.rolTipo || requestingUser?.role || '').toLowerCase();
           const isSuperadminOGerencia = rolTipo === 'superadmin' || rolTipo === 'gerencia';
@@ -418,6 +426,272 @@ export class InventarioTecnicoService {
     }
 
     return resultados;
+  }
+
+  async retornarMaterialesABodega(
+    usuarioId: number,
+    dto: import('./dto/create-inventario-tecnico.dto').ReturnMaterialesToBodegaDto,
+    requestingUser?: any,
+  ) {
+    if (!dto?.bodegaDestinoId) {
+      throw new BadRequestException('bodegaDestinoId es requerido');
+    }
+    if (!dto?.materiales || dto.materiales.length === 0) {
+      throw new BadRequestException('Debe enviar al menos un material');
+    }
+
+    // Validar sede (no permitir entre centros operativos)
+    const tecnico = await this.usersService.findOne(usuarioId, requestingUser).catch(() => null);
+    if (!tecnico) throw new NotFoundException('Técnico no encontrado');
+
+    const inventarioDestino = await this.inventariosService.findOrCreateByBodega(
+      Number(dto.bodegaDestinoId),
+    );
+    if (String(inventarioDestino?.bodega?.bodegaTipo || '').toLowerCase() === 'instalaciones') {
+      throw new BadRequestException(
+        'No se puede retornar material a la bodega de instalaciones; solo se usa para novedades de instalación.',
+      );
+    }
+
+    const sedeTecnico = tecnico?.usuarioSede != null ? Number(tecnico.usuarioSede) : null;
+    const sedeBodegaDestino =
+      inventarioDestino?.bodega?.sedeId != null ? Number(inventarioDestino.bodega.sedeId) : null;
+    if (sedeTecnico != null && sedeBodegaDestino != null && sedeTecnico !== sedeBodegaDestino) {
+      throw new BadRequestException(
+        'No se permite retornar materiales entre centros operativos diferentes.',
+      );
+    }
+
+    const usuarioAsignador = dto.usuarioAsignadorId || requestingUser?.usuarioId || usuarioId;
+    const codigo = `TRASLADO-TECNICO-BODEGA-${usuarioId}-${Date.now()}`;
+
+    // 1) Salida desde técnico (descuenta inventario técnico)
+    for (const m of dto.materiales) {
+      await this.movimientosService.create(
+        {
+          movimientoTipo: TipoMovimiento.SALIDA,
+          materiales: [
+            {
+              materialId: m.materialId,
+              movimientoCantidad: m.cantidad,
+              numerosMedidor: m.numerosMedidor,
+            } as any,
+          ],
+          usuarioId: usuarioAsignador,
+          movimientoCodigo: codigo,
+          movimientoObservaciones: dto.observaciones || 'Retorno de materiales de técnico a bodega',
+          numeroOrden: dto.numeroOrden,
+          origenTipo: 'tecnico',
+          tecnicoOrigenId: usuarioId,
+          inventarioId: null,
+        } as any,
+        requestingUser,
+      );
+    }
+
+    // 2) Entrada hacia bodega destino (aumenta stock)
+    for (const m of dto.materiales) {
+      await this.movimientosService.create(
+        {
+          movimientoTipo: TipoMovimiento.ENTRADA,
+          materiales: [
+            {
+              materialId: m.materialId,
+              movimientoCantidad: m.cantidad,
+              numerosMedidor: m.numerosMedidor,
+            } as any,
+          ],
+          usuarioId: usuarioAsignador,
+          inventarioId: inventarioDestino.inventarioId,
+          movimientoCodigo: codigo,
+          movimientoObservaciones: dto.observaciones || 'Retorno de materiales de técnico a bodega',
+          numeroOrden: dto.numeroOrden,
+        } as any,
+        requestingUser,
+      );
+    }
+
+    return this.findByUsuario(usuarioId, requestingUser);
+  }
+
+  async transferirMaterialesEntreTecnicos(
+    usuarioOrigenId: number,
+    dto: import('./dto/create-inventario-tecnico.dto').TransferMaterialesEntreTecnicosDto,
+    requestingUser?: any,
+  ) {
+    if (!dto?.usuarioDestinoId) {
+      throw new BadRequestException('usuarioDestinoId es requerido');
+    }
+    if (Number(dto.usuarioDestinoId) === Number(usuarioOrigenId)) {
+      throw new BadRequestException('El técnico origen y destino no pueden ser el mismo');
+    }
+    if (!dto?.materiales || dto.materiales.length === 0) {
+      throw new BadRequestException('Debe enviar al menos un material');
+    }
+
+    const [tecnicoOrigen, tecnicoDestino] = await Promise.all([
+      this.usersService.findOne(usuarioOrigenId, requestingUser).catch(() => null),
+      this.usersService.findOne(Number(dto.usuarioDestinoId), requestingUser).catch(() => null),
+    ]);
+    if (!tecnicoOrigen) throw new NotFoundException('Técnico origen no encontrado');
+    if (!tecnicoDestino) throw new NotFoundException('Técnico destino no encontrado');
+
+    const sedeOrigen =
+      tecnicoOrigen?.usuarioSede != null ? Number(tecnicoOrigen.usuarioSede) : Number.NaN;
+    const sedeDestino =
+      tecnicoDestino?.usuarioSede != null ? Number(tecnicoDestino.usuarioSede) : Number.NaN;
+    if (!Number.isFinite(sedeOrigen) || !Number.isFinite(sedeDestino) || sedeOrigen <= 0 || sedeDestino <= 0) {
+      throw new BadRequestException(
+        'Ambos técnicos deben tener centro operativo (sede) definido para transferir inventario entre técnicos.',
+      );
+    }
+    if (sedeOrigen !== sedeDestino) {
+      throw new BadRequestException(
+        'No se permite trasladar materiales entre técnicos de centros operativos diferentes.',
+      );
+    }
+
+    // 1) Validar disponibilidad en inventario del técnico origen
+    const inventarioOrigen = await this.inventarioTecnicoRepository.find({
+      where: { usuarioId: usuarioOrigenId },
+      relations: ['material', 'material.categoria'],
+    });
+    const byMaterialOrigen = new Map<number, InventarioTecnico>();
+    for (const it of inventarioOrigen) {
+      if (!byMaterialOrigen.has(it.materialId)) byMaterialOrigen.set(it.materialId, it);
+      else {
+        // Consolidar cantidad (por si hay duplicados legacy)
+        const acc = byMaterialOrigen.get(it.materialId)!;
+        acc.cantidad = Number(acc.cantidad || 0) + Number(it.cantidad || 0);
+      }
+    }
+
+    const usuarioAsignador = dto.usuarioAsignadorId || requestingUser?.usuarioId || usuarioOrigenId;
+    const codigo = `TRASLADO-TECNICO-TECNICO-${usuarioOrigenId}-${dto.usuarioDestinoId}-${Date.now()}`;
+
+    for (const m of dto.materiales) {
+      const materialId = Number(m.materialId);
+      const cantidad = Number(m.cantidad || 0);
+      if (!materialId || cantidad <= 0) continue;
+
+      const itemOrigen = byMaterialOrigen.get(materialId);
+      const disponible = Number(itemOrigen?.cantidad || 0);
+      if (disponible < cantidad) {
+        throw new BadRequestException(
+          `Stock insuficiente en técnico origen para material ${materialId}. Disponible: ${disponible}, solicitado: ${cantidad}`,
+        );
+      }
+
+      // 2) Si es medidor y vienen números, reasignarlos al técnico destino
+      if (m.numerosMedidor && Array.isArray(m.numerosMedidor) && m.numerosMedidor.length > 0) {
+        const numeros = m.numerosMedidor;
+        // Validar que existan y pertenezcan al técnico origen
+        for (const num of numeros) {
+          const nm = await this.numerosMedidorService.findByNumero(String(num));
+          if (!nm) throw new NotFoundException(`Número de medidor "${num}" no encontrado`);
+          if (nm.usuarioId != null && Number(nm.usuarioId) !== usuarioOrigenId) {
+            throw new BadRequestException(
+              `El número de medidor "${num}" no pertenece al técnico origen.`,
+            );
+          }
+        }
+      }
+
+      // 3) Descontar del técnico origen (inventario_tecnico)
+      // Buscar registro real (no consolidado) para actualizar: el primero del query
+      const registroOrigen = inventarioOrigen.find((x) => Number(x.materialId) === materialId);
+      if (!registroOrigen) {
+        throw new BadRequestException(`No se encontró inventario del técnico origen para material ${materialId}`);
+      }
+      const nuevaCantOrigen = Number(registroOrigen.cantidad || 0) - cantidad;
+      if (nuevaCantOrigen < 0) {
+        throw new BadRequestException(`Stock insuficiente en técnico origen para material ${materialId}`);
+      }
+      await this.inventarioTecnicoRepository.save({
+        ...registroOrigen,
+        cantidad: nuevaCantOrigen,
+      });
+
+      // 4) Sumar al técnico destino (crear o actualizar)
+      let registroDestino = await this.inventarioTecnicoRepository.findOne({
+        where: { usuarioId: Number(dto.usuarioDestinoId), materialId },
+      });
+      if (!registroDestino) {
+        registroDestino = await this.inventarioTecnicoRepository.save({
+          usuarioId: Number(dto.usuarioDestinoId),
+          materialId,
+          cantidad: cantidad,
+        } as any);
+      } else {
+        registroDestino.cantidad = Number(registroDestino.cantidad || 0) + cantidad;
+        registroDestino = await this.inventarioTecnicoRepository.save(registroDestino);
+      }
+
+      // 5) Reasignar números de medidor al técnico destino si aplica (por IDs)
+      if (m.numerosMedidor && Array.isArray(m.numerosMedidor) && m.numerosMedidor.length > 0) {
+        const ids: number[] = [];
+        for (const num of m.numerosMedidor) {
+          const nm = await this.numerosMedidorService.findByNumero(String(num));
+          if (nm?.numeroMedidorId) ids.push(nm.numeroMedidorId);
+        }
+        if (ids.length > 0) {
+          await this.numerosMedidorService.asignarATecnico(
+            ids,
+            Number(dto.usuarioDestinoId),
+            registroDestino.inventarioTecnicoId,
+          );
+        }
+      }
+
+      // 6) Movimiento solo trazabilidad: el stock en inventario_tecnico ya se ajustó arriba.
+      // Si el movimiento queda COMPLETADA por defecto, MovimientosService volvería a descontar del técnico origen.
+      await this.movimientosService.create(
+        {
+          movimientoTipo: TipoMovimiento.SALIDA,
+          materiales: [
+            {
+              materialId,
+              movimientoCantidad: cantidad,
+              numerosMedidor: m.numerosMedidor,
+            } as any,
+          ],
+          usuarioId: usuarioAsignador,
+          movimientoCodigo: codigo,
+          movimientoObservaciones:
+            dto.observaciones ||
+            `Traslado entre técnicos: ${usuarioOrigenId} → ${dto.usuarioDestinoId}`,
+          numeroOrden: dto.numeroOrden,
+          origenTipo: 'tecnico',
+          tecnicoOrigenId: usuarioOrigenId,
+          inventarioId: null,
+          movimientoEstado: EstadoMovimiento.PENDIENTE,
+        } as any,
+        requestingUser,
+      );
+    }
+
+    // Devolver inventario actualizado de ambos técnicos
+    const [invOrigenUpd, invDestUpd] = await Promise.all([
+      this.findByUsuario(usuarioOrigenId, requestingUser),
+      this.findByUsuario(Number(dto.usuarioDestinoId), requestingUser),
+    ]);
+
+    // Persistir auditoría operativa para permitir reversión posterior (eliminación)
+    try {
+      await this.transferenciasTecnicosService.create({
+        codigo,
+        usuarioOrigenId,
+        usuarioDestinoId: Number(dto.usuarioDestinoId),
+        materiales: dto.materiales as any,
+        numeroOrden: dto.numeroOrden || null,
+        observaciones: dto.observaciones || null,
+        usuarioAsignadorId: usuarioAsignador || null,
+      } as any);
+    } catch (_e) {
+      // no bloquear el flujo por auditoría
+    }
+
+    return { origen: invOrigenUpd, destino: invDestUpd };
   }
 
   async findAll(): Promise<InventarioTecnico[]> {
