@@ -10,6 +10,20 @@ import { WinstonLogger } from './common/logger/winston.logger';
 import { AllExceptionsFilter } from './common/filters/http-exception.filter';
 import { TransformInterceptor } from './common/interceptors/transform.interceptor';
 
+/** Puerto HTTP: Cloud Run inyecta PORT; si viene vacío o inválido, no usar 4100 en Cloud Run (enrutamiento fallaría). */
+function resolveListenPort(): number {
+  const raw = process.env.PORT;
+  const parsed =
+    raw !== undefined && String(raw).trim() !== '' ? Number.parseInt(String(raw), 10) : Number.NaN;
+  if (Number.isFinite(parsed) && parsed > 0) {
+    return parsed;
+  }
+  if (process.env.K_SERVICE) {
+    return 8080;
+  }
+  return 4100;
+}
+
 async function bootstrap() {
   const app = await NestFactory.create<NestExpressApplication>(AppModule, {
     logger: new WinstonLogger(),
@@ -130,14 +144,32 @@ async function bootstrap() {
   const document = SwaggerModule.createDocument(app, config);
   SwaggerModule.setup('api/docs', app, document);
 
-  // Cloud Run (y otros PaaS) inyectan PORT y esperan escucha en todas las interfaces.
-  const rawPort = process.env.PORT;
-  const parsed =
-    rawPort !== undefined && String(rawPort).trim() !== ''
-      ? Number.parseInt(String(rawPort), 10)
-      : NaN;
-  const port = Number.isFinite(parsed) && parsed > 0 ? parsed : 4100;
+  const port = resolveListenPort();
+  // JSON en una línea para Cloud Logging (diagnóstico de despliegues).
+  console.log(
+    JSON.stringify({
+      severity: 'INFO',
+      message: 'HTTP server binding',
+      port,
+      host: '0.0.0.0',
+      kService: process.env.K_SERVICE ?? null,
+    }),
+  );
   await app.listen(port, '0.0.0.0');
 }
 
-bootstrap();
+bootstrap().catch((err: unknown) => {
+  const e =
+    err instanceof Error
+      ? err
+      : new Error(typeof err === 'object' && err !== null ? JSON.stringify(err) : String(err));
+  console.error(
+    JSON.stringify({
+      severity: 'ERROR',
+      message: 'Nest bootstrap failed',
+      error: e.message,
+      stack: e.stack,
+    }),
+  );
+  process.exit(1);
+});

@@ -71,7 +71,8 @@ import { PushTokensModule } from './modules/push-tokens/push-tokens.module';
       imports: [ConfigModule],
       useFactory: (configService: ConfigService) => {
         const host = configService.get<string>('DB_HOST', '127.0.0.1');
-        const port = configService.get<string>('DB_PORT', '3306');
+        const dbPortStr = configService.get<string>('DB_PORT', '3306');
+        const socketPath = configService.get<string>('DB_SOCKET_PATH', '').trim();
         const username = configService.get<string>('DB_USERNAME', 'root');
         const password = configService.get<string>('DB_PASSWORD', '') || '';
         const database = configService.get<string>('DB_NAME', 'jarlepsisdev');
@@ -85,8 +86,7 @@ import { PushTokensModule } from './modules/push-tokens/push-tokens.module';
 
         const config = {
           type: 'mysql' as const,
-          host,
-          port: parseInt(port, 10),
+          ...(socketPath.length > 0 ? { socketPath } : { host, port: parseInt(dbPortStr, 10) }),
           username,
           password: password || '',
           database,
