@@ -51,6 +51,7 @@ import { SearchModule } from './modules/search/search.module';
 import { AuditoriaInventarioModule } from './modules/auditoria-inventario/auditoria-inventario.module';
 import { UploadModule } from './modules/upload/upload.module';
 import { PushTokensModule } from './modules/push-tokens/push-tokens.module';
+import { isDevelopmentNodeEnv } from './common/utils/node-env';
 
 @Module({
   imports: [
@@ -79,10 +80,11 @@ import { PushTokensModule } from './modules/push-tokens/push-tokens.module';
 
         // Database configuration
 
-        const nodeEnv = (configService.get<string>('NODE_ENV') || '').toLowerCase();
+        const nodeEnv = configService.get<string>('NODE_ENV', '');
         const migrationsRunEnv = configService.get<string>('DB_MIGRATIONS_RUN', '');
+        // Sin tocar GCP: nunca inferir "desarrollo" por ausencia de NODE_ENV (evita migraciones al boot).
         const migrationsRun =
-          migrationsRunEnv !== '' ? migrationsRunEnv === 'true' : nodeEnv !== 'production';
+          migrationsRunEnv !== '' ? migrationsRunEnv === 'true' : isDevelopmentNodeEnv(nodeEnv);
 
         const config = {
           type: 'mysql' as const,

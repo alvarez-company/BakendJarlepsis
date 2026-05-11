@@ -10,6 +10,7 @@ import {
 import { Server, Socket } from 'socket.io';
 import { Injectable, Logger } from '@nestjs/common';
 import { JwtService } from '@nestjs/jwt';
+import { isDevelopmentNodeEnv } from '@/common/utils/node-env';
 
 @Injectable()
 @WebSocketGateway({
@@ -29,7 +30,7 @@ import { JwtService } from '@nestjs/jwt';
         callback(null, true);
       } else {
         // En desarrollo, permitir cualquier origin localhost
-        if (process.env.NODE_ENV === 'development' && origin.includes('localhost')) {
+        if (isDevelopmentNodeEnv(process.env.NODE_ENV) && origin.includes('localhost')) {
           callback(null, true);
         } else {
           callback(new Error('Not allowed by CORS'));

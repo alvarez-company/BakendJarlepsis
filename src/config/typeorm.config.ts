@@ -1,5 +1,6 @@
 import { DataSource } from 'typeorm';
 import { config } from 'dotenv';
+import { isDevelopmentNodeEnv } from '../common/utils/node-env';
 
 config();
 
@@ -13,7 +14,7 @@ export default new DataSource({
   entities: [__dirname + '/../**/*.entity{.ts,.js}'],
   migrations: [__dirname + '/../migrations/*{.ts,.js}'],
   synchronize: false,
-  logging: process.env.NODE_ENV === 'development' || process.env.MIGRATION_LOGGING === 'true',
+  logging: isDevelopmentNodeEnv(process.env.NODE_ENV) || process.env.MIGRATION_LOGGING === 'true',
   charset: 'utf8mb4',
   timezone: 'Z',
 });

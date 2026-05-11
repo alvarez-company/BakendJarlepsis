@@ -2,8 +2,9 @@ import { WinstonModuleOptions } from 'nest-winston';
 import * as winston from 'winston';
 import * as fs from 'fs';
 import * as path from 'path';
+import { isProductionNodeEnv } from '../utils/node-env';
 
-const isProduction = process.env.NODE_ENV === 'production';
+const isProduction = isProductionNodeEnv(process.env.NODE_ENV);
 
 // Crear directorio de logs solo en desarrollo
 let fileTransports: winston.transports.FileTransportInstance[] = [];

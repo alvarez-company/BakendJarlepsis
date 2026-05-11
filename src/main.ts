@@ -9,6 +9,7 @@ import { AppModule } from './app.module';
 import { WinstonLogger } from './common/logger/winston.logger';
 import { AllExceptionsFilter } from './common/filters/http-exception.filter';
 import { TransformInterceptor } from './common/interceptors/transform.interceptor';
+import { isDevelopmentNodeEnv } from './common/utils/node-env';
 
 /** Puerto HTTP: Cloud Run inyecta PORT; si viene vacío o inválido, no usar 4100 en Cloud Run (enrutamiento fallaría). */
 function resolveListenPort(): number {
@@ -81,7 +82,7 @@ async function bootstrap() {
         callback(null, true);
       } else {
         // En desarrollo, permitir cualquier origin localhost
-        if (process.env.NODE_ENV === 'development' && origin.includes('localhost')) {
+        if (isDevelopmentNodeEnv(process.env.NODE_ENV) && origin.includes('localhost')) {
           callback(null, true);
         } else {
           callback(new Error('Not allowed by CORS'));
