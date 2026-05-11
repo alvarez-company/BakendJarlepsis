@@ -51,7 +51,7 @@ import { SearchModule } from './modules/search/search.module';
 import { AuditoriaInventarioModule } from './modules/auditoria-inventario/auditoria-inventario.module';
 import { UploadModule } from './modules/upload/upload.module';
 import { PushTokensModule } from './modules/push-tokens/push-tokens.module';
-import { isDevelopmentNodeEnv } from './common/utils/node-env';
+import { isCloudRunLike, isDevelopmentNodeEnv } from './common/utils/node-env';
 
 @Module({
   imports: [
@@ -86,7 +86,6 @@ import { isDevelopmentNodeEnv } from './common/utils/node-env';
         const migrationsRun =
           migrationsRunEnv !== '' ? migrationsRunEnv === 'true' : isDevelopmentNodeEnv(nodeEnv);
 
-        const onCloudRun = Boolean(process.env.K_SERVICE);
         const config = {
           type: 'mysql' as const,
           ...(socketPath.length > 0 ? { socketPath } : { host, port: parseInt(dbPortStr, 10) }),
@@ -99,7 +98,7 @@ import { isDevelopmentNodeEnv } from './common/utils/node-env';
           migrationsRun,
           logging: false,
           // Cloud Run: no bloquear NestFactory.create con MySQL; se llama DataSource.initialize() en main tras listen.
-          manualInitialization: onCloudRun,
+          manualInitialization: isCloudRunLike(),
           retryAttempts: 3,
           retryDelay: 2000,
           // Opciones para conexiones remotas: mantener conexión viva y timeout más tolerante

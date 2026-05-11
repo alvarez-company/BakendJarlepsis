@@ -10,7 +10,7 @@ import { AppModule } from './app.module';
 import { WinstonLogger } from './common/logger/winston.logger';
 import { AllExceptionsFilter } from './common/filters/http-exception.filter';
 import { TransformInterceptor } from './common/interceptors/transform.interceptor';
-import { isDevelopmentNodeEnv } from './common/utils/node-env';
+import { isCloudRunLike, isDevelopmentNodeEnv } from './common/utils/node-env';
 
 /** Puerto HTTP: Cloud Run inyecta PORT; si viene vacío o inválido, no usar 4100 en Cloud Run (enrutamiento fallaría). */
 function resolveListenPort(): number {
@@ -20,7 +20,7 @@ function resolveListenPort(): number {
   if (Number.isFinite(parsed) && parsed > 0) {
     return parsed;
   }
-  if (process.env.K_SERVICE) {
+  if (isCloudRunLike()) {
     return 8080;
   }
   return 4100;
@@ -136,15 +136,20 @@ async function bootstrap() {
   // Global interceptors
   app.useGlobalInterceptors(new TransformInterceptor());
 
-  // Swagger documentation
-  const config = new DocumentBuilder()
-    .setTitle('Jarlepsis API')
-    .setDescription('API robusta con NestJS')
-    .setVersion('1.0')
-    .addBearerAuth()
-    .build();
-  const document = SwaggerModule.createDocument(app, config);
-  SwaggerModule.setup('api/docs', app, document);
+  // Swagger: createDocument escanea todos los controladores y puede superar el startup timeout de Cloud Run.
+  const swaggerOnCloud =
+    process.env.ENABLE_SWAGGER_ON_CLOUD_RUN === 'true' ||
+    process.env.ENABLE_SWAGGER_ON_CLOUD_RUN === '1';
+  if (!isCloudRunLike() || swaggerOnCloud) {
+    const config = new DocumentBuilder()
+      .setTitle('Jarlepsis API')
+      .setDescription('API robusta con NestJS')
+      .setVersion('1.0')
+      .addBearerAuth()
+      .build();
+    const document = SwaggerModule.createDocument(app, config);
+    SwaggerModule.setup('api/docs', app, document);
+  }
 
   const port = resolveListenPort();
   // JSON en una línea para Cloud Logging (diagnóstico de despliegues).
@@ -155,11 +160,13 @@ async function bootstrap() {
       port,
       host: '0.0.0.0',
       kService: process.env.K_SERVICE ?? null,
+      kRevision: process.env.K_REVISION ?? null,
+      cloudRun: isCloudRunLike(),
     }),
   );
   await app.listen(port, '0.0.0.0');
 
-  if (process.env.K_SERVICE) {
+  if (isCloudRunLike()) {
     const dataSource = app.get(DataSource);
     if (!dataSource.isInitialized) {
       console.log(
