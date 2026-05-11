@@ -23,6 +23,20 @@
       "@/config/*": ["src/config/*"],
       "@/modules/*": ["src/modules/*"]
     }
-  }
+  },
+  "include": ["src/**/*"],
+  "exclude": [
+    "node_modules",
+    "dist",
+    "scripts",
+    "test",
+    "logs",
+    "public",
+    "documents",
+    "postman",
+    "docker",
+    "**/*.spec.ts",
+    "**/*.e2e-spec.ts"
+  ]
 }
 
