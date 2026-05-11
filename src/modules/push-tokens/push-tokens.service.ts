@@ -55,4 +55,3 @@ export class PushTokensService {
     await this.pushTokensRepo.update({ token }, { activo: false });
   }
 }
-

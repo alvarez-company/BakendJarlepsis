@@ -130,6 +130,10 @@ export class Instalacion {
   @Column({ type: 'json', nullable: true })
   instalacionAnexos: string[] | null;
 
+  /** PDF de anexo (data URL base64 o URL legada /public/...); opcional en cualquier estado. */
+  @Column({ type: 'longtext', nullable: true })
+  anexoPdf: string | null;
+
   @Column({ type: 'varchar', length: 32, default: EstadoInstalacion.APM })
   estado: EstadoInstalacion;
 

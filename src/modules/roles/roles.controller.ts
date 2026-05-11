@@ -6,7 +6,10 @@ import { UpdateRoleDto } from './dto/update-role.dto';
 import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard';
 import { RolesGuard } from '../../common/guards/roles.guard';
 import { Roles } from '../../common/decorators/roles.decorator';
-import { ROLES_SUPERADMIN_GERENCIA, ROLES_VER_CATALOGOS_ADMIN } from '../../common/constants/roles.constants';
+import {
+  ROLES_SUPERADMIN_GERENCIA,
+  ROLES_VER_CATALOGOS_ADMIN,
+} from '../../common/constants/roles.constants';
 
 @ApiTags('roles')
 @ApiBearerAuth()

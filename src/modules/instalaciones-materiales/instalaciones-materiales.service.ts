@@ -17,6 +17,7 @@ import { InstalacionesService } from '../instalaciones/instalaciones.service';
 import { InventarioTecnicoService } from '../inventario-tecnico/inventario-tecnico.service';
 import { NumerosMedidorService } from '../numeros-medidor/numeros-medidor.service';
 import { MaterialesService } from '../materiales/materiales.service';
+import { instalacionPermiteTecnicoGestionarMaterialesUtilizados } from '../instalaciones/estado-instalacion.codes';
 
 @Injectable()
 export class InstalacionesMaterialesService {
@@ -33,7 +34,69 @@ export class InstalacionesMaterialesService {
     private materialesService: MaterialesService,
   ) {}
 
-  async create(createDto: CreateInstalacionMaterialDto): Promise<InstalacionMaterial> {
+  /**
+   * Inventario técnico: si quien registra es técnico/soldador asignado a la obra, se descuenta a él.
+   * Si no (p. ej. admin/almacenista), se usa el primer técnico o soldador activo en la instalación.
+   */
+  private resolveTecnicoInventarioTarget(instalacion: any, requestingUser?: any): number | null {
+    const asignados = instalacion?.usuariosAsignados;
+    if (!Array.isArray(asignados) || asignados.length === 0) {
+      return null;
+    }
+
+    const reqUid =
+      requestingUser?.usuarioId != null ? Number(requestingUser.usuarioId) : Number.NaN;
+    const rolReq = String(
+      requestingUser?.usuarioRol?.rolTipo || requestingUser?.role || '',
+    ).toLowerCase();
+
+    if (Number.isFinite(reqUid) && reqUid > 0 && (rolReq === 'tecnico' || rolReq === 'soldador')) {
+      const yo = asignados.find((u: any) => {
+        const id = Number(u.usuarioId ?? u.usuario?.usuarioId);
+        const activo = u.activo !== undefined ? Boolean(u.activo) : true;
+        return activo && Number.isFinite(id) && id === reqUid;
+      });
+      if (yo) {
+        return reqUid;
+      }
+    }
+
+    for (const u of asignados) {
+      const activo = u.activo !== undefined ? Boolean(u.activo) : true;
+      if (!activo) continue;
+      const usuario = u.usuario || u;
+      if (!usuario?.usuarioId) continue;
+      const r = String(usuario.usuarioRol?.rolTipo ?? usuario.rolTipo ?? '').toLowerCase();
+      const rolEn = String(u.rolEnInstalacion ?? '').toLowerCase();
+      if (r === 'tecnico' || r === 'soldador' || rolEn === 'tecnico' || rolEn === 'soldador') {
+        return Number(usuario.usuarioId);
+      }
+    }
+    return null;
+  }
+
+  /** Técnico/soldador: solo en AVAN o NOVE. Otros roles no aplican esta restricción aquí. */
+  private assertTecnicoPuedeGestionarMateriales(
+    instalacionEstado: string | null | undefined,
+    requestingUser?: any,
+  ): void {
+    const rol = String(
+      requestingUser?.usuarioRol?.rolTipo || requestingUser?.role || '',
+    ).toLowerCase();
+    if (rol !== 'tecnico' && rol !== 'soldador') {
+      return;
+    }
+    if (!instalacionPermiteTecnicoGestionarMaterialesUtilizados(instalacionEstado)) {
+      throw new BadRequestException(
+        'Solo puede registrar, editar o eliminar materiales durante avance de obra o novedad. En certificación, facturación u otros estados de cierre solo intervienen roles administrativos.',
+      );
+    }
+  }
+
+  async create(
+    createDto: CreateInstalacionMaterialDto,
+    requestingUser?: any,
+  ): Promise<InstalacionMaterial> {
     // Validar que solo se permita un medidor por instalación
     const material = await this.materialesService.findOne(createDto.materialId);
     const esMedidor = Boolean(material?.materialEsMedidor);
@@ -63,6 +126,12 @@ export class InstalacionesMaterialesService {
       }
     }
 
+    const instalacionParaEstado = await this.instalacionesService.findOne(
+      createDto.instalacionId,
+      requestingUser,
+    );
+    this.assertTecnicoPuedeGestionarMateriales(instalacionParaEstado?.estado, requestingUser);
+
     const instalacionMaterial = this.instalacionMaterialRepository.create(createDto);
     const materialGuardado = await this.instalacionMaterialRepository.save(instalacionMaterial);
 
@@ -72,6 +141,7 @@ export class InstalacionesMaterialesService {
       createDto.instalacionId,
       createDto.materialId,
       createDto.cantidad,
+      requestingUser,
     );
 
     // Manejar números de medidor si el material es de categoría "medidor"
@@ -128,37 +198,24 @@ export class InstalacionesMaterialesService {
       } else {
         // Si no se proporcionaron números, obtener números asignados al técnico automáticamente
         const instalacion = await this.instalacionesService.findOne(createDto.instalacionId);
-        if (instalacion && instalacion.usuariosAsignados) {
-          const tecnicoAsignado = instalacion.usuariosAsignados.find((u: any) => {
-            const usuario = u.usuario || u;
-            return (
-              usuario &&
-              ((usuario.usuarioRol?.rolTipo ?? usuario.rolTipo) === 'tecnico' ||
-                (usuario.usuarioRol?.rolTipo ?? usuario.rolTipo) === 'soldador')
+        const tecnicoId = this.resolveTecnicoInventarioTarget(instalacion, requestingUser);
+        if (instalacion && tecnicoId != null) {
+          // Obtener números de medidor asignados al técnico para este material
+          const numerosMedidorTecnico = await this.numerosMedidorService.findByUsuario(tecnicoId);
+          const numerosDelMaterial = numerosMedidorTecnico.filter(
+            (n) => n.materialId === createDto.materialId && n.estado === 'asignado_tecnico',
+          );
+
+          // Asignar los primeros números disponibles a la instalación
+          const cantidadNumerica = Math.round(Number(createDto.cantidad || 0));
+          const numerosAAsignar = numerosDelMaterial.slice(0, cantidadNumerica);
+
+          if (numerosAAsignar.length > 0) {
+            await this.numerosMedidorService.asignarAInstalacion(
+              numerosAAsignar.map((n) => n.numeroMedidorId),
+              createDto.instalacionId,
+              materialGuardado.instalacionMaterialId,
             );
-          });
-
-          if (tecnicoAsignado) {
-            const usuario = tecnicoAsignado.usuario || tecnicoAsignado;
-            const tecnicoId = usuario.usuarioId;
-
-            // Obtener números de medidor asignados al técnico para este material
-            const numerosMedidorTecnico = await this.numerosMedidorService.findByUsuario(tecnicoId);
-            const numerosDelMaterial = numerosMedidorTecnico.filter(
-              (n) => n.materialId === createDto.materialId && n.estado === 'asignado_tecnico',
-            );
-
-            // Asignar los primeros números disponibles a la instalación
-            const cantidadNumerica = Math.round(Number(createDto.cantidad || 0));
-            const numerosAAsignar = numerosDelMaterial.slice(0, cantidadNumerica);
-
-            if (numerosAAsignar.length > 0) {
-              await this.numerosMedidorService.asignarAInstalacion(
-                numerosAAsignar.map((n) => n.numeroMedidorId),
-                createDto.instalacionId,
-                materialGuardado.instalacionMaterialId,
-              );
-            }
           }
         }
       }
@@ -173,6 +230,7 @@ export class InstalacionesMaterialesService {
   async asignarMateriales(
     instalacionId: number,
     dto: AssignMaterialesToInstalacionDto,
+    requestingUser?: any,
   ): Promise<InstalacionMaterial[]> {
     // Validar que solo se permita un medidor por instalación
     const materialesMedidor = [];
@@ -196,19 +254,30 @@ export class InstalacionesMaterialesService {
       );
     }
 
-    // Eliminar materiales existentes de esta instalación
-    await this.instalacionMaterialRepository.delete({ instalacionId });
+    const instalacionAsignar = await this.instalacionesService.findOne(
+      instalacionId,
+      requestingUser,
+    );
+    this.assertTecnicoPuedeGestionarMateriales(instalacionAsignar?.estado, requestingUser);
 
-    // Crear nuevos registros
+    const existentes = await this.instalacionMaterialRepository.find({ where: { instalacionId } });
+    for (const m of existentes) {
+      await this.remove(m.instalacionMaterialId, requestingUser);
+    }
+
     const materiales: InstalacionMaterial[] = [];
     for (const material of dto.materiales) {
-      const nuevo = this.instalacionMaterialRepository.create({
-        instalacionId,
-        materialId: material.materialId,
-        cantidad: material.cantidad,
-        observaciones: material.observaciones,
-      });
-      materiales.push(await this.instalacionMaterialRepository.save(nuevo));
+      const creado = await this.create(
+        {
+          instalacionId,
+          materialId: material.materialId,
+          cantidad: material.cantidad,
+          observaciones: material.observaciones,
+          numerosMedidor: material.numerosMedidor,
+        },
+        requestingUser,
+      );
+      materiales.push(creado);
     }
 
     return materiales;
@@ -290,8 +359,18 @@ export class InstalacionesMaterialesService {
     return instalacionMaterial;
   }
 
-  async update(id: number, updateDto: UpdateInstalacionMaterialDto): Promise<InstalacionMaterial> {
+  async update(
+    id: number,
+    updateDto: UpdateInstalacionMaterialDto,
+    requestingUser?: any,
+  ): Promise<InstalacionMaterial> {
     const instalacionMaterial = await this.findOne(id);
+    const instalacionUpdate = await this.instalacionesService.findOne(
+      instalacionMaterial.instalacionId,
+      requestingUser,
+    );
+    this.assertTecnicoPuedeGestionarMateriales(instalacionUpdate?.estado, requestingUser);
+
     const cantidadAnterior = Number(instalacionMaterial.cantidad || 0);
     const cantidadNueva =
       updateDto.cantidad !== undefined ? Number(updateDto.cantidad) : cantidadAnterior;
@@ -311,85 +390,69 @@ export class InstalacionesMaterialesService {
           instalacionMaterial.instalacionId,
         );
 
-        if (instalacion && instalacion.usuariosAsignados) {
-          const tecnicoAsignado = instalacion.usuariosAsignados.find((u: any) => {
-            const usuario = u.usuario || u;
-            return (
-              usuario &&
-              ((usuario.usuarioRol?.rolTipo ?? usuario.rolTipo) === 'tecnico' ||
-                (usuario.usuarioRol?.rolTipo ?? usuario.rolTipo) === 'soldador')
-            );
-          });
+        const tecnicoId = this.resolveTecnicoInventarioTarget(instalacion, requestingUser);
+        if (instalacion && tecnicoId != null) {
+          // Obtener números de medidor actuales asignados a esta instalación para este material
+          const numerosMedidorInstalacion = await this.numerosMedidorService.findByInstalacion(
+            instalacionMaterial.instalacionId,
+          );
+          const numerosDelMaterial = numerosMedidorInstalacion.filter(
+            (n) =>
+              n.materialId === instalacionMaterial.materialId &&
+              n.instalacionMaterialId === instalacionMaterial.instalacionMaterialId &&
+              (n.estado === 'en_instalacion' || n.estado === 'instalado'),
+          );
 
-          if (tecnicoAsignado) {
-            const usuario = tecnicoAsignado.usuario || tecnicoAsignado;
-            const tecnicoId = usuario.usuarioId;
+          const cantidadNumericaNueva = Math.round(cantidadNueva);
+          const cantidadNumericaAnterior = Math.round(cantidadAnterior);
 
-            // Obtener números de medidor actuales asignados a esta instalación para este material
-            const numerosMedidorInstalacion = await this.numerosMedidorService.findByInstalacion(
-              instalacionMaterial.instalacionId,
-            );
-            const numerosDelMaterial = numerosMedidorInstalacion.filter(
+          if (diferencia > 0) {
+            // Si aumentó la cantidad, asignar más números de medidor del técnico
+            const numerosNecesarios = cantidadNumericaNueva - cantidadNumericaAnterior;
+            const numerosMedidorTecnico = await this.numerosMedidorService.findByUsuario(tecnicoId);
+            const numerosDisponiblesTecnico = numerosMedidorTecnico.filter(
               (n) =>
-                n.materialId === instalacionMaterial.materialId &&
-                n.instalacionMaterialId === instalacionMaterial.instalacionMaterialId &&
-                (n.estado === 'en_instalacion' || n.estado === 'instalado'),
+                n.materialId === instalacionMaterial.materialId && n.estado === 'asignado_tecnico',
             );
 
-            const cantidadNumericaNueva = Math.round(cantidadNueva);
-            const cantidadNumericaAnterior = Math.round(cantidadAnterior);
+            const numerosAAsignar = numerosDisponiblesTecnico.slice(0, numerosNecesarios);
+            if (numerosAAsignar.length > 0) {
+              await this.numerosMedidorService.asignarAInstalacion(
+                numerosAAsignar.map((n) => n.numeroMedidorId),
+                instalacionMaterial.instalacionId,
+                instalacionMaterial.instalacionMaterialId,
+              );
+            }
+          } else if (diferencia < 0) {
+            // Si disminuyó la cantidad, liberar números de medidor (volver al técnico)
+            const numerosALiberar = Math.abs(diferencia);
+            const numerosParaLiberar = numerosDelMaterial.slice(0, numerosALiberar);
 
-            if (diferencia > 0) {
-              // Si aumentó la cantidad, asignar más números de medidor del técnico
-              const numerosNecesarios = cantidadNumericaNueva - cantidadNumericaAnterior;
-              const numerosMedidorTecnico =
-                await this.numerosMedidorService.findByUsuario(tecnicoId);
-              const numerosDisponiblesTecnico = numerosMedidorTecnico.filter(
-                (n) =>
-                  n.materialId === instalacionMaterial.materialId &&
-                  n.estado === 'asignado_tecnico',
+            if (numerosParaLiberar.length > 0) {
+              // Obtener inventario técnico para este material
+              const inventarioTecnico =
+                await this.inventarioTecnicoService.findByUsuario(tecnicoId);
+              const inventarioItem = inventarioTecnico.find(
+                (inv) =>
+                  inv.materialId === instalacionMaterial.materialId && inv.usuarioId === tecnicoId,
               );
 
-              const numerosAAsignar = numerosDisponiblesTecnico.slice(0, numerosNecesarios);
-              if (numerosAAsignar.length > 0) {
-                await this.numerosMedidorService.asignarAInstalacion(
-                  numerosAAsignar.map((n) => n.numeroMedidorId),
-                  instalacionMaterial.instalacionId,
-                  instalacionMaterial.instalacionMaterialId,
-                );
-              }
-            } else if (diferencia < 0) {
-              // Si disminuyó la cantidad, liberar números de medidor (volver al técnico)
-              const numerosALiberar = Math.abs(diferencia);
-              const numerosParaLiberar = numerosDelMaterial.slice(0, numerosALiberar);
-
-              if (numerosParaLiberar.length > 0) {
-                // Obtener inventario técnico para este material
-                const inventarioTecnico =
-                  await this.inventarioTecnicoService.findByUsuario(tecnicoId);
-                const inventarioItem = inventarioTecnico.find(
-                  (inv) =>
-                    inv.materialId === instalacionMaterial.materialId &&
-                    inv.usuarioId === tecnicoId,
-                );
-
-                if (inventarioItem) {
-                  // Liberar de instalación y volver a asignar al técnico
-                  for (const numero of numerosParaLiberar) {
-                    await this.numerosMedidorService.update(numero.numeroMedidorId, {
-                      estado: 'asignado_tecnico' as any,
-                      instalacionId: null,
-                      instalacionMaterialId: null,
-                      usuarioId: tecnicoId,
-                      inventarioTecnicoId: inventarioItem.inventarioTecnicoId,
-                    });
-                  }
-                } else {
-                  // Si no hay inventario técnico, liberar completamente
-                  await this.numerosMedidorService.liberarDeInstalacion(
-                    numerosParaLiberar.map((n) => n.numeroMedidorId),
-                  );
+              if (inventarioItem) {
+                // Liberar de instalación y volver a asignar al técnico
+                for (const numero of numerosParaLiberar) {
+                  await this.numerosMedidorService.update(numero.numeroMedidorId, {
+                    estado: 'asignado_tecnico' as any,
+                    instalacionId: null,
+                    instalacionMaterialId: null,
+                    usuarioId: tecnicoId,
+                    inventarioTecnicoId: inventarioItem.inventarioTecnicoId,
+                  });
                 }
+              } else {
+                // Si no hay inventario técnico, liberar completamente
+                await this.numerosMedidorService.liberarDeInstalacion(
+                  numerosParaLiberar.map((n) => n.numeroMedidorId),
+                );
               }
             }
           }
@@ -411,25 +474,9 @@ export class InstalacionesMaterialesService {
           instalacionMaterial.instalacionId,
         );
 
-        if (
-          instalacion &&
-          instalacion.usuariosAsignados &&
-          Array.isArray(instalacion.usuariosAsignados)
-        ) {
-          // Buscar el técnico asignado
-          const tecnicoAsignado = instalacion.usuariosAsignados.find((u: any) => {
-            const usuario = u.usuario || u;
-            return (
-              usuario &&
-              ((usuario.usuarioRol?.rolTipo ?? usuario.rolTipo) === 'tecnico' ||
-                (usuario.usuarioRol?.rolTipo ?? usuario.rolTipo) === 'soldador')
-            );
-          });
-
-          if (tecnicoAsignado) {
-            const usuario = tecnicoAsignado.usuario || tecnicoAsignado;
-            const tecnicoId = usuario.usuarioId;
-
+        if (instalacion) {
+          const tecnicoId = this.resolveTecnicoInventarioTarget(instalacion, requestingUser);
+          if (tecnicoId != null) {
             // Obtener el inventario del técnico para este material
             const inventarioTecnico = await this.inventarioTecnicoService.findByUsuario(tecnicoId);
             const inventarioItem = inventarioTecnico.find(
@@ -461,9 +508,15 @@ export class InstalacionesMaterialesService {
     return materialActualizado;
   }
 
-  async remove(id: number): Promise<void> {
+  async remove(id: number, requestingUser?: any): Promise<void> {
     const instalacionMaterial = await this.findOne(id);
     const instalacionId = instalacionMaterial.instalacionId;
+    const instalacionRemove = await this.instalacionesService.findOne(
+      instalacionId,
+      requestingUser,
+    );
+    this.assertTecnicoPuedeGestionarMateriales(instalacionRemove?.estado, requestingUser);
+
     const materialId = instalacionMaterial.materialId;
     const cantidad = instalacionMaterial.cantidad;
 
@@ -492,52 +545,18 @@ export class InstalacionesMaterialesService {
     }
 
     // Devolver el material al inventario del técnico cuando se elimina
-    await this.devolverMaterialAlTecnico(instalacionId, materialId, cantidad);
+    await this.devolverMaterialAlTecnico(instalacionId, materialId, cantidad, requestingUser);
 
     await this.instalacionMaterialRepository.remove(instalacionMaterial);
   }
 
   async removeByInstalacion(instalacionId: number): Promise<void> {
-    // Obtener todos los materiales de la instalación antes de eliminarlos
     const materiales = await this.instalacionMaterialRepository.find({
       where: { instalacionId },
     });
-
-    // Liberar números de medidor de todos los materiales
-    for (const material of materiales) {
-      try {
-        const numerosMedidorInstalacion =
-          await this.numerosMedidorService.findByInstalacion(instalacionId);
-        const numerosDelMaterial = numerosMedidorInstalacion.filter(
-          (n) =>
-            n.materialId === material.materialId &&
-            n.instalacionMaterialId === material.instalacionMaterialId,
-        );
-
-        if (numerosDelMaterial.length > 0) {
-          await this.numerosMedidorService.liberarDeInstalacion(
-            numerosDelMaterial.map((n) => n.numeroMedidorId),
-          );
-        }
-      } catch (error) {
-        console.error(
-          `Error al liberar números de medidor al eliminar material ${material.instalacionMaterialId}:`,
-          error,
-        );
-        // Continuar con la eliminación aunque falle la liberación
-      }
-
-      // Devolver el material al inventario del técnico
-      try {
-        await this.devolverMaterialAlTecnico(instalacionId, material.materialId, material.cantidad);
-      } catch (error) {
-        console.error(`Error al devolver material ${material.materialId} al técnico:`, error);
-        // Continuar con la eliminación aunque falle la devolución
-      }
+    for (const m of materiales) {
+      await this.remove(m.instalacionMaterialId, undefined);
     }
-
-    // Eliminar todos los materiales de la instalación
-    await this.instalacionMaterialRepository.delete({ instalacionId });
   }
 
   async aprobarMaterial(id: number, aprobado: boolean): Promise<InstalacionMaterial> {
@@ -553,35 +572,14 @@ export class InstalacionesMaterialesService {
     instalacionId: number,
     materialId: number,
     cantidad: number,
+    requestingUser?: any,
   ): Promise<void> {
     try {
-      // Obtener la instalación para encontrar el técnico asignado
       const instalacion = await this.instalacionesService.findOne(instalacionId);
-
-      if (
-        !instalacion ||
-        !instalacion.usuariosAsignados ||
-        !Array.isArray(instalacion.usuariosAsignados)
-      ) {
+      const tecnicoId = this.resolveTecnicoInventarioTarget(instalacion, requestingUser);
+      if (tecnicoId == null) {
         return;
       }
-
-      // Buscar el técnico asignado
-      const tecnicoAsignado = instalacion.usuariosAsignados.find((u: any) => {
-        const usuario = u.usuario || u;
-        return (
-          usuario &&
-          ((usuario.usuarioRol?.rolTipo ?? usuario.rolTipo) === 'tecnico' ||
-            (usuario.usuarioRol?.rolTipo ?? usuario.rolTipo) === 'soldador')
-        );
-      });
-
-      if (!tecnicoAsignado) {
-        return;
-      }
-
-      const usuario = tecnicoAsignado.usuario || tecnicoAsignado;
-      const tecnicoId = usuario.usuarioId;
       const cantidadNumerica = Math.round(Number(cantidad || 0));
 
       if (cantidadNumerica <= 0) {
@@ -618,35 +616,14 @@ export class InstalacionesMaterialesService {
     instalacionId: number,
     materialId: number,
     cantidad: number,
+    requestingUser?: any,
   ): Promise<void> {
     try {
-      // Obtener la instalación para encontrar el técnico asignado
       const instalacion = await this.instalacionesService.findOne(instalacionId);
-
-      if (
-        !instalacion ||
-        !instalacion.usuariosAsignados ||
-        !Array.isArray(instalacion.usuariosAsignados)
-      ) {
+      const tecnicoId = this.resolveTecnicoInventarioTarget(instalacion, requestingUser);
+      if (tecnicoId == null) {
         return;
       }
-
-      // Buscar el técnico asignado
-      const tecnicoAsignado = instalacion.usuariosAsignados.find((u: any) => {
-        const usuario = u.usuario || u;
-        return (
-          usuario &&
-          ((usuario.usuarioRol?.rolTipo ?? usuario.rolTipo) === 'tecnico' ||
-            (usuario.usuarioRol?.rolTipo ?? usuario.rolTipo) === 'soldador')
-        );
-      });
-
-      if (!tecnicoAsignado) {
-        return;
-      }
-
-      const usuario = tecnicoAsignado.usuario || tecnicoAsignado;
-      const tecnicoId = usuario.usuarioId;
       const cantidadNumerica = Math.round(Number(cantidad || 0));
 
       if (cantidadNumerica <= 0) {

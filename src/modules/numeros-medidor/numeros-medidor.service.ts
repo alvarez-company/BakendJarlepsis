@@ -52,7 +52,9 @@ export class NumerosMedidorService {
   }
 
   private normalizeNumero(value: string): string {
-    return String(value || '').trim().toLowerCase();
+    return String(value || '')
+      .trim()
+      .toLowerCase();
   }
 
   /**
@@ -170,7 +172,11 @@ export class NumerosMedidorService {
     }
 
     const normalizedInRequest = items
-      .map((i) => ({ raw: i.numeroMedidor, norm: this.normalizeNumero(i.numeroMedidor), bodegaId: i.bodegaId }))
+      .map((i) => ({
+        raw: i.numeroMedidor,
+        norm: this.normalizeNumero(i.numeroMedidor),
+        bodegaId: i.bodegaId,
+      }))
       .filter((x) => x.norm);
 
     if (!normalizedInRequest.length) return [];
@@ -250,10 +256,9 @@ export class NumerosMedidorService {
     if (sedeScope != null) {
       qb.andWhere(
         new Brackets((w) => {
-          w.where('bodega.sedeId = :sedeScope', { sedeScope }).orWhere(
-            'usuario.usuarioSede = :sedeScope',
-            { sedeScope },
-          ).orWhere('(numero.bodegaId IS NULL AND numero.usuarioId IS NULL)');
+          w.where('bodega.sedeId = :sedeScope', { sedeScope })
+            .orWhere('usuario.usuarioSede = :sedeScope', { sedeScope })
+            .orWhere('(numero.bodegaId IS NULL AND numero.usuarioId IS NULL)');
         }),
       );
     }
@@ -429,9 +434,7 @@ export class NumerosMedidorService {
       const nuevoNorm = updateDto.numeroMedidor.trim().toLowerCase();
       const actuales = await this.numerosMedidorRepository.find();
       const duplicado = actuales.some(
-        (n) =>
-          n.numeroMedidorId !== id &&
-          n.numeroMedidor.trim().toLowerCase() === nuevoNorm,
+        (n) => n.numeroMedidorId !== id && n.numeroMedidor.trim().toLowerCase() === nuevoNorm,
       );
       if (duplicado) {
         throw new BadRequestException(

@@ -93,11 +93,15 @@ export class InventarioTecnicoService {
           );
         }
         if (requestingUser) {
-          const rolTipo = String(requestingUser?.usuarioRol?.rolTipo || requestingUser?.role || '').toLowerCase();
+          const rolTipo = String(
+            requestingUser?.usuarioRol?.rolTipo || requestingUser?.role || '',
+          ).toLowerCase();
           const isSuperadminOGerencia = rolTipo === 'superadmin' || rolTipo === 'gerencia';
           if (!isSuperadminOGerencia) {
-            const userBodegaId = requestingUser?.usuarioBodega != null ? Number(requestingUser.usuarioBodega) : null;
-            const userSedeId = requestingUser?.usuarioSede != null ? Number(requestingUser.usuarioSede) : null;
+            const userBodegaId =
+              requestingUser?.usuarioBodega != null ? Number(requestingUser.usuarioBodega) : null;
+            const userSedeId =
+              requestingUser?.usuarioSede != null ? Number(requestingUser.usuarioSede) : null;
             const bodegaTipo = String(inventario?.bodega?.bodegaTipo || '').toLowerCase();
             if (userBodegaId != null && userBodegaId > 0) {
               if (Number(inventario.bodegaId) !== userBodegaId) {
@@ -114,8 +118,14 @@ export class InventarioTecnicoService {
             }
 
             // Técnico destino debe ser del mismo centro operativo
-            const tecnico = await this.usersService.findOne(usuarioId, requestingUser).catch(() => null);
-            if (userSedeId != null && tecnico?.usuarioSede != null && Number(tecnico.usuarioSede) !== userSedeId) {
+            const tecnico = await this.usersService
+              .findOne(usuarioId, requestingUser)
+              .catch(() => null);
+            if (
+              userSedeId != null &&
+              tecnico?.usuarioSede != null &&
+              Number(tecnico.usuarioSede) !== userSedeId
+            ) {
               throw new BadRequestException(
                 'Solo puedes asignar materiales a técnicos de tu mismo centro operativo.',
               );
@@ -131,20 +141,23 @@ export class InventarioTecnicoService {
           for (const material of dto.materiales) {
             try {
               // Crear el movimiento de salida
-              const movimientosCreados = await this.movimientosService.create({
-                movimientoTipo: TipoMovimiento.SALIDA,
-                materiales: [
-                  {
-                    materialId: material.materialId,
-                    movimientoCantidad: material.cantidad,
-                  },
-                ],
-                inventarioId: dto.inventarioId,
-                usuarioId: usuarioAsignador,
-                movimientoObservaciones:
-                  dto.observaciones || `Asignación de material a técnico ${usuarioId}`,
-                movimientoCodigo: salidaCodigo,
-              }, requestingUser);
+              const movimientosCreados = await this.movimientosService.create(
+                {
+                  movimientoTipo: TipoMovimiento.SALIDA,
+                  materiales: [
+                    {
+                      materialId: material.materialId,
+                      movimientoCantidad: material.cantidad,
+                    },
+                  ],
+                  inventarioId: dto.inventarioId,
+                  usuarioId: usuarioAsignador,
+                  movimientoObservaciones:
+                    dto.observaciones || `Asignación de material a técnico ${usuarioId}`,
+                  movimientoCodigo: salidaCodigo,
+                },
+                requestingUser,
+              );
 
               // Completar automáticamente el movimiento para que se reste el stock
               if (movimientosCreados && movimientosCreados.length > 0) {
@@ -540,7 +553,12 @@ export class InventarioTecnicoService {
       tecnicoOrigen?.usuarioSede != null ? Number(tecnicoOrigen.usuarioSede) : Number.NaN;
     const sedeDestino =
       tecnicoDestino?.usuarioSede != null ? Number(tecnicoDestino.usuarioSede) : Number.NaN;
-    if (!Number.isFinite(sedeOrigen) || !Number.isFinite(sedeDestino) || sedeOrigen <= 0 || sedeDestino <= 0) {
+    if (
+      !Number.isFinite(sedeOrigen) ||
+      !Number.isFinite(sedeDestino) ||
+      sedeOrigen <= 0 ||
+      sedeDestino <= 0
+    ) {
       throw new BadRequestException(
         'Ambos técnicos deben tener centro operativo (sede) definido para transferir inventario entre técnicos.',
       );
@@ -601,11 +619,15 @@ export class InventarioTecnicoService {
       // Buscar registro real (no consolidado) para actualizar: el primero del query
       const registroOrigen = inventarioOrigen.find((x) => Number(x.materialId) === materialId);
       if (!registroOrigen) {
-        throw new BadRequestException(`No se encontró inventario del técnico origen para material ${materialId}`);
+        throw new BadRequestException(
+          `No se encontró inventario del técnico origen para material ${materialId}`,
+        );
       }
       const nuevaCantOrigen = Number(registroOrigen.cantidad || 0) - cantidad;
       if (nuevaCantOrigen < 0) {
-        throw new BadRequestException(`Stock insuficiente en técnico origen para material ${materialId}`);
+        throw new BadRequestException(
+          `Stock insuficiente en técnico origen para material ${materialId}`,
+        );
       }
       await this.inventarioTecnicoRepository.save({
         ...registroOrigen,

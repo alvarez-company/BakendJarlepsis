@@ -15,4 +15,3 @@ import { AuditoriaModule } from '../auditoria/auditoria.module';
   exports: [TransferenciasTecnicosService],
 })
 export class TransferenciasTecnicosModule {}
-

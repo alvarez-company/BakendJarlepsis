@@ -365,18 +365,24 @@ export class NotificacionesService {
         return data;
       } catch (error: any) {
         lastError = error;
-        console.error(`[NotificacionesService] Error al obtener notificaciones (intento ${attempt}/${maxRetries}):`, error.message);
-        
+        console.error(
+          `[NotificacionesService] Error al obtener notificaciones (intento ${attempt}/${maxRetries}):`,
+          error.message,
+        );
+
         if (attempt < maxRetries && (error.code === 'ECONNRESET' || error.errno === 'ECONNRESET')) {
           const waitTime = Math.pow(2, attempt) * 100;
-          await new Promise(resolve => setTimeout(resolve, waitTime));
+          await new Promise((resolve) => setTimeout(resolve, waitTime));
           continue;
         }
         break;
       }
     }
-    
-    console.error('[NotificacionesService] ❌ Error final al obtener notificaciones:', lastError?.message);
+
+    console.error(
+      '[NotificacionesService] ❌ Error final al obtener notificaciones:',
+      lastError?.message,
+    );
     return [];
   }
 
@@ -439,18 +445,24 @@ export class NotificacionesService {
         return count;
       } catch (error: any) {
         lastError = error;
-        console.error(`[NotificacionesService] Error al contar notificaciones no leídas (intento ${attempt}/${maxRetries}):`, error.message);
-        
+        console.error(
+          `[NotificacionesService] Error al contar notificaciones no leídas (intento ${attempt}/${maxRetries}):`,
+          error.message,
+        );
+
         if (attempt < maxRetries && (error.code === 'ECONNRESET' || error.errno === 'ECONNRESET')) {
           const waitTime = Math.pow(2, attempt) * 100;
-          await new Promise(resolve => setTimeout(resolve, waitTime));
+          await new Promise((resolve) => setTimeout(resolve, waitTime));
           continue;
         }
         break;
       }
     }
-    
-    console.error('[NotificacionesService] ❌ Error final al contar notificaciones no leídas:', lastError?.message);
+
+    console.error(
+      '[NotificacionesService] ❌ Error final al contar notificaciones no leídas:',
+      lastError?.message,
+    );
     return 0;
   }
 
@@ -479,22 +491,28 @@ export class NotificacionesService {
         return count;
       } catch (error: any) {
         lastError = error;
-        console.error(`[NotificacionesService] Error al contar mensajes no leídos (intento ${attempt}/${maxRetries}):`, error.message);
-        
+        console.error(
+          `[NotificacionesService] Error al contar mensajes no leídos (intento ${attempt}/${maxRetries}):`,
+          error.message,
+        );
+
         // Si es un error de conexión y no es el último intento, esperar antes de reintentar
         if (attempt < maxRetries && (error.code === 'ECONNRESET' || error.errno === 'ECONNRESET')) {
           const waitTime = Math.pow(2, attempt) * 100; // 200ms, 400ms, 800ms
           console.log(`[NotificacionesService] Reintentando en ${waitTime}ms...`);
-          await new Promise(resolve => setTimeout(resolve, waitTime));
+          await new Promise((resolve) => setTimeout(resolve, waitTime));
           continue;
         }
-        
+
         // Si no es un error de conexión o es el último intento, romper el ciclo
         break;
       }
     }
-    
-    console.error('[NotificacionesService] ❌ Error final al contar mensajes no leídos después de reintentos:', lastError?.message);
+
+    console.error(
+      '[NotificacionesService] ❌ Error final al contar mensajes no leídos después de reintentos:',
+      lastError?.message,
+    );
     // Retornar 0 en caso de error para no bloquear la aplicación
     return 0;
   }

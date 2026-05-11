@@ -60,14 +60,18 @@ export class MaterialesController {
   @Roles(...ROLES_VER_MATERIALES_INVENTARIO)
   @ApiOperation({ summary: 'Get all materiales' })
   @ApiQuery({ name: 'vistaCentroOperativo', required: false, type: Number })
-  findAll(
-    @Request() req,
-    @Query('vistaCentroOperativo') vistaCentroOperativo?: string,
-  ) {
+  findAll(@Request() req, @Query('vistaCentroOperativo') vistaCentroOperativo?: string) {
     const raw = vistaCentroOperativo?.trim();
     const id = raw ? Number(raw) : NaN;
     const vista = Number.isFinite(id) && id > 0 ? id : undefined;
     return this.materialesService.findAll(req.user, vista);
+  }
+
+  @Get('stock-por-bodega/:bodegaId')
+  @Roles(...ROLES_VER_MATERIALES_INVENTARIO)
+  @ApiOperation({ summary: 'Materiales con stock en una bodega' })
+  findStockPorBodega(@Param('bodegaId') bodegaId: string, @Request() req?: any) {
+    return this.materialesService.findStockByBodega(+bodegaId, req?.user);
   }
 
   @Get(':id')

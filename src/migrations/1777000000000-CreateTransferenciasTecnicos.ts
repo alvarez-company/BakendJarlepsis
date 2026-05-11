@@ -25,4 +25,3 @@ export class CreateTransferenciasTecnicos1777000000000 implements MigrationInter
     await queryRunner.query('DROP TABLE IF EXISTS `transferencias_tecnicos`');
   }
 }
-

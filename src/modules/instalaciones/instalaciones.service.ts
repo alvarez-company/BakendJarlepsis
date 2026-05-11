@@ -9,7 +9,10 @@ import {
 import { InjectRepository } from '@nestjs/typeorm';
 import { In, Repository } from 'typeorm';
 import { Instalacion, EstadoInstalacion } from './instalacion.entity';
-import { esEstadoInstalacionCanonico, normalizarEstadoInstalacionCodigo } from './estado-instalacion.codes';
+import {
+  esEstadoInstalacionCanonico,
+  normalizarEstadoInstalacionCodigo,
+} from './estado-instalacion.codes';
 import { CreateInstalacionDto } from './dto/create-instalacion.dto';
 import { UpdateInstalacionDto } from './dto/update-instalacion.dto';
 import { ChatGateway } from '../chat/chat.gateway';
@@ -27,7 +30,6 @@ import { AuditoriaService } from '../auditoria/auditoria.service';
 import { TipoEntidad } from '../auditoria/auditoria.entity';
 import { EstadosInstalacionService } from '../estados-instalacion/estados-instalacion.service';
 import { InstalacionesMaterialesService } from '../instalaciones-materiales/instalaciones-materiales.service';
-import { InventarioTecnicoService } from '../inventario-tecnico/inventario-tecnico.service';
 import { UsersService } from '../users/users.service';
 import { NumerosMedidorService } from '../numeros-medidor/numeros-medidor.service';
 import { BodegasService } from '../bodegas/bodegas.service';
@@ -62,8 +64,6 @@ export class InstalacionesService {
     private estadosInstalacionService: EstadosInstalacionService,
     @Inject(forwardRef(() => InstalacionesMaterialesService))
     private instalacionesMaterialesService: InstalacionesMaterialesService,
-    @Inject(forwardRef(() => InventarioTecnicoService))
-    private inventarioTecnicoService: InventarioTecnicoService,
     @Inject(forwardRef(() => UsersService))
     private usersService: UsersService,
     @Inject(forwardRef(() => NumerosMedidorService))
@@ -79,6 +79,29 @@ export class InstalacionesService {
     if (Array.isArray(raw)) return raw.length > 0;
     if (typeof raw === 'object') return Object.keys(raw).length > 0;
     return Boolean(raw);
+  }
+
+  private static readonly ANEXO_PDF_MAX_CHARS = 35_000_000;
+
+  /** Data URL PDF, URL legada (/public/... o http(s)), o solo Base64 del PDF. */
+  private normalizarAnexoPdfParaPersistencia(input: string | null | undefined): string | null {
+    if (input === null || input === undefined) return null;
+    const s0 = typeof input === 'string' ? input.trim() : '';
+    if (!s0) return null;
+    if (s0.length > InstalacionesService.ANEXO_PDF_MAX_CHARS) {
+      throw new BadRequestException('El anexo PDF excede el tamaño máximo permitido.');
+    }
+    if (s0.startsWith('data:application/pdf')) return s0;
+    if (s0.startsWith('/public/') || s0.startsWith('http://') || s0.startsWith('https://')) {
+      return s0;
+    }
+    const compact = s0.replace(/\s+/g, '');
+    if (/^[A-Za-z0-9+/]+=*$/.test(compact) && compact.length >= 80) {
+      return `data:application/pdf;base64,${compact}`;
+    }
+    throw new BadRequestException(
+      'Formato de anexo PDF no válido. Use data:application/pdf;base64,... o una ruta /public/...',
+    );
   }
 
   /**
@@ -117,7 +140,9 @@ export class InstalacionesService {
     }
     const version = (raw as any).version;
     if (version != null && version !== 'redes_v2') {
-      throw new BadRequestException(`Versión de instalacionProyectos no soportada: ${String(version)}.`);
+      throw new BadRequestException(
+        `Versión de instalacionProyectos no soportada: ${String(version)}.`,
+      );
     }
 
     let proyectoRedesId: number | undefined =
@@ -155,9 +180,7 @@ export class InstalacionesService {
 
     const leerMetraje = (k: string) => {
       const v =
-        (metSrc as any)[k] ??
-        (metSrc as any)[k.toLowerCase()] ??
-        (metSrc as any)[k.toUpperCase()];
+        (metSrc as any)[k] ?? (metSrc as any)[k.toLowerCase()] ?? (metSrc as any)[k.toUpperCase()];
       if (v === '' || v == null) return 0;
       const n = Number(v);
       if (Number.isNaN(n) || n < 0) {
@@ -329,11 +352,18 @@ export class InstalacionesService {
     }
 
     if (tipo === 'redes') {
-      (instalacionData as any).instalacionProyectos = await this.normalizarInstalacionProyectosRedes(
-        (instalacionData as any).instalacionProyectos,
-      );
+      (instalacionData as any).instalacionProyectos =
+        await this.normalizarInstalacionProyectosRedes(
+          (instalacionData as any).instalacionProyectos,
+        );
     } else {
       (instalacionData as any).instalacionProyectos = null;
+    }
+
+    if (Object.prototype.hasOwnProperty.call(createInstalacionDto, 'anexoPdf')) {
+      (instalacionData as any).anexoPdf = this.normalizarAnexoPdfParaPersistencia(
+        createInstalacionDto.anexoPdf,
+      );
     }
 
     const instalacion = this.instalacionesRepository.create({
@@ -498,6 +528,7 @@ export class InstalacionesService {
           i.instalacionObservaciones,
           i.observacionesTecnico,
           i.instalacionAnexos,
+          (CASE WHEN i.anexoPdf IS NOT NULL AND LENGTH(TRIM(i.anexoPdf)) > 0 THEN 1 ELSE 0 END) AS tieneAnexoPdf,
           i.estado,
           i.estadoInstalacionId,
           i.usuarioRegistra,
@@ -703,6 +734,8 @@ export class InstalacionesService {
                   }
                 })()
               : row.instalacionAnexos,
+          anexoPdf: null,
+          tieneAnexoPdf: Number(row.tieneAnexoPdf) === 1,
           estado: row.estado,
           estadoInstalacionId: row.estadoInstalacionId,
           usuarioRegistra: row.usuarioRegistra,
@@ -1069,6 +1102,7 @@ export class InstalacionesService {
         i.instalacionObservaciones,
         i.observacionesTecnico,
         i.instalacionAnexos,
+        i.anexoPdf,
         i.estado,
         i.usuarioRegistra,
           i.bodegaId,
@@ -1224,6 +1258,7 @@ export class InstalacionesService {
               }
             })()
           : row.instalacionAnexos,
+      anexoPdf: row.anexoPdf ?? null,
       estado: row.estado,
       usuarioRegistra: row.usuarioRegistra,
       bodegaId: row.bodegaId,
@@ -1342,7 +1377,10 @@ export class InstalacionesService {
     if (
       tipoFinal === 'internas' &&
       updateInstalacionDto &&
-      Object.prototype.hasOwnProperty.call(updateInstalacionDto as object, 'instalacionProyectos') &&
+      Object.prototype.hasOwnProperty.call(
+        updateInstalacionDto as object,
+        'instalacionProyectos',
+      ) &&
       this.instalacionProyectosPayloadNoVacio((updateInstalacionDto as any).instalacionProyectos)
     ) {
       throw new BadRequestException(
@@ -1444,6 +1482,12 @@ export class InstalacionesService {
         (instalacionData as any).instalacionProyectos =
           await this.normalizarInstalacionProyectosRedes(raw);
       }
+    }
+
+    if (Object.prototype.hasOwnProperty.call(updateInstalacionDto, 'anexoPdf')) {
+      (instalacionData as any).anexoPdf = this.normalizarAnexoPdfParaPersistencia(
+        updateInstalacionDto.anexoPdf,
+      );
     }
 
     Object.assign(instalacion, instalacionData);
@@ -2440,10 +2484,12 @@ export class InstalacionesService {
   }
 
   /**
-   * Crea salidas automáticamente cuando se asignan usuarios a una instalación
-   * Basa las salidas en los materiales de instalacionProyectos o materialesInstalados
-   * @param completarInmediatamente Si es true, las salidas se crean en estado COMPLETADA (para instalaciones finalizadas)
-   * @param bodegaId ID de la bodega de origen (opcional)
+   * Crea movimientos de SALIDA vinculados a la instalación (mismo mecanismo que salidas manuales al completarse).
+   * Origen de stock: bodega de la instalación (`bodegaId` o parámetro), resuelto con inventario por bodega.
+   * Materiales: `instalacionProyectos` (listas legacy con items) o `materialesInstalados`; redes_v2 usa solo materialesInstalados.
+   * Se invoca al pasar a facturación (FACT) y al recalcular materiales en instalación ya facturada.
+   * @param completarInmediatamente Si es true, las salidas pasan a COMPLETADA y se aplica stock de bodega de inmediato.
+   * @param bodegaId ID de la bodega de origen (opcional; por defecto el de la instalación)
    */
   async crearSalidasAutomaticas(
     instalacionId: number,
@@ -2545,17 +2591,20 @@ export class InstalacionesService {
       // Usar bodegaId de la instalación si está disponible, o el parámetro pasado
       const bodegaIdFinal = instalacion.bodegaId || bodegaId;
 
-      // Obtener inventarioId desde bodegaId si está disponible
+      // Mismo criterio que entradas/salidas manuales: inventario activo de la bodega (crear si no existe)
       let inventarioId: number | undefined = undefined;
       if (bodegaIdFinal) {
         try {
-          const inventarios = await this.inventariosService.findAll();
-          const inventario = inventarios.find((inv) => inv.bodegaId === bodegaIdFinal);
-          if (inventario) {
-            inventarioId = inventario.inventarioId;
-          }
+          const inv = await this.inventariosService.findOrCreateByBodega(Number(bodegaIdFinal), {
+            inventarioNombre: `Inventario - Instalación / Bodega ${bodegaIdFinal}`,
+            inventarioDescripcion: 'Inventario para salidas automáticas de instalación',
+          });
+          inventarioId = inv.inventarioId;
         } catch (error) {
-          console.error('Error al obtener inventario desde bodega:', error);
+          console.error(
+            '[InstalacionesService.crearSalidasAutomaticas] Error al resolver inventario por bodega:',
+            error,
+          );
         }
       }
 
@@ -2654,10 +2703,7 @@ export class InstalacionesService {
 
         // Si la cantidad realmente utilizada difiere de la planificada, actualizar el movimiento
         // ANTES de completarlo, para que el ajuste de stock se haga con la cantidad correcta.
-        if (
-          tieneCantidadUtilizada &&
-          Number(movimiento.movimientoCantidad) !== cantidadFinal
-        ) {
+        if (tieneCantidadUtilizada && Number(movimiento.movimientoCantidad) !== cantidadFinal) {
           await this.movimientosService.update(movimiento.movimientoId, {
             materiales: [
               {
@@ -2689,79 +2735,6 @@ export class InstalacionesService {
           }
         }
       }
-    }
-  }
-
-  /**
-   * Descontar materiales utilizados del inventario del técnico cuando pasa de construccion a certificacion
-   */
-  private async descontarMaterialesDeTecnico(instalacionId: number): Promise<void> {
-    try {
-      // Obtener la instalación con usuarios asignados
-      const instalacion = await this.findOne(instalacionId);
-
-      if (
-        !instalacion ||
-        !instalacion.usuariosAsignados ||
-        !Array.isArray(instalacion.usuariosAsignados)
-      ) {
-        return;
-      }
-
-      // Buscar el técnico o soldador asignado (para descontar de su inventario)
-      const tecnicoAsignado = instalacion.usuariosAsignados.find((u: any) => {
-        const usuario = u.usuario || u;
-        const rol = usuario?.usuarioRol?.rolTipo ?? usuario?.rolTipo;
-        return usuario && (rol === 'tecnico' || rol === 'soldador');
-      });
-
-      if (!tecnicoAsignado) {
-        return;
-      }
-
-      const usuario = tecnicoAsignado.usuario || tecnicoAsignado;
-      const tecnicoId = usuario.usuarioId;
-
-      // Obtener todos los materiales utilizados en esta instalación
-      const materialesUtilizados =
-        await this.instalacionesMaterialesService.findByInstalacion(instalacionId);
-
-      if (!materialesUtilizados || materialesUtilizados.length === 0) {
-        return;
-      }
-
-      // Obtener el inventario del técnico
-      const inventarioTecnico = await this.inventarioTecnicoService.findByUsuario(tecnicoId);
-
-      // Descontar cada material utilizado
-      for (const materialUtilizado of materialesUtilizados) {
-        const materialId = materialUtilizado.materialId;
-        const cantidadUtilizada = Math.round(Number(materialUtilizado.cantidad || 0));
-
-        if (cantidadUtilizada <= 0) {
-          continue;
-        }
-
-        // Buscar el material en el inventario del técnico
-        const inventarioItem = inventarioTecnico.find(
-          (inv) => inv.materialId === materialId && inv.usuarioId === tecnicoId,
-        );
-
-        if (inventarioItem) {
-          const cantidadActual = Number(inventarioItem.cantidad || 0);
-          const nuevaCantidad = Math.max(0, cantidadActual - cantidadUtilizada);
-
-          await this.inventarioTecnicoService.update(inventarioItem.inventarioTecnicoId, {
-            cantidad: nuevaCantidad,
-          });
-        }
-      }
-    } catch (error) {
-      console.error(
-        `[InstalacionesService] Error al descontar materiales del técnico para instalación ${instalacionId}:`,
-        error,
-      );
-      // No lanzar error para no interrumpir el cambio de estado
     }
   }
 }

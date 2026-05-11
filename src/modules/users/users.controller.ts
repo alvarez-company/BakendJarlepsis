@@ -116,24 +116,26 @@ export class UsersController {
     // El campo usuarioSede debería estar disponible directamente en la entidad
     // Si no está, intentar obtenerlo desde la relación sede
     let sedeId = req.user?.usuarioSede;
-    
+
     // Si no está disponible directamente, intentar desde la relación
     if (!sedeId && req.user?.sede) {
       sedeId = req.user.sede.sedeId;
     }
-    
+
     // Si aún no hay sedeId válido, retornar array vacío
     // Esto puede ocurrir si el almacenista no tiene sede asignada
     if (!sedeId || sedeId === 0) {
       return { data: [], total: 0, page: 1, limit: paginationDto?.limit ?? 10 };
     }
-    
+
     return this.usersService.findTecnicosBySede(sedeId, paginationDto, search);
   }
 
   @Get(':id')
   @Roles(...ROLES_VER_USUARIOS_CON_ALMACENISTA)
-  @ApiOperation({ summary: 'Get a user by ID (almacenista solo ve usuarios de su centro, p. ej. técnicos)' })
+  @ApiOperation({
+    summary: 'Get a user by ID (almacenista solo ve usuarios de su centro, p. ej. técnicos)',
+  })
   findOne(@Param('id') id: string, @Request() req?: { user?: any }) {
     return this.usersService.findOne(+id, req?.user);
   }

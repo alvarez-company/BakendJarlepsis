@@ -1,5 +1,13 @@
 import { ApiProperty } from '@nestjs/swagger';
-import { IsString, IsNumber, IsOptional, IsDateString, IsArray, IsIn } from 'class-validator';
+import {
+  IsString,
+  IsNumber,
+  IsOptional,
+  IsDateString,
+  IsArray,
+  IsIn,
+  ValidateIf,
+} from 'class-validator';
 
 export class CreateInstalacionDto {
   @ApiProperty({ example: 1 })
@@ -86,4 +94,15 @@ export class CreateInstalacionDto {
   @IsNumber()
   @IsOptional()
   bodegaId?: number;
+
+  @ApiProperty({
+    required: false,
+    nullable: true,
+    description:
+      'Anexo PDF: data URL (data:application/pdf;base64,...) guardada en BD, o ruta legada /public/...',
+  })
+  @IsOptional()
+  @ValidateIf((_, v) => v !== null && v !== undefined)
+  @IsString()
+  anexoPdf?: string | null;
 }

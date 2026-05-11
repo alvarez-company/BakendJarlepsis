@@ -16,7 +16,6 @@ import { ClientesService } from '../clientes/clientes.service';
 import { GruposService } from '../grupos/grupos.service';
 import { AuditoriaService } from '../auditoria/auditoria.service';
 import { EstadosInstalacionService } from '../estados-instalacion/estados-instalacion.service';
-import { InventarioTecnicoService } from '../inventario-tecnico/inventario-tecnico.service';
 import { NumerosMedidorService } from '../numeros-medidor/numeros-medidor.service';
 import { BodegasService } from '../bodegas/bodegas.service';
 import { ProyectosRedesService } from '../proyectos-redes/proyectos-redes.service';
@@ -59,6 +58,8 @@ describe('InstalacionesService - Permisos', () => {
   const mockInstalacionesMaterialesService = {
     findByInstalacion: jest.fn(),
     removeByInstalacion: jest.fn().mockResolvedValue(undefined),
+    remove: jest.fn().mockResolvedValue(undefined),
+    create: jest.fn(),
   };
 
   const mockChatGateway = {
@@ -86,7 +87,6 @@ describe('InstalacionesService - Permisos', () => {
       .fn()
       .mockResolvedValue({ estadoInstalacionId: 1, estadoCodigo: 'en_proceso' }),
   };
-  const mockInventarioTecnicoService = {};
   const mockNumerosMedidorService = {
     findByInstalacion: jest.fn().mockResolvedValue([]),
   };
@@ -156,10 +156,6 @@ describe('InstalacionesService - Permisos', () => {
         {
           provide: EstadosInstalacionService,
           useValue: mockEstadosInstalacionService,
-        },
-        {
-          provide: InventarioTecnicoService,
-          useValue: mockInventarioTecnicoService,
         },
         {
           provide: NumerosMedidorService,

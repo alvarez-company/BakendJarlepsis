@@ -41,8 +41,7 @@ export class DefaultProyectoRedesV2EnInstalaciones1772000000000 implements Migra
     );
   }
 
-  public async down(queryRunner: QueryRunner): Promise<void> {
+  public async down(_queryRunner: QueryRunner): Promise<void> {
     // No revertimos porque podría borrar datos reales agregados luego.
   }
 }
-

@@ -1,8 +1,6 @@
 import { MigrationInterface, QueryRunner } from 'typeorm';
 
-export class InstalacionesOptionalTipoYFechaMetrogas1776000000000
-  implements MigrationInterface
-{
+export class InstalacionesOptionalTipoYFechaMetrogas1776000000000 implements MigrationInterface {
   name = 'InstalacionesOptionalTipoYFechaMetrogas1776000000000';
 
   public async up(queryRunner: QueryRunner): Promise<void> {
@@ -32,4 +30,3 @@ export class InstalacionesOptionalTipoYFechaMetrogas1776000000000
     `);
   }
 }
-

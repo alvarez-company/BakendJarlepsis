@@ -166,7 +166,13 @@ export class AsignacionesTecnicosService {
         usuarioAsignadorId: createDto.usuarioAsignadorId,
       } as any,
       order: { fechaCreacion: 'DESC' } as any,
-      relations: ['usuario', 'inventario', 'inventario.bodega', 'inventario.bodega.sede', 'usuarioAsignador'],
+      relations: [
+        'usuario',
+        'inventario',
+        'inventario.bodega',
+        'inventario.bodega.sede',
+        'usuarioAsignador',
+      ],
     });
 
     if (!latest) {

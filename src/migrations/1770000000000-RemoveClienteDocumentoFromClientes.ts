@@ -15,12 +15,10 @@ export class RemoveClienteDocumentoFromClientes1770000000000 implements Migratio
 
     if (hasClienteDocumento) {
       console.log('🔄 Eliminando índice único y columna clienteDocumento...');
-      
+
       // 1. Primero, eliminar el índice único si existe
       try {
-        await queryRunner.query(
-          `DROP INDEX \`IDX_40e6ad87dd45613db7c261ac3d\` ON \`clientes\``
-        );
+        await queryRunner.query(`DROP INDEX \`IDX_40e6ad87dd45613db7c261ac3d\` ON \`clientes\``);
         console.log(`✅ Índice único IDX_40e6ad87dd45613db7c261ac3d eliminado`);
       } catch (error: any) {
         // Si el índice no existe, continuar
@@ -30,11 +28,9 @@ export class RemoveClienteDocumentoFromClientes1770000000000 implements Migratio
           throw error;
         }
       }
-      
+
       // 2. Luego, eliminar la columna (TypeORM manejará esto sin intentar eliminar el índice de nuevo)
-      await queryRunner.query(
-        `ALTER TABLE \`clientes\` DROP COLUMN \`clienteDocumento\``
-      );
+      await queryRunner.query(`ALTER TABLE \`clientes\` DROP COLUMN \`clienteDocumento\``);
       console.log('✅ Columna clienteDocumento eliminada');
     } else {
       console.log('✅ La columna clienteDocumento ya no existe');
@@ -43,9 +39,7 @@ export class RemoveClienteDocumentoFromClientes1770000000000 implements Migratio
     // Verificar y eliminar clienteCorreo si existe (también parece no estar en uso)
     const hasClienteCorreo = table?.findColumnByName('clienteCorreo');
     if (hasClienteCorreo) {
-      await queryRunner.query(
-        `ALTER TABLE \`clientes\` DROP COLUMN \`clienteCorreo\``
-      );
+      await queryRunner.query(`ALTER TABLE \`clientes\` DROP COLUMN \`clienteCorreo\``);
       console.log('✅ Columna clienteCorreo eliminada');
     }
   }
@@ -66,12 +60,12 @@ export class RemoveClienteDocumentoFromClientes1770000000000 implements Migratio
           type: 'varchar',
           length: '255',
           isNullable: true, // Cambiado a nullable para evitar problemas con datos existentes
-        })
+        }),
       );
 
       // Crear índice único (pero permitiendo NULL)
       await queryRunner.query(
-        `CREATE UNIQUE INDEX \`IDX_40e6ad87dd45613db7c261ac3d\` ON \`clientes\` (\`clienteDocumento\`)`
+        `CREATE UNIQUE INDEX \`IDX_40e6ad87dd45613db7c261ac3d\` ON \`clientes\` (\`clienteDocumento\`)`,
       );
     }
 
@@ -85,7 +79,7 @@ export class RemoveClienteDocumentoFromClientes1770000000000 implements Migratio
           type: 'varchar',
           length: '255',
           isNullable: true,
-        })
+        }),
       );
     }
   }

@@ -23,4 +23,3 @@ export class PushTokensController {
     return { ok: true, pushTokenId: saved.pushTokenId };
   }
 }
-

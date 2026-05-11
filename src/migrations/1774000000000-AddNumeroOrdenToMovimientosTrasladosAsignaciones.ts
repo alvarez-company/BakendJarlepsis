@@ -1,8 +1,6 @@
 import { MigrationInterface, QueryRunner } from 'typeorm';
 
-export class AddNumeroOrdenToMovimientosTrasladosAsignaciones1774000000000
-  implements MigrationInterface
-{
+export class AddNumeroOrdenToMovimientosTrasladosAsignaciones1774000000000 implements MigrationInterface {
   name = 'AddNumeroOrdenToMovimientosTrasladosAsignaciones1774000000000';
 
   public async up(queryRunner: QueryRunner): Promise<void> {
@@ -23,4 +21,3 @@ export class AddNumeroOrdenToMovimientosTrasladosAsignaciones1774000000000
     await queryRunner.query(`ALTER TABLE movimientos_inventario DROP COLUMN numeroOrden`);
   }
 }
-

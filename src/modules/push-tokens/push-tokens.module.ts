@@ -11,4 +11,3 @@ import { PushTokensController } from './push-tokens.controller';
   exports: [PushTokensService],
 })
 export class PushTokensModule {}
-

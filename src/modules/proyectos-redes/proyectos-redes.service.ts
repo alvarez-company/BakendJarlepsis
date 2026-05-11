@@ -22,7 +22,10 @@ export class ProyectosRedesService {
     return this.proyectosRepo.findOne({ where: { codigo: c } });
   }
 
-  async assertActividadesPertenecen(proyectoRedesId: number, actividadIds: number[]): Promise<void> {
+  async assertActividadesPertenecen(
+    proyectoRedesId: number,
+    actividadIds: number[],
+  ): Promise<void> {
     if (!actividadIds.length) return;
     const rows = await this.actividadesRepo.find({ where: { proyectoRedesId } });
     const permitidas = new Set(rows.map((r) => r.actividadId));
@@ -41,7 +44,9 @@ export class ProyectosRedesService {
     return p;
   }
 
-  async findActividadesByProyectoRedesId(proyectoRedesId: number): Promise<ProyectoRedesActividad[]> {
+  async findActividadesByProyectoRedesId(
+    proyectoRedesId: number,
+  ): Promise<ProyectoRedesActividad[]> {
     await this.findTipoById(proyectoRedesId);
     return this.actividadesRepo.find({
       where: { proyectoRedesId },
@@ -77,7 +82,8 @@ export class ProyectosRedesService {
     if (!act) throw new NotFoundException(`Actividad ${actividadId} no encontrada`);
     if (dto.nombre !== undefined) {
       const nombre = String(dto.nombre).trim();
-      if (!nombre) throw new BadRequestException('El nombre de la actividad no puede quedar vacío.');
+      if (!nombre)
+        throw new BadRequestException('El nombre de la actividad no puede quedar vacío.');
       act.nombre = nombre;
     }
     if (dto.orden !== undefined) act.orden = Number(dto.orden);

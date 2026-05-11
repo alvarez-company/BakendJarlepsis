@@ -166,7 +166,11 @@ export class Municipios1777000000000 implements MigrationInterface {
     await this.insertMunicipios(queryRunner, norteId, municipiosNorte);
   }
 
-  private async insertMunicipios(queryRunner: QueryRunner, departamentoId: number, municipios: Mun[]) {
+  private async insertMunicipios(
+    queryRunner: QueryRunner,
+    departamentoId: number,
+    municipios: Mun[],
+  ) {
     for (const m of municipios) {
       await queryRunner.query(
         `
@@ -178,8 +182,7 @@ export class Municipios1777000000000 implements MigrationInterface {
     }
   }
 
-  public async down(queryRunner: QueryRunner): Promise<void> {
+  public async down(_queryRunner: QueryRunner): Promise<void> {
     // No revertimos automáticamente para evitar borrar data que el negocio haya usado.
   }
 }
-

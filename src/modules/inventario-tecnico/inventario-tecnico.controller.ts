@@ -57,7 +57,10 @@ export class InventarioTecnicoController {
 
   @Post('usuario/:usuarioId/retornar-bodega')
   @Roles(...ROLES_INVENTARIO_TECNICO_EDITAR)
-  @ApiOperation({ summary: 'Retornar múltiples materiales de un técnico hacia una bodega (mismo centro operativo)' })
+  @ApiOperation({
+    summary:
+      'Retornar múltiples materiales de un técnico hacia una bodega (mismo centro operativo)',
+  })
   retornarABodega(
     @Param('usuarioId') usuarioId: string,
     @Body() dto: ReturnMaterialesToBodegaDto,
@@ -68,7 +71,9 @@ export class InventarioTecnicoController {
 
   @Post('usuario/:usuarioId/transferir-tecnico')
   @Roles(...ROLES_INVENTARIO_TECNICO_EDITAR)
-  @ApiOperation({ summary: 'Transferir múltiples materiales entre técnicos (mismo centro operativo)' })
+  @ApiOperation({
+    summary: 'Transferir múltiples materiales entre técnicos (mismo centro operativo)',
+  })
   transferirATecnico(
     @Param('usuarioId') usuarioId: string,
     @Body() dto: TransferMaterialesEntreTecnicosDto,

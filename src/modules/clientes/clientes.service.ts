@@ -19,7 +19,9 @@ export class ClientesService {
     private municipiosRepository: Repository<Municipio>,
   ) {}
 
-  private async assertClienteMunicipioZonaOperacion(municipioId: number | null | undefined): Promise<void> {
+  private async assertClienteMunicipioZonaOperacion(
+    municipioId: number | null | undefined,
+  ): Promise<void> {
     if (municipioId == null || municipioId === 0) return;
     const m = await this.municipiosRepository.findOne({
       where: { municipioId },

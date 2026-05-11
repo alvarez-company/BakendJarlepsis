@@ -4,10 +4,7 @@ import { ReaccionesMensajeService } from './reacciones-mensaje.service';
 import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard';
 import { RolesGuard } from '../../common/guards/roles.guard';
 import { Roles } from '../../common/decorators/roles.decorator';
-import {
-  ROLES_CHAT,
-  ROLES_VER_INVENTARIO_TECNICO,
-} from '../../common/constants/roles.constants';
+import { ROLES_CHAT, ROLES_VER_INVENTARIO_TECNICO } from '../../common/constants/roles.constants';
 
 @ApiTags('reacciones-mensaje')
 @ApiBearerAuth()

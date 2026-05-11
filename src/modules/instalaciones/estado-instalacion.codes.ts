@@ -52,3 +52,14 @@ export function normalizarEstadoInstalacionCodigo(raw: string): EstadoInstalacio
 export function esEstadoInstalacionCanonico(c: string): boolean {
   return CANONICOS.has((c || '').toLowerCase().trim());
 }
+
+/**
+ * Estados en los que el técnico/soldador puede registrar, editar o quitar materiales utilizados en obra.
+ * A partir de construida (CONS), certificación, facturación, etc., el flujo lo maneja el sistema / roles administrativos.
+ */
+export function instalacionPermiteTecnicoGestionarMaterialesUtilizados(
+  estadoRaw: string | null | undefined,
+): boolean {
+  const e = normalizarEstadoInstalacionCodigo(String(estadoRaw ?? ''));
+  return e === EstadoInstalacion.AVAN || e === EstadoInstalacion.NOVE;
+}

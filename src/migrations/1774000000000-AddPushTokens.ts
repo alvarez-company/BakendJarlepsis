@@ -26,4 +26,3 @@ export class AddPushTokens1774000000000 implements MigrationInterface {
     await queryRunner.query('DROP TABLE `push_tokens`');
   }
 }
-

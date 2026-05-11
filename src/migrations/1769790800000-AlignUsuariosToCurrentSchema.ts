@@ -7,9 +7,7 @@ import { MigrationInterface, QueryRunner } from 'typeorm';
  * - Elimina usuarioOficina si aún existe (columna obsoleta).
  * - Asegura que usuarios existentes tengan usuarioEstado = 1 donde sea NULL.
  */
-export class AlignUsuariosToCurrentSchema1769790800000
-  implements MigrationInterface
-{
+export class AlignUsuariosToCurrentSchema1769790800000 implements MigrationInterface {
   name = 'AlignUsuariosToCurrentSchema1769790800000';
 
   public async up(queryRunner: QueryRunner): Promise<void> {
@@ -37,9 +35,7 @@ export class AlignUsuariosToCurrentSchema1769790800000
       } catch {
         // ignorar si no hay FK
       }
-      await queryRunner.query(
-        `ALTER TABLE \`usuarios\` DROP COLUMN \`usuarioOficina\``,
-      );
+      await queryRunner.query(`ALTER TABLE \`usuarios\` DROP COLUMN \`usuarioOficina\``);
     }
 
     // 2. Añadir usuarioFoto si no existe
@@ -54,8 +50,7 @@ export class AlignUsuariosToCurrentSchema1769790800000
 
     // 3. Añadir tipoDocumentoId si no existe
     const tableForTipo = await queryRunner.getTable('usuarios');
-    const tipoDocumentoIdColumn =
-      tableForTipo?.findColumnByName('tipoDocumentoId');
+    const tipoDocumentoIdColumn = tableForTipo?.findColumnByName('tipoDocumentoId');
     if (!tipoDocumentoIdColumn) {
       await queryRunner.query(`
         ALTER TABLE \`usuarios\` 
@@ -96,8 +91,7 @@ export class AlignUsuariosToCurrentSchema1769790800000
     if (!usuariosTable) return;
 
     // Quitar FK y columna tipoDocumentoId
-    const tipoDocumentoIdColumn =
-      usuariosTable.findColumnByName('tipoDocumentoId');
+    const tipoDocumentoIdColumn = usuariosTable.findColumnByName('tipoDocumentoId');
     if (tipoDocumentoIdColumn) {
       try {
         await queryRunner.query(
@@ -106,9 +100,7 @@ export class AlignUsuariosToCurrentSchema1769790800000
       } catch {
         // ignorar si no existe la FK
       }
-      await queryRunner.query(
-        `ALTER TABLE \`usuarios\` DROP COLUMN \`tipoDocumentoId\``,
-      );
+      await queryRunner.query(`ALTER TABLE \`usuarios\` DROP COLUMN \`tipoDocumentoId\``);
     }
 
     // No restauramos usuarioOficina ni eliminamos usuarioFoto en down

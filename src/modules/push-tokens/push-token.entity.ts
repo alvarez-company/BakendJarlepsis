@@ -35,4 +35,3 @@ export class PushToken {
   })
   fechaActualizacion: Date;
 }
-

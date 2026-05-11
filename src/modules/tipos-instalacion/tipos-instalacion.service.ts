@@ -83,7 +83,9 @@ export class TiposInstalacionService {
 
     // Bodega Redes solo ve tipos que contengan "redes"
     if (user?.usuarioRol?.rolTipo === 'bodega-redes' || user?.role === 'bodega-redes') {
-      const data = allTipos.filter((tipo) => tipo.tipoInstalacionNombre?.toLowerCase().includes('redes'));
+      const data = allTipos.filter((tipo) =>
+        tipo.tipoInstalacionNombre?.toLowerCase().includes('redes'),
+      );
       this.setFindAllCache(cacheKey, data);
       return data;
     }

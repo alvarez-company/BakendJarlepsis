@@ -7,7 +7,8 @@ export class UpdateEstadoInstalacionDto {
   @ApiProperty({
     enum: EstadoInstalacion,
     example: EstadoInstalacion.PPC,
-    description: 'Nuevo estado de la instalación (códigos v2: apm, ppc, aat, avan, cons, cert, fact, nove, dev). Legacy anulada/cancelada se normalizan a dev.',
+    description:
+      'Nuevo estado de la instalación (códigos v2: apm, ppc, aat, avan, cons, cert, fact, nove, dev). Legacy anulada/cancelada se normalizan a dev.',
   })
   @Transform(({ value }) => {
     const v = String(value ?? '')
@@ -22,7 +23,9 @@ export class UpdateEstadoInstalacionDto {
   @IsNotEmpty()
   estado: EstadoInstalacion;
 
-  @ApiPropertyOptional({ description: 'Obligatorio al pasar a facturación (fact / legacy completada)' })
+  @ApiPropertyOptional({
+    description: 'Obligatorio al pasar a facturación (fact / legacy completada)',
+  })
   @IsOptional()
   @IsString()
   numeroActa?: string;

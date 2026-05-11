@@ -35,4 +35,3 @@ export class ResetStocksAndMovimientos1776100000000 implements MigrationInterfac
     // No-op: este reset no es reversible automáticamente.
   }
 }
-

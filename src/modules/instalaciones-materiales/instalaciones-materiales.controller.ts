@@ -1,4 +1,15 @@
-import { Controller, Get, Post, Body, Param, Delete, Put, Patch, UseGuards } from '@nestjs/common';
+import {
+  Controller,
+  Get,
+  Post,
+  Body,
+  Param,
+  Delete,
+  Put,
+  Patch,
+  UseGuards,
+  Req,
+} from '@nestjs/common';
 import { ApiTags, ApiBearerAuth, ApiOperation } from '@nestjs/swagger';
 import { InstalacionesMaterialesService } from './instalaciones-materiales.service';
 import {
@@ -26,8 +37,8 @@ export class InstalacionesMaterialesController {
   @Post()
   @Roles(...ROLES_INSTALACIONES_MATERIALES)
   @ApiOperation({ summary: 'Crear registro de material utilizado en instalación' })
-  create(@Body() createDto: CreateInstalacionMaterialDto) {
-    return this.service.create(createDto);
+  create(@Body() createDto: CreateInstalacionMaterialDto, @Req() req: { user?: any }) {
+    return this.service.create(createDto, req.user);
   }
 
   @Post('instalacion/:instalacionId/asignar')
@@ -36,8 +47,9 @@ export class InstalacionesMaterialesController {
   asignarMateriales(
     @Param('instalacionId') instalacionId: string,
     @Body() dto: AssignMaterialesToInstalacionDto,
+    @Req() req: { user?: any },
   ) {
-    return this.service.asignarMateriales(+instalacionId, dto);
+    return this.service.asignarMateriales(+instalacionId, dto, req.user);
   }
 
   @Get()
@@ -71,22 +83,30 @@ export class InstalacionesMaterialesController {
   @Put(':id')
   @Roles(...ROLES_INSTALACIONES_MATERIALES)
   @ApiOperation({ summary: 'Actualizar material de instalación' })
-  update(@Param('id') id: string, @Body() updateDto: UpdateInstalacionMaterialDto) {
-    return this.service.update(+id, updateDto);
+  update(
+    @Param('id') id: string,
+    @Body() updateDto: UpdateInstalacionMaterialDto,
+    @Req() req: { user?: any },
+  ) {
+    return this.service.update(+id, updateDto, req.user);
   }
 
   @Patch(':id')
   @Roles(...ROLES_INSTALACIONES_MATERIALES)
   @ApiOperation({ summary: 'Actualizar parcialmente material de instalación' })
-  patch(@Param('id') id: string, @Body() updateDto: UpdateInstalacionMaterialDto) {
-    return this.service.update(+id, updateDto);
+  patch(
+    @Param('id') id: string,
+    @Body() updateDto: UpdateInstalacionMaterialDto,
+    @Req() req: { user?: any },
+  ) {
+    return this.service.update(+id, updateDto, req.user);
   }
 
   @Delete(':id')
-  @Roles(...ROLES_VER_CATALOGOS_ADMIN)
+  @Roles(...ROLES_INSTALACIONES_MATERIALES)
   @ApiOperation({ summary: 'Eliminar registro de material de instalación' })
-  remove(@Param('id') id: string) {
-    return this.service.remove(+id);
+  remove(@Param('id') id: string, @Req() req: { user?: any }) {
+    return this.service.remove(+id, req.user);
   }
 
   @Delete('instalacion/:instalacionId')

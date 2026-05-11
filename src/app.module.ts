@@ -81,9 +81,7 @@ import { PushTokensModule } from './modules/push-tokens/push-tokens.module';
         const nodeEnv = (configService.get<string>('NODE_ENV') || '').toLowerCase();
         const migrationsRunEnv = configService.get<string>('DB_MIGRATIONS_RUN', '');
         const migrationsRun =
-          migrationsRunEnv !== ''
-            ? migrationsRunEnv === 'true'
-            : nodeEnv !== 'production';
+          migrationsRunEnv !== '' ? migrationsRunEnv === 'true' : nodeEnv !== 'production';
 
         const config = {
           type: 'mysql' as const,

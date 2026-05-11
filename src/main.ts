@@ -16,14 +16,36 @@ async function bootstrap() {
     bodyParser: false, // Deshabilitar body parser por defecto para configurarlo manualmente
   });
 
-  // Configurar carpeta pública para archivos estáticos
-  app.useStaticAssets(join(__dirname, '..', 'public'), {
+  // Archivos subidos viven en `process.cwd()/public` (Multer usa cwd). Con `nest start`/`node dist`,
+  // `__dirname/../public` apunta a `dist/public` (vacío) → 404. Usar siempre la carpeta `public` del proyecto.
+  const publicRoot = join(process.cwd(), 'public');
+  const frameAncestorsExtra = [
+    process.env.FRONTEND_URL,
+    process.env.MINIAPP_URL,
+    'http://localhost:4173',
+    'http://localhost:5173',
+    'http://127.0.0.1:4173',
+    'http://127.0.0.1:5173',
+  ]
+    .filter((o): o is string => Boolean(o && String(o).trim()))
+    .join(' ');
+  app.useStaticAssets(publicRoot, {
     prefix: '/public/',
+    setHeaders: (res, filePath) => {
+      res.setHeader('Cross-Origin-Resource-Policy', 'cross-origin');
+      // Permitir iframe / embed desde el SPA (otro puerto u origen) en vista previa de PDF, etc.
+      if (filePath.endsWith('.pdf')) {
+        res.setHeader(
+          'Content-Security-Policy',
+          `frame-ancestors 'self' ${frameAncestorsExtra}`.trim(),
+        );
+      }
+    },
   });
 
-  // Configurar body parser con límite aumentado para imágenes base64
-  app.use(json({ limit: '10mb' })); // Aumentar límite a 10MB
-  app.use(urlencoded({ extended: true, limit: '10mb' }));
+  // Body parser: anexos PDF en data URL (base64) pueden superar 10MB
+  app.use(json({ limit: '50mb' }));
+  app.use(urlencoded({ extended: true, limit: '50mb' }));
 
   // Security
   app.use(helmet());

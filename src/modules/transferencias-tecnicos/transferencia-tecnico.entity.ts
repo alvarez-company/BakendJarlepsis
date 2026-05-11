@@ -29,4 +29,3 @@ export class TransferenciaTecnico {
   @CreateDateColumn()
   fechaCreacion: Date;
 }
-

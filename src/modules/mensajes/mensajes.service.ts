@@ -64,7 +64,7 @@ export class MensajesService {
       archivosAdjuntos && archivosAdjuntos.length > 0
         ? archivosAdjuntos.map((a, index) => {
             const str = typeof a === 'string' ? a : (a as { url: string }).url;
-            
+
             // Validar formato base64 si es data URL
             if (str.startsWith('data:')) {
               // Validar formato: data:[tipo];base64,[datos]
@@ -100,7 +100,7 @@ export class MensajesService {
 
               totalSize += str.length;
             }
-            
+
             return str;
           })
         : null;

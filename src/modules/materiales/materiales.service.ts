@@ -288,7 +288,11 @@ export class MaterialesService {
         const bodegaIdsEnSede = new Set(ids);
         const materialesConStockYSede = await Promise.all(
           allMateriales.map(async (material) => {
-            const stockEnCentroOperativo = await this.calculateStockBySede(material, sid, bodegaIdsEnSede);
+            const stockEnCentroOperativo = await this.calculateStockBySede(
+              material,
+              sid,
+              bodegaIdsEnSede,
+            );
             const materialBodegasCentro = (material.materialBodegas || []).filter((mb: any) =>
               this.materialBodegaEnSede(mb, sid, bodegaIdsEnSede),
             );
@@ -310,6 +314,49 @@ export class MaterialesService {
   }
 
   /**
+   * Materiales con stock en una bodega específica.
+   * Evita traer todo el catálogo (performance + evita ECONNRESET por payload grande).
+   */
+  async findStockByBodega(bodegaId: number, user?: any): Promise<Material[]> {
+    const bid = Number(bodegaId);
+    if (!Number.isFinite(bid) || bid <= 0) return [];
+
+    const bodega = await this.bodegasService.findOne(bid, user);
+    const sedeId = bodega?.sedeId ?? bodega?.sede?.sedeId;
+    if (sedeId != null) {
+      const puede = await this.usuarioPuedeVerStockEnCentro(Number(sedeId), user);
+      if (!puede) {
+        throw new ForbiddenException('No tiene acceso al inventario de ese centro operativo.');
+      }
+    }
+
+    const rows = await this.materialesBodegasRepository.find({
+      where: { bodegaId: bid },
+      relations: ['material', 'material.categoria', 'material.proveedor', 'material.unidadMedida'],
+    });
+
+    // Filtrar solo stock positivo (lo que se muestra en Empresa → bodega).
+    const conStock = rows.filter((r) => Number(r.stock || 0) > 0);
+
+    return conStock.map((r) => {
+      const m = r.material as Material;
+      return {
+        ...m,
+        materialBodegas: [
+          {
+            materialBodegaId: r.materialBodegaId,
+            materialId: r.materialId,
+            bodegaId: r.bodegaId,
+            stock: Number(r.stock || 0),
+            precioPromedio: r.precioPromedio,
+            bodega: r.bodega,
+          } as any,
+        ],
+      } as Material;
+    });
+  }
+
+  /**
    * Incluye fila de materiales_bodegas si la bodega pertenece al centro, aunque `mb.bodega.sedeId`
    * no venga poblado en la relación (serialización / carga parcial).
    */
@@ -319,9 +366,7 @@ export class MaterialesService {
     bodegaIdsEnSede: Set<number>,
   ): boolean {
     const sid = Number(sedeId);
-    const fromRel = mb.bodega
-      ? Number(mb.bodega.sedeId ?? mb.bodega.sede?.sedeId)
-      : NaN;
+    const fromRel = mb.bodega ? Number(mb.bodega.sedeId ?? mb.bodega.sede?.sedeId) : NaN;
     if (Number.isFinite(fromRel) && fromRel === sid) return true;
     const bid = mb.bodegaId != null ? Number(mb.bodegaId) : NaN;
     return Number.isFinite(bid) && bid > 0 && bodegaIdsEnSede.has(bid);
@@ -353,7 +398,9 @@ export class MaterialesService {
       );
       const stockTecnicos = inventariosTecnicos
         .filter((inv) => {
-          const u = inv.usuario as { usuarioSede?: number; bodega?: { sedeId?: number } } | undefined;
+          const u = inv.usuario as
+            | { usuarioSede?: number; bodega?: { sedeId?: number } }
+            | undefined;
           if (!u) return false;
           if (u.usuarioSede != null && Number(u.usuarioSede) === sid) return true;
           const bSede = u.bodega?.sedeId;
@@ -387,7 +434,7 @@ export class MaterialesService {
     if (!material) {
       throw new NotFoundException(`Material con ID ${id} no encontrado`);
     }
-    
+
     const rolTipo = (user?.usuarioRol?.rolTipo || user?.role || '').toLowerCase();
     const esSuperadminOGerencia = rolTipo === 'superadmin' || rolTipo === 'gerencia';
     const sedeId = await this.resolveUsuarioSedeId(user);

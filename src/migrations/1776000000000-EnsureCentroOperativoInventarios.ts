@@ -66,4 +66,3 @@ export class EnsureCentroOperativoInventarios1776000000000 implements MigrationI
     // No revertimos: estas bodegas/inventarios son infraestructura requerida.
   }
 }
-

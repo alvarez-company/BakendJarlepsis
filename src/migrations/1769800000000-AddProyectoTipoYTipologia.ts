@@ -7,11 +7,11 @@ export class AddProyectoTipoYTipologia1769800000000 implements MigrationInterfac
     const cols: Array<{ name: string; ddl: string }> = [
       {
         name: 'proyectoTipo',
-        ddl: "ALTER TABLE `proyectos` ADD COLUMN `proyectoTipo` VARCHAR(20) NULL",
+        ddl: 'ALTER TABLE `proyectos` ADD COLUMN `proyectoTipo` VARCHAR(20) NULL',
       },
       {
         name: 'proyectoTipologiaTerreno',
-        ddl: "ALTER TABLE `proyectos` ADD COLUMN `proyectoTipologiaTerreno` VARCHAR(10) NULL",
+        ddl: 'ALTER TABLE `proyectos` ADD COLUMN `proyectoTipologiaTerreno` VARCHAR(10) NULL',
       },
     ];
 
@@ -52,4 +52,3 @@ export class AddProyectoTipoYTipologia1769800000000 implements MigrationInterfac
     }
   }
 }
-

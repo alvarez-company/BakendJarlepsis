@@ -6,11 +6,7 @@
  */
 
 /** Roles que pueden crear usuarios (solo admin de centro, superadmin y gerencia) */
-export const ROLES_CREAR_USUARIO = [
-  'superadmin',
-  'gerencia',
-  'admin',
-] as const;
+export const ROLES_CREAR_USUARIO = ['superadmin', 'gerencia', 'admin'] as const;
 
 /** Roles que pueden listar/ver usuarios */
 export const ROLES_VER_USUARIOS = [
@@ -213,7 +209,11 @@ export const ROLES_EDITAR_INSTALACIONES = [
 ] as const;
 
 /** Roles que eliminan instalaciones (solo bodega) */
-export const ROLES_ELIMINAR_INSTALACIONES = ['superadmin', 'bodega-internas', 'bodega-redes'] as const;
+export const ROLES_ELIMINAR_INSTALACIONES = [
+  'superadmin',
+  'bodega-internas',
+  'bodega-redes',
+] as const;
 
 /** Roles que asignan usuarios a instalaciones */
 export const ROLES_ASIGNAR_INSTALACIONES = [

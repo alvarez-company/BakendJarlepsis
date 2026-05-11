@@ -329,7 +329,11 @@ export class BodegasService {
         throw new NotFoundException(`Bodega with ID ${id} not found`);
       }
       // Bodega-internas / bodega-redes: solo bodegas de su centro (y su bodega asignada)
-      if ((rolTipo === 'bodega-internas' || rolTipo === 'bodega-redes') && sedeId != null && bodega.sedeId !== sedeId) {
+      if (
+        (rolTipo === 'bodega-internas' || rolTipo === 'bodega-redes') &&
+        sedeId != null &&
+        bodega.sedeId !== sedeId
+      ) {
         throw new NotFoundException(`Bodega with ID ${id} not found`);
       }
     }

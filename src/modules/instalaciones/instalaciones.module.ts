@@ -16,7 +16,6 @@ import { AuditoriaModule } from '../auditoria/auditoria.module';
 import { ExportacionModule } from '../exportacion/exportacion.module';
 import { EstadosInstalacionModule } from '../estados-instalacion/estados-instalacion.module';
 import { InstalacionesMaterialesModule } from '../instalaciones-materiales/instalaciones-materiales.module';
-import { InventarioTecnicoModule } from '../inventario-tecnico/inventario-tecnico.module';
 import { UsersModule } from '../users/users.module';
 import { NumerosMedidorModule } from '../numeros-medidor/numeros-medidor.module';
 import { AuthModule } from '../auth/auth.module';
@@ -39,7 +38,6 @@ import { ProyectosRedesModule } from '../proyectos-redes/proyectos-redes.module'
     ExportacionModule,
     EstadosInstalacionModule,
     forwardRef(() => InstalacionesMaterialesModule),
-    forwardRef(() => InventarioTecnicoModule),
     forwardRef(() => UsersModule),
     forwardRef(() => NumerosMedidorModule),
     forwardRef(() => AuthModule),

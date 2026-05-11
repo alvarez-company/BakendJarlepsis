@@ -71,7 +71,7 @@ export class CreateMovimientoDto {
   @ApiProperty({ required: false, example: 1 })
   @IsNumber()
   @IsOptional()
-  inventarioId?: number;
+  inventarioId?: number | null;
 
   @ApiProperty({ required: false })
   @IsString()

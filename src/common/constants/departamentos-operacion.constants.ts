@@ -3,11 +3,7 @@
  * Nombres comparados sin tildes y en minúsculas.
  */
 export function normalizarNombreDepartamento(nombre: string): string {
-  return nombre
-    .normalize('NFD')
-    .replace(/\p{M}/gu, '')
-    .toLowerCase()
-    .trim();
+  return nombre.normalize('NFD').replace(/\p{M}/gu, '').toLowerCase().trim();
 }
 
 const NOMBRES_ZONA_OPERACION = new Set(['santander', 'norte de santander']);
