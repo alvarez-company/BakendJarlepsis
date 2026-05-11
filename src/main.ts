@@ -28,7 +28,8 @@ function resolveListenPort(): number {
 
 async function bootstrap() {
   const app = await NestFactory.create<NestExpressApplication>(AppModule, {
-    logger: new WinstonLogger(),
+    // En Cloud Run menos I/O en arranque; Winston sigue activo fuera de allí.
+    logger: isCloudRunLike() ? false : new WinstonLogger(),
     bodyParser: false, // Deshabilitar body parser por defecto para configurarlo manualmente
   });
 
@@ -166,17 +167,16 @@ async function bootstrap() {
   );
   await app.listen(port, '0.0.0.0');
 
-  if (isCloudRunLike()) {
-    const dataSource = app.get(DataSource);
-    if (!dataSource.isInitialized) {
-      console.log(
-        JSON.stringify({
-          severity: 'INFO',
-          message: 'TypeORM initializing after HTTP listen (Cloud Run)',
-        }),
-      );
-      await dataSource.initialize();
-    }
+  const dataSource = app.get(DataSource);
+  if (!dataSource.isInitialized) {
+    console.log(
+      JSON.stringify({
+        severity: 'INFO',
+        message: 'TypeORM initializing after HTTP listen',
+        cloudRun: isCloudRunLike(),
+      }),
+    );
+    await dataSource.initialize();
   }
 }
 

@@ -51,7 +51,7 @@ import { SearchModule } from './modules/search/search.module';
 import { AuditoriaInventarioModule } from './modules/auditoria-inventario/auditoria-inventario.module';
 import { UploadModule } from './modules/upload/upload.module';
 import { PushTokensModule } from './modules/push-tokens/push-tokens.module';
-import { isCloudRunLike, isDevelopmentNodeEnv } from './common/utils/node-env';
+import { isDevelopmentNodeEnv } from './common/utils/node-env';
 
 @Module({
   imports: [
@@ -97,8 +97,8 @@ import { isCloudRunLike, isDevelopmentNodeEnv } from './common/utils/node-env';
           migrations: [__dirname + '/migrations/*{.ts,.js}'],
           migrationsRun,
           logging: false,
-          // Cloud Run: no bloquear NestFactory.create con MySQL; se llama DataSource.initialize() en main tras listen.
-          manualInitialization: isCloudRunLike(),
+          // Siempre diferir conexión: main.ts llama DataSource.initialize() tras listen (Cloud Run y local).
+          manualInitialization: true,
           retryAttempts: 3,
           retryDelay: 2000,
           // Opciones para conexiones remotas: mantener conexión viva y timeout más tolerante
