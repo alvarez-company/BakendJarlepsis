@@ -1,9 +1,11 @@
 import { NestFactory } from '@nestjs/core';
 import { ValidationPipe } from '@nestjs/common';
+import type { NestApplicationOptions } from '@nestjs/common/interfaces/nest-application-options.interface';
 import { SwaggerModule, DocumentBuilder } from '@nestjs/swagger';
 import helmet from 'helmet';
-import { json, urlencoded } from 'express';
-import { NestExpressApplication } from '@nestjs/platform-express';
+import express, { json, urlencoded } from 'express';
+import * as http from 'node:http';
+import { ExpressAdapter, NestExpressApplication } from '@nestjs/platform-express';
 import { join } from 'path';
 import { DataSource } from 'typeorm';
 import { AppModule } from './app.module';
@@ -26,12 +28,88 @@ function resolveListenPort(): number {
   return 4100;
 }
 
+/**
+ * Cloud Run exige que el proceso abra PORT antes del timeout; NestFactory.create(AppModule)
+ * puede tardar mucho. Enlazamos TCP con el mismo Express + http.Server que usará Nest,
+ * y hacemos que ExpressAdapter reutilice ese server (evita EADDRINUSE por un segundo listen).
+ */
+function listenAsync(server: http.Server, port: number, host: string): Promise<void> {
+  return new Promise((resolve, reject) => {
+    const onErr = (e: Error) => reject(e);
+    server.once('error', onErr);
+    server.listen(port, host, () => {
+      server.removeListener('error', onErr);
+      resolve();
+    });
+  });
+}
+
+function installExpressAdapterReusePreboundServer(sharedServer: http.Server): () => void {
+  const proto = ExpressAdapter.prototype as unknown as {
+    initHttpServer: (options?: Record<string, unknown>) => void;
+    listen: (port: number, ...args: unknown[]) => unknown;
+  };
+  const origInit = proto.initHttpServer;
+  const origListen = proto.listen;
+  proto.initHttpServer = function (this: ExpressAdapter, options?: Record<string, unknown>) {
+    (this as unknown as { httpServer: http.Server }).httpServer = sharedServer;
+    const track = (this as unknown as { trackOpenConnections?: () => void }).trackOpenConnections;
+    if (options?.forceCloseConnections && typeof track === 'function') {
+      track.call(this);
+    }
+  };
+  proto.listen = function (this: ExpressAdapter, port: number, ...args: unknown[]) {
+    const httpServer = (this as unknown as { httpServer?: http.Server }).httpServer;
+    if (httpServer?.listening) {
+      const cb = args[args.length - 1];
+      if (typeof cb === 'function') {
+        (cb as () => void)();
+      }
+      return httpServer;
+    }
+    return origListen.apply(this, [port, ...args] as never) as http.Server;
+  };
+  return () => {
+    proto.initHttpServer = origInit;
+    proto.listen = origListen;
+  };
+}
+
 async function bootstrap() {
-  const app = await NestFactory.create<NestExpressApplication>(AppModule, {
+  const port = resolveListenPort();
+  let restoreExpressAdapter: (() => void) | undefined;
+
+  let expressApp: express.Express | undefined;
+  if (isCloudRunLike()) {
+    expressApp = express();
+    const earlyServer = http.createServer(expressApp);
+    console.log(
+      JSON.stringify({
+        severity: 'INFO',
+        message: 'Cloud Run early TCP bind (before NestFactory.create)',
+        port,
+        host: '0.0.0.0',
+        kService: process.env.K_SERVICE ?? null,
+        kRevision: process.env.K_REVISION ?? null,
+      }),
+    );
+    await listenAsync(earlyServer, port, '0.0.0.0');
+    restoreExpressAdapter = installExpressAdapterReusePreboundServer(earlyServer);
+  }
+
+  const nestCreateOptions: NestApplicationOptions = {
     // En Cloud Run menos I/O en arranque; Winston sigue activo fuera de allí.
     logger: isCloudRunLike() ? false : new WinstonLogger(),
     bodyParser: false, // Deshabilitar body parser por defecto para configurarlo manualmente
-  });
+  };
+
+  const app = expressApp
+    ? await NestFactory.create<NestExpressApplication>(
+        AppModule,
+        new ExpressAdapter(expressApp),
+        nestCreateOptions,
+      )
+    : await NestFactory.create<NestExpressApplication>(AppModule, nestCreateOptions);
 
   // Archivos subidos viven en `process.cwd()/public` (Multer usa cwd). Con `nest start`/`node dist`,
   // `__dirname/../public` apunta a `dist/public` (vacío) → 404. Usar siempre la carpeta `public` del proyecto.
@@ -152,20 +230,21 @@ async function bootstrap() {
     SwaggerModule.setup('api/docs', app, document);
   }
 
-  const port = resolveListenPort();
   // JSON en una línea para Cloud Logging (diagnóstico de despliegues).
   console.log(
     JSON.stringify({
       severity: 'INFO',
-      message: 'HTTP server binding',
+      message: 'HTTP server binding (Nest listen / init)',
       port,
       host: '0.0.0.0',
       kService: process.env.K_SERVICE ?? null,
       kRevision: process.env.K_REVISION ?? null,
       cloudRun: isCloudRunLike(),
+      earlyTcpBind: Boolean(expressApp),
     }),
   );
   await app.listen(port, '0.0.0.0');
+  restoreExpressAdapter?.();
 
   const dataSource = app.get(DataSource);
   if (!dataSource.isInitialized) {
