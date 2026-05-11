@@ -60,6 +60,7 @@ jobs:
             --region="us-central1" \
             --allow-unauthenticated \
             --port=8080 \
+            --cpu-boost \
             --service-account=alvarez-company@farmsmanager.iam.gserviceaccount.com \
             --set-env-vars="NODE_ENV=prod" \
             --set-env-vars="DB_HOST=srv1925.hstgr.io" \
