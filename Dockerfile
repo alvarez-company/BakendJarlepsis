@@ -32,12 +32,12 @@ COPY --from=builder /app/dist ./dist
 # Create logs directory
 RUN mkdir -p logs
 
-# Expose port
-EXPOSE 3000
+# Documentación: Cloud Run inyecta PORT (p. ej. 8080); local sin PORT usa 4100 en main.ts.
+EXPOSE 8080 4100
 
-# Health check
-HEALTHCHECK --interval=30s --timeout=3s --start-period=40s --retries=3 \
-  CMD node -e "require('http').get('http://localhost:3000/api/v1/health', (r) => {process.exit(r.statusCode === 200 ? 0 : 1)})"
+# Healthcheck: mismo puerto que process.env.PORT en runtime (p. ej. 8080 en Cloud Run).
+HEALTHCHECK --interval=30s --timeout=5s --start-period=120s --retries=3 \
+  CMD node -e "const p=process.env.PORT||'4100';require('http').get('http://127.0.0.1:'+p+'/api/v1/health',(r)=>{process.exit(r.statusCode===200?0:1)}).on('error',()=>process.exit(1))"
 
 # Start the application
 CMD ["node", "dist/main"]

@@ -130,8 +130,14 @@ async function bootstrap() {
   const document = SwaggerModule.createDocument(app, config);
   SwaggerModule.setup('api/docs', app, document);
 
-  const port = process.env.PORT || 4100;
-  await app.listen(port);
+  // Cloud Run (y otros PaaS) inyectan PORT y esperan escucha en todas las interfaces.
+  const rawPort = process.env.PORT;
+  const parsed =
+    rawPort !== undefined && String(rawPort).trim() !== ''
+      ? Number.parseInt(String(rawPort), 10)
+      : NaN;
+  const port = Number.isFinite(parsed) && parsed > 0 ? parsed : 4100;
+  await app.listen(port, '0.0.0.0');
 }
 
 bootstrap();
