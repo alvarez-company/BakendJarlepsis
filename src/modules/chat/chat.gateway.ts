@@ -10,7 +10,7 @@ import {
 import { Server, Socket } from 'socket.io';
 import { Injectable, Logger } from '@nestjs/common';
 import { JwtService } from '@nestjs/jwt';
-import { isDevelopmentNodeEnv } from '@/common/utils/node-env';
+import { isDevelopmentNodeEnv } from '../../common/utils/node-env';
 
 @Injectable()
 @WebSocketGateway({

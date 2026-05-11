@@ -86,6 +86,7 @@ import { isDevelopmentNodeEnv } from './common/utils/node-env';
         const migrationsRun =
           migrationsRunEnv !== '' ? migrationsRunEnv === 'true' : isDevelopmentNodeEnv(nodeEnv);
 
+        const onCloudRun = Boolean(process.env.K_SERVICE);
         const config = {
           type: 'mysql' as const,
           ...(socketPath.length > 0 ? { socketPath } : { host, port: parseInt(dbPortStr, 10) }),
@@ -97,6 +98,8 @@ import { isDevelopmentNodeEnv } from './common/utils/node-env';
           migrations: [__dirname + '/migrations/*{.ts,.js}'],
           migrationsRun,
           logging: false,
+          // Cloud Run: no bloquear NestFactory.create con MySQL; se llama DataSource.initialize() en main tras listen.
+          manualInitialization: onCloudRun,
           retryAttempts: 3,
           retryDelay: 2000,
           // Opciones para conexiones remotas: mantener conexión viva y timeout más tolerante

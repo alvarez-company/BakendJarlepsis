@@ -5,6 +5,7 @@ import helmet from 'helmet';
 import { json, urlencoded } from 'express';
 import { NestExpressApplication } from '@nestjs/platform-express';
 import { join } from 'path';
+import { DataSource } from 'typeorm';
 import { AppModule } from './app.module';
 import { WinstonLogger } from './common/logger/winston.logger';
 import { AllExceptionsFilter } from './common/filters/http-exception.filter';
@@ -157,6 +158,19 @@ async function bootstrap() {
     }),
   );
   await app.listen(port, '0.0.0.0');
+
+  if (process.env.K_SERVICE) {
+    const dataSource = app.get(DataSource);
+    if (!dataSource.isInitialized) {
+      console.log(
+        JSON.stringify({
+          severity: 'INFO',
+          message: 'TypeORM initializing after HTTP listen (Cloud Run)',
+        }),
+      );
+      await dataSource.initialize();
+    }
+  }
 }
 
 bootstrap().catch((err: unknown) => {
