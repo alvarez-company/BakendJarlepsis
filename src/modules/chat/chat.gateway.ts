@@ -10,32 +10,30 @@ import {
 import { Server, Socket } from 'socket.io';
 import { Injectable, Logger } from '@nestjs/common';
 import { JwtService } from '@nestjs/jwt';
-import { isDevelopmentNodeEnv } from '../../common/utils/node-env';
+import { isDevelopmentNodeEnv, normalizeBrowserOrigin } from '../../common/utils/node-env';
 
 @Injectable()
 @WebSocketGateway({
   cors: {
     origin: (origin, callback) => {
-      const frontendUrl = process.env.FRONTEND_URL || 'http://localhost:4173';
-      const miniappUrl = process.env.MINIAPP_URL || 'http://localhost:4174';
-      const allowedOrigins = [frontendUrl, miniappUrl];
+      const frontendUrl = normalizeBrowserOrigin(
+        process.env.FRONTEND_URL || 'http://localhost:4173',
+      );
+      const miniappUrl = normalizeBrowserOrigin(process.env.MINIAPP_URL || 'http://localhost:4174');
+      const allowedOrigins = [frontendUrl, miniappUrl].filter(Boolean);
 
-      // Permitir requests sin origin (mobile apps, etc.)
       if (!origin) {
         return callback(null, true);
       }
 
-      // Verificar si el origin está en la lista permitida
-      if (allowedOrigins.includes(origin)) {
-        callback(null, true);
-      } else {
-        // En desarrollo, permitir cualquier origin localhost
-        if (isDevelopmentNodeEnv(process.env.NODE_ENV) && origin.includes('localhost')) {
-          callback(null, true);
-        } else {
-          callback(new Error('Not allowed by CORS'));
-        }
+      const o = normalizeBrowserOrigin(origin);
+      if (allowedOrigins.includes(o)) {
+        return callback(null, true);
       }
+      if (isDevelopmentNodeEnv(process.env.NODE_ENV) && o.includes('localhost')) {
+        return callback(null, true);
+      }
+      return callback(null, false);
     },
     credentials: true,
   },

@@ -12,7 +12,11 @@ import { AppModule } from './app.module';
 import { WinstonLogger } from './common/logger/winston.logger';
 import { AllExceptionsFilter } from './common/filters/http-exception.filter';
 import { TransformInterceptor } from './common/interceptors/transform.interceptor';
-import { isCloudRunLike, isDevelopmentNodeEnv } from './common/utils/node-env';
+import {
+  isCloudRunLike,
+  isDevelopmentNodeEnv,
+  normalizeBrowserOrigin,
+} from './common/utils/node-env';
 
 /** Puerto HTTP: Cloud Run inyecta PORT; si viene vacío o inválido, no usar 4100 en Cloud Run (enrutamiento fallaría). */
 function resolveListenPort(): number {
@@ -142,37 +146,36 @@ async function bootstrap() {
   app.use(json({ limit: '50mb' }));
   app.use(urlencoded({ extended: true, limit: '50mb' }));
 
-  // Security
-  app.use(helmet());
-
-  // Configurar CORS para permitir múltiples orígenes (Frontend principal y MiniApp móvil)
-  const frontendUrl = process.env.FRONTEND_URL || 'http://localhost:4173';
-  const miniappUrl = process.env.MINIAPP_URL || 'http://localhost:4174';
-  const allowedOrigins = [frontendUrl, miniappUrl];
+  // CORS antes que Helmet: preflight OPTIONS debe responder bien; no usar callback(Error) (puede cortar la conexión).
+  const frontendUrl = normalizeBrowserOrigin(process.env.FRONTEND_URL || 'http://localhost:4173');
+  const miniappUrl = normalizeBrowserOrigin(process.env.MINIAPP_URL || 'http://localhost:4174');
+  const allowedOrigins = [frontendUrl, miniappUrl].filter(Boolean);
 
   app.enableCors({
     origin: (origin, callback) => {
-      // Permitir requests sin origin (mobile apps, Postman, etc.)
       if (!origin) {
         return callback(null, true);
       }
-
-      // Verificar si el origin está en la lista permitida
-      if (allowedOrigins.includes(origin)) {
-        callback(null, true);
-      } else {
-        // En desarrollo, permitir cualquier origin localhost
-        if (isDevelopmentNodeEnv(process.env.NODE_ENV) && origin.includes('localhost')) {
-          callback(null, true);
-        } else {
-          callback(new Error('Not allowed by CORS'));
-        }
+      const o = normalizeBrowserOrigin(origin);
+      if (allowedOrigins.includes(o)) {
+        return callback(null, true);
       }
+      if (isDevelopmentNodeEnv(process.env.NODE_ENV) && o.includes('localhost')) {
+        return callback(null, true);
+      }
+      return callback(null, false);
     },
     credentials: true,
     methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
     allowedHeaders: ['Content-Type', 'Authorization', 'X-Impersonate-User-Id'],
   });
+
+  // API consumida desde otros orígenes: no forzar CORP same-origin (Helmet por defecto).
+  app.use(
+    helmet({
+      crossOriginResourcePolicy: { policy: 'cross-origin' },
+    }),
+  );
 
   // Root endpoint (before global prefix)
   const httpAdapter = app.getHttpAdapter();

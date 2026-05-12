@@ -1,3 +1,10 @@
+/** Igual que envía el navegador en `Origin` (sin barra final). */
+export function normalizeBrowserOrigin(url: string): string {
+  return String(url || '')
+    .trim()
+    .replace(/\/+$/, '');
+}
+
 /** Alineado con despliegues que usan NODE_ENV=prod en lugar de production. */
 export function isProductionNodeEnv(nodeEnv: string | undefined): boolean {
   const n = (nodeEnv ?? '').toLowerCase().trim();
