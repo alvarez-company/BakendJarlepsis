@@ -258,7 +258,32 @@ async function bootstrap() {
         cloudRun: isCloudRunLike(),
       }),
     );
-    await dataSource.initialize();
+    try {
+      await dataSource.initialize();
+      console.log(
+        JSON.stringify({
+          severity: 'INFO',
+          message: 'TypeORM initialized',
+          cloudRun: isCloudRunLike(),
+        }),
+      );
+    } catch (dbErr: unknown) {
+      const e =
+        dbErr instanceof Error
+          ? dbErr
+          : new Error(
+              typeof dbErr === 'object' && dbErr !== null ? JSON.stringify(dbErr) : String(dbErr),
+            );
+      console.error(
+        JSON.stringify({
+          severity: 'ERROR',
+          message:
+            'TypeORM initialize failed — process stays up for /health and logs; fix DB env / network',
+          error: e.message,
+          stack: e.stack,
+        }),
+      );
+    }
   }
 }
 
