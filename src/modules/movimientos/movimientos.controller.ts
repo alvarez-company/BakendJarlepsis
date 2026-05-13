@@ -26,7 +26,7 @@ import {
   ROLES_VER_HISTORIAL_BODEGA,
   ROLES_SUPERADMIN_GERENCIA,
 } from '../../common/constants/roles.constants';
-import { PaginationDto } from '../../common/dto/pagination.dto';
+import { MovimientosListQueryDto } from './dto/movimientos-list-query.dto';
 import { ImpersonationGuard } from '../auth/guards/impersonation.guard';
 
 @ApiTags('movimientos')
@@ -51,7 +51,7 @@ export class MovimientosController {
   @ApiOperation({ summary: 'Get all movimientos' })
   findAll(
     @Query('instalacionId') instalacionId?: string,
-    @Query() paginationDto?: PaginationDto,
+    @Query() paginationDto?: MovimientosListQueryDto,
     @Request() req?: any,
   ) {
     if (instalacionId) {
@@ -110,10 +110,13 @@ export class MovimientosController {
     @Query('dateEnd') dateEnd?: string,
   ) {
     try {
-      const resultado = instalacionId
-        ? await this.movimientosService.findByInstalacion(+instalacionId)
-        : await this.movimientosService.findAll(undefined, req?.user);
-      const movimientos = Array.isArray(resultado) ? resultado : resultado.data;
+      let movimientos: any[];
+      if (instalacionId) {
+        const resultado = await this.movimientosService.findByInstalacion(+instalacionId);
+        movimientos = Array.isArray(resultado) ? resultado : [];
+      } else {
+        movimientos = await this.movimientosService.findAllFetchAllPages(req?.user);
+      }
 
       let filteredData = movimientos;
 
@@ -205,16 +208,20 @@ export class MovimientosController {
   @ApiQuery({ name: 'dateEnd', required: false, type: String })
   async exportToPdf(
     @Res() res: Response,
+    @Request() req,
     @Query('filters') filters?: string,
     @Query('instalacionId') instalacionId?: string,
     @Query('dateStart') dateStart?: string,
     @Query('dateEnd') dateEnd?: string,
   ) {
     try {
-      const resultado = instalacionId
-        ? await this.movimientosService.findByInstalacion(+instalacionId)
-        : await this.movimientosService.findAll({ page: 1, limit: 10000 });
-      const movimientos = Array.isArray(resultado) ? resultado : resultado.data;
+      let movimientos: any[];
+      if (instalacionId) {
+        const resultado = await this.movimientosService.findByInstalacion(+instalacionId);
+        movimientos = Array.isArray(resultado) ? resultado : [];
+      } else {
+        movimientos = await this.movimientosService.findAllFetchAllPages(req?.user);
+      }
 
       let filteredData = movimientos;
 

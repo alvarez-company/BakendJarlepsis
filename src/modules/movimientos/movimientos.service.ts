@@ -2,6 +2,7 @@ import {
   Injectable,
   NotFoundException,
   BadRequestException,
+  HttpException,
   Inject,
   forwardRef,
 } from '@nestjs/common';
@@ -36,6 +37,29 @@ function getTipoLabel(tipo: TipoMovimiento): string {
   if (tipo === TipoMovimiento.SALIDA) return 'Salida';
   if (tipo === TipoMovimiento.DEVOLUCION) return 'Devolución';
   return String(tipo);
+}
+
+function mapMovimientoGuardadoAResumen(movimientoGuardado: MovimientoInventario): Record<string, unknown> {
+  return {
+    movimientoId: movimientoGuardado.movimientoId,
+    materialId: movimientoGuardado.materialId,
+    movimientoTipo: movimientoGuardado.movimientoTipo,
+    movimientoCantidad: movimientoGuardado.movimientoCantidad,
+    movimientoPrecioUnitario: movimientoGuardado.movimientoPrecioUnitario,
+    movimientoObservaciones: movimientoGuardado.movimientoObservaciones,
+    instalacionId: movimientoGuardado.instalacionId,
+    usuarioId: movimientoGuardado.usuarioId,
+    proveedorId: movimientoGuardado.proveedorId,
+    inventarioId: movimientoGuardado.inventarioId,
+    movimientoCodigo: movimientoGuardado.movimientoCodigo,
+    identificadorUnico: movimientoGuardado.identificadorUnico,
+    movimientoEstado: movimientoGuardado.movimientoEstado,
+    origenTipo: movimientoGuardado.origenTipo,
+    tecnicoOrigenId: movimientoGuardado.tecnicoOrigenId,
+    numerosMedidor: movimientoGuardado.numerosMedidor,
+    fechaCreacion: movimientoGuardado.fechaCreacion,
+    fechaActualizacion: movimientoGuardado.fechaActualizacion,
+  };
 }
 
 @Injectable()
@@ -133,9 +157,24 @@ export class MovimientosService {
     ).toLowerCase();
     const isSuperadminOGerencia = rolTipo === 'superadmin' || rolTipo === 'gerencia';
 
-    // Generar código único para agrupar los movimientos
+    const explicitCodigo = createMovimientoDto.movimientoCodigo?.trim();
+    if (explicitCodigo) {
+      const existentes = await this.movimientosRepository.find({
+        where: {
+          movimientoCodigo: explicitCodigo,
+          movimientoTipo: createMovimientoDto.movimientoTipo,
+        },
+        order: { movimientoId: 'ASC' },
+      });
+      if (existentes.length > 0) {
+        return existentes.map(
+          (m) => mapMovimientoGuardadoAResumen(m),
+        ) as unknown as MovimientoInventario[];
+      }
+    }
+
     const movimientoCodigo =
-      createMovimientoDto.movimientoCodigo ||
+      explicitCodigo ||
       `${createMovimientoDto.movimientoTipo.toUpperCase()}-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
 
     // NO generar identificador único aquí - se generará por cada movimiento individual
@@ -332,6 +371,40 @@ export class MovimientosService {
     };
 
     // oficinaId eliminado - las bodegas ahora pertenecen directamente a sedes
+
+    // Entrada: los seriales de medidor no pueden repetirse en el mismo request ni existir ya en el sistema.
+    if (createMovimientoDto.movimientoTipo === TipoMovimiento.ENTRADA) {
+      const seenSerial = new Set<string>();
+      const dupInPayload: string[] = [];
+      const allSerials: string[] = [];
+      for (const m of createMovimientoDto.materiales) {
+        const nums = Array.isArray(m.numerosMedidor)
+          ? m.numerosMedidor.map((x) => String(x || '').trim()).filter(Boolean)
+          : [];
+        for (const raw of nums) {
+          const norm = raw.trim().toLowerCase();
+          if (!norm) continue;
+          allSerials.push(raw);
+          if (seenSerial.has(norm)) dupInPayload.push(raw);
+          seenSerial.add(norm);
+        }
+      }
+      if (dupInPayload.length) {
+        const uniq = Array.from(new Set(dupInPayload)).slice(0, 25);
+        throw new BadRequestException(
+          `Números de medidor repetidos en la misma entrada: ${uniq.join(', ')}${dupInPayload.length > 25 ? '…' : ''}`,
+        );
+      }
+      if (allSerials.length) {
+        const existingGlobal = await this.numerosMedidorService.findExistingByNumeros(allSerials);
+        if (existingGlobal.size > 0) {
+          const sample = Array.from(existingGlobal.keys()).slice(0, 25).join(', ');
+          throw new BadRequestException(
+            `Estos números de medidor ya existen en el sistema y no pueden registrarse de nuevo en una entrada: ${sample}${existingGlobal.size > 25 ? '…' : ''}`,
+          );
+        }
+      }
+    }
 
     // Procesar cada material del array
     for (const materialDto of createMovimientoDto.materiales) {
@@ -545,8 +618,7 @@ export class MovimientosService {
           const existingMap = await this.numerosMedidorService.findExistingByNumeros(numeros);
 
           if (esEntrada) {
-            // ENTRADA: crear números nuevos o actualizar existentes (ej. traslado: números que se mueven a bodega destino)
-            // Resolver bodega destino una vez
+            // ENTRADA: solo creación de seriales nuevos (la validación previa ya rechazó duplicados en BD y en el payload).
             let bodegaIdDestino: number | null = null;
             if (createMovimientoDto.inventarioId) {
               try {
@@ -558,20 +630,21 @@ export class MovimientosService {
             }
 
             const nuevos: string[] = [];
-            const existentes: Array<{ id: number }> = [];
             for (const n of numeros) {
               const norm = String(n || '')
                 .trim()
                 .toLowerCase();
               if (!norm) continue;
               const found = existingMap.get(norm);
-              if (!found) nuevos.push(n);
-              else existentes.push({ id: found.numeroMedidorId });
+              if (found) {
+                throw new BadRequestException(
+                  `El número de medidor "${n}" ya existe en el sistema. No se puede repetir en una entrada.`,
+                );
+              }
+              nuevos.push(n);
             }
 
             if (nuevos.length > 0) {
-              // Crear nuevo número de medidor (entrada desde proveedor)
-              // Usar crearMultiples (bulk + 1 sync stock)
               await this.numerosMedidorService.crearMultiples(
                 materialIdFinal,
                 nuevos.map((num) => ({
@@ -579,14 +652,6 @@ export class MovimientosService {
                   bodegaId: bodegaIdDestino ?? undefined,
                 })),
               );
-            }
-
-            if (existentes.length > 0) {
-              await this.numerosMedidorService.bulkSetDisponible({
-                numeroMedidorIds: existentes.map((e) => e.id),
-                bodegaId: bodegaIdDestino,
-                materialIdToSync: materialIdFinal,
-              });
             }
           } else if (esSalida || esDevolucion) {
             // SALIDA/DEVOLUCIÓN:
@@ -642,8 +707,13 @@ export class MovimientosService {
           }
         }
       } catch (error) {
+        if (error instanceof HttpException) {
+          throw error;
+        }
         console.error(`Error al manejar números de medidor en movimiento:`, error);
-        // No lanzar error para no interrumpir el proceso
+        throw new BadRequestException(
+          `Error al registrar números de medidor: ${error instanceof Error ? error.message : String(error)}`,
+        );
       }
 
       // Ajustar stock según el tipo de movimiento (solo si el movimiento está completado)
@@ -954,9 +1024,8 @@ export class MovimientosService {
     user?: any,
   ): Promise<{ data: any[]; total: number; page: number; limit: number }> {
     try {
-      const page = paginationDto?.page || 1;
-      // Si no se especifica límite o es muy grande, usar un valor razonable o sin límite
-      const limit = paginationDto?.limit || 10;
+      const page = Math.max(1, Number(paginationDto?.page) || 1);
+      const limit = Math.min(50, Math.max(1, Number(paginationDto?.limit) || 50));
       const skip = (page - 1) * limit;
 
       // Construir condiciones de filtrado según el rol del usuario
@@ -1057,6 +1126,22 @@ export class MovimientosService {
             queryParams.push(user.usuarioId, user.usuarioId, user.usuarioId);
           }
         }
+      }
+
+      const listQuery = paginationDto as PaginationDto & { movimientoTipo?: string; search?: string };
+
+      if (listQuery.movimientoTipo) {
+        const frag = 'movimientoTipo = ?';
+        whereConditions = whereConditions ? `${whereConditions} AND ${frag}` : ` WHERE ${frag}`;
+        queryParams.push(listQuery.movimientoTipo);
+      }
+
+      if (listQuery.search && listQuery.search.trim()) {
+        const term = `%${listQuery.search.trim()}%`;
+        const frag =
+          '(movimientoCodigo LIKE ? OR COALESCE(CAST(numeroOrden AS CHAR), \'\') LIKE ? OR COALESCE(identificadorUnico, \'\') LIKE ?)';
+        whereConditions = whereConditions ? `${whereConditions} AND ${frag}` : ` WHERE ${frag}`;
+        queryParams.push(term, term, term);
       }
 
       // Obtener el total de registros con filtros
@@ -1259,6 +1344,36 @@ export class MovimientosService {
       }
       throw error;
     }
+  }
+
+  /**
+   * Recorre todas las páginas con límite 50 (exportaciones / jobs internos).
+   * Cada 20 páginas API cede el event loop para no bloquear Node con datasets enormes.
+   */
+  async findAllFetchAllPages(user?: any): Promise<any[]> {
+    const PAGE_SIZE = 50;
+    const PAGES_PER_WINDOW = 20;
+    const acc: any[] = [];
+    let page = 1;
+    let total = Number.POSITIVE_INFINITY;
+
+    for (;;) {
+      const res = await this.findAll({ page, limit: PAGE_SIZE }, user);
+      total = Number(res.total) || acc.length + res.data.length;
+      acc.push(...res.data);
+      if (res.data.length < PAGE_SIZE || acc.length >= total) {
+        break;
+      }
+      if (page % PAGES_PER_WINDOW === 0) {
+        await new Promise<void>((resolve) => setImmediate(() => resolve()));
+      }
+      page += 1;
+      if (page > 50_000) {
+        break;
+      }
+    }
+
+    return acc;
   }
 
   async findOne(id: number, user?: any): Promise<any> {

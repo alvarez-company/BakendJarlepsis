@@ -148,8 +148,8 @@ export class TrasladosService {
     user?: any,
   ): Promise<{ data: Traslado[]; total: number; page: number; limit: number }> {
     try {
-      const page = paginationDto?.page || 1;
-      const limit = paginationDto?.limit || 10;
+      const page = Math.max(1, Number(paginationDto?.page) || 1);
+      const limit = Math.min(50, Math.max(1, Number(paginationDto?.limit) || 50));
       const skip = (page - 1) * limit;
 
       const queryBuilder = this.trasladosRepository
@@ -191,23 +191,6 @@ export class TrasladosService {
 
       const [data, total] = await queryBuilder.getManyAndCount();
 
-      // Debug temporal: verificar que las relaciones están cargadas
-      if (data.length > 0) {
-        const primerTraslado = data[0];
-        console.log('[TrasladosService] Primer traslado:', {
-          trasladoId: primerTraslado.trasladoId,
-          bodegaOrigenId: primerTraslado.bodegaOrigenId,
-          bodegaOrigen: primerTraslado.bodegaOrigen
-            ? {
-                bodegaId: primerTraslado.bodegaOrigen.bodegaId,
-                sedeId: primerTraslado.bodegaOrigen.sedeId,
-                tieneSedeRelacion: !!primerTraslado.bodegaOrigen.sede,
-                sedeSedeId: primerTraslado.bodegaOrigen.sede?.sedeId,
-              }
-            : null,
-        });
-      }
-
       return {
         data,
         total,
@@ -219,8 +202,8 @@ export class TrasladosService {
       console.error('Mensaje:', error.message);
       // Si el error es por una columna que no existe, usar query builder
       if (error.message?.includes('trasladoCodigo') || error.message?.includes('materialPadreId')) {
-        const page = paginationDto?.page || 1;
-        const limit = paginationDto?.limit || 10;
+        const page = Math.max(1, Number(paginationDto?.page) || 1);
+        const limit = Math.min(50, Math.max(1, Number(paginationDto?.limit) || 50));
         const skip = (page - 1) * limit;
 
         // Usar query builder y seleccionar explícitamente las columnas
@@ -337,6 +320,32 @@ export class TrasladosService {
       }
       throw error;
     }
+  }
+
+  async findAllFetchAllPages(user?: any): Promise<Traslado[]> {
+    const PAGE_SIZE = 50;
+    const PAGES_PER_WINDOW = 20;
+    const acc: Traslado[] = [];
+    let page = 1;
+    let total = Number.POSITIVE_INFINITY;
+
+    for (;;) {
+      const res = await this.findAll({ page, limit: PAGE_SIZE }, user);
+      total = Number(res.total) || acc.length + res.data.length;
+      acc.push(...res.data);
+      if (res.data.length < PAGE_SIZE || acc.length >= total) {
+        break;
+      }
+      if (page % PAGES_PER_WINDOW === 0) {
+        await new Promise<void>((resolve) => setImmediate(() => resolve()));
+      }
+      page += 1;
+      if (page > 50_000) {
+        break;
+      }
+    }
+
+    return acc;
   }
 
   async findOne(id: number, user?: any): Promise<Traslado> {

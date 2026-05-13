@@ -149,7 +149,14 @@ async function bootstrap() {
   // CORS antes que Helmet: preflight OPTIONS debe responder bien; no usar callback(Error) (puede cortar la conexión).
   const frontendUrl = normalizeBrowserOrigin(process.env.FRONTEND_URL || 'http://localhost:4173');
   const miniappUrl = normalizeBrowserOrigin(process.env.MINIAPP_URL || 'http://localhost:4174');
-  const allowedOrigins = [frontendUrl, miniappUrl].filter(Boolean);
+  /** Orígenes adicionales (p. ej. `https://jarlepsis.web.app`) separados por coma. Obligatorio si el SPA no coincide con FRONTEND_URL. */
+  const corsExtraOrigins = (process.env.CORS_EXTRA_ORIGINS || '')
+    .split(',')
+    .map((s) => normalizeBrowserOrigin(s.trim()))
+    .filter((s) => s.length > 0);
+  const allowedOrigins = Array.from(
+    new Set([frontendUrl, miniappUrl, ...corsExtraOrigins].filter(Boolean)),
+  );
 
   app.enableCors({
     origin: (origin, callback) => {

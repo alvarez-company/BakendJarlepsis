@@ -102,13 +102,13 @@ export class TrasladosController {
   @ApiQuery({ name: 'dateEnd', required: false, type: String })
   async exportToExcel(
     @Res() res: Response,
+    @Request() req,
     @Query('filters') filters?: string,
     @Query('dateStart') dateStart?: string,
     @Query('dateEnd') dateEnd?: string,
   ) {
     try {
-      const resultado = await this.trasladosService.findAll({ page: 1, limit: 10000 });
-      const traslados = resultado.data;
+      const traslados = await this.trasladosService.findAllFetchAllPages(req?.user);
 
       let filteredData = traslados;
 
@@ -190,13 +190,13 @@ export class TrasladosController {
   @ApiQuery({ name: 'dateEnd', required: false, type: String })
   async exportToPdf(
     @Res() res: Response,
+    @Request() req,
     @Query('filters') filters?: string,
     @Query('dateStart') dateStart?: string,
     @Query('dateEnd') dateEnd?: string,
   ) {
     try {
-      const resultado = await this.trasladosService.findAll({ page: 1, limit: 10000 });
-      const traslados = resultado.data;
+      const traslados = await this.trasladosService.findAllFetchAllPages(req?.user);
 
       let filteredData = traslados;
 
