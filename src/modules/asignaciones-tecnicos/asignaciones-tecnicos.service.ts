@@ -187,7 +187,7 @@ export class AsignacionesTecnicosService {
     user?: any,
   ): Promise<{ data: AsignacionTecnico[]; total: number; page: number; limit: number }> {
     const page = paginationDto?.page || 1;
-    const limit = paginationDto?.limit || 10;
+    const limit = Math.min(50, Math.max(1, Number(paginationDto?.limit) || 50));
     const skip = (page - 1) * limit;
 
     const queryBuilder = this.asignacionesRepository
@@ -201,13 +201,13 @@ export class AsignacionesTecnicosService {
       .skip(skip)
       .take(limit);
 
-    // Admin / admin-internas / admin-redes: solo asignaciones de técnicos de su centro operativo
-    const rolTipo = user?.usuarioRol?.rolTipo ?? user?.role ?? '';
-    const sedeRestricted =
-      (rolTipo === 'admin' || rolTipo === 'admin-internas' || rolTipo === 'admin-redes') &&
-      user?.usuarioSede;
-    if (sedeRestricted) {
-      queryBuilder.andWhere('usuario.usuarioSede = :sedeId', { sedeId: user.usuarioSede });
+    const rolTipo = String(user?.usuarioRol?.rolTipo ?? user?.role ?? '').toLowerCase();
+    const sinRestriccionSede = rolTipo === 'superadmin' || rolTipo === 'gerencia';
+    // Con centro operativo: solo asignaciones cuyo técnico pertenece a la misma sede (listados paginados coherentes)
+    if (user?.usuarioSede && !sinRestriccionSede) {
+      queryBuilder.andWhere('usuario.usuarioSede = :asigSedeId', {
+        asigSedeId: user.usuarioSede,
+      });
     }
 
     const [data, total] = await queryBuilder.getManyAndCount();
@@ -237,11 +237,9 @@ export class AsignacionesTecnicosService {
     }
 
     // Admin / admin-internas / admin-redes: solo asignaciones de técnicos de su centro operativo
-    const rolTipo = user?.usuarioRol?.rolTipo ?? user?.role ?? '';
-    const sedeRestricted =
-      (rolTipo === 'admin' || rolTipo === 'admin-internas' || rolTipo === 'admin-redes') &&
-      user?.usuarioSede;
-    if (sedeRestricted) {
+    const rolTipo = String(user?.usuarioRol?.rolTipo ?? user?.role ?? '').toLowerCase();
+    const sinRestriccionSede = rolTipo === 'superadmin' || rolTipo === 'gerencia';
+    if (user?.usuarioSede && !sinRestriccionSede) {
       const tecnicoSede = asignacion.usuario?.usuarioSede ?? null;
       if (tecnicoSede !== user.usuarioSede) {
         throw new NotFoundException(`Asignación con ID ${id} no encontrada`);
@@ -252,12 +250,9 @@ export class AsignacionesTecnicosService {
   }
 
   async findByUsuario(usuarioId: number, user?: any): Promise<AsignacionTecnico[]> {
-    // Admin / admin-internas / admin-redes: solo ver asignaciones de técnicos de su centro
-    const rolTipo = user?.usuarioRol?.rolTipo ?? user?.role ?? '';
-    const sedeRestricted =
-      (rolTipo === 'admin' || rolTipo === 'admin-internas' || rolTipo === 'admin-redes') &&
-      user?.usuarioSede;
-    if (sedeRestricted) {
+    const rolTipo = String(user?.usuarioRol?.rolTipo ?? user?.role ?? '').toLowerCase();
+    const sinRestriccionSede = rolTipo === 'superadmin' || rolTipo === 'gerencia';
+    if (user?.usuarioSede && !sinRestriccionSede) {
       const rows = await this.asignacionesRepository.query(
         'SELECT usuarioSede FROM usuarios WHERE usuarioId = ?',
         [usuarioId],

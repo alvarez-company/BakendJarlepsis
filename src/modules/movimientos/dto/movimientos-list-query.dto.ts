@@ -14,7 +14,7 @@ export class MovimientosListQueryDto extends PaginationDto {
   @IsIn(['entrada', 'salida', 'devolucion'])
   movimientoTipo?: string;
 
-  @ApiPropertyOptional({ description: 'Búsqueda por código, número de orden o identificador' })
+  @ApiPropertyOptional({ description: 'Código de movimiento, número de orden o identificador (búsqueda insensible a mayúsculas; en orden se ignoran espacios al comparar)' })
   @IsOptional()
   @Transform(({ value }) => {
     if (value === undefined || value === null) return undefined;

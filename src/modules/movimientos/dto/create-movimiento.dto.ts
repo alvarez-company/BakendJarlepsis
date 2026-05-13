@@ -80,7 +80,8 @@ export class CreateMovimientoDto {
 
   @ApiProperty({
     required: false,
-    description: 'Número de orden (manual) asociado al movimiento',
+    description:
+      'Número de orden (manual). Debe ser único entre operaciones distintas: no puede repetirse en otra entrada, salida o devolución (varios renglones de la misma operación comparten el mismo código de movimiento y el mismo número de orden).',
     example: 'OT-12345',
   })
   @IsString()

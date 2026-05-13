@@ -1,6 +1,6 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Repository } from 'typeorm';
+import { In, Repository } from 'typeorm';
 import { Proveedor } from './proveedor.entity';
 import { CreateProveedorDto } from './dto/create-proveedor.dto';
 import { UpdateProveedorDto } from './dto/update-proveedor.dto';
@@ -31,6 +31,26 @@ export class ProveedoresService {
       throw new NotFoundException(`Proveedor con ID ${id} no encontrado`);
     }
     return proveedor;
+  }
+
+  /** Listados: sin relación `materiales` (mucho más liviano que `findOne`). */
+  async findSummariesByIds(ids: number[]): Promise<Map<number, Partial<Proveedor> & { proveedorId: number }>> {
+    const uniq = [...new Set(ids.map((n) => Number(n)).filter((n) => Number.isFinite(n) && n > 0))];
+    if (!uniq.length) return new Map();
+    const rows = await this.proveedoresRepository.find({
+      where: { proveedorId: In(uniq) },
+      select: [
+        'proveedorId',
+        'proveedorNombre',
+        'proveedorNit',
+        'proveedorTelefono',
+        'proveedorEmail',
+        'proveedorDireccion',
+        'proveedorContacto',
+        'proveedorEstado',
+      ],
+    });
+    return new Map(rows.map((r) => [r.proveedorId, r]));
   }
 
   async update(id: number, updateProveedorDto: UpdateProveedorDto): Promise<Proveedor> {

@@ -7,7 +7,7 @@ import {
   forwardRef,
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Repository, DeepPartial, QueryFailedError } from 'typeorm';
+import { In, Repository, DeepPartial, QueryFailedError } from 'typeorm';
 import * as bcrypt from 'bcrypt';
 import { User } from './user.entity';
 import { CreateUserDto } from './dto/create-user.dto';
@@ -546,6 +546,39 @@ export class UsersService {
       throw new NotFoundException(`User with ID ${id} not found`);
     }
     return user;
+  }
+
+  /** Enriquecimiento de listas (movimientos): sin reglas de visibilidad extra. */
+  async findSummariesByIds(ids: number[]): Promise<
+    Map<
+      number,
+      Pick<
+        User,
+        | 'usuarioId'
+        | 'usuarioNombre'
+        | 'usuarioApellido'
+        | 'usuarioCorreo'
+        | 'usuarioTelefono'
+        | 'usuarioDocumento'
+        | 'usuarioEstado'
+      >
+    >
+  > {
+    const uniq = [...new Set(ids.map((n) => Number(n)).filter((n) => Number.isFinite(n) && n > 0))];
+    if (!uniq.length) return new Map();
+    const rows = await this.usersRepository.find({
+      where: { usuarioId: In(uniq) },
+      select: [
+        'usuarioId',
+        'usuarioNombre',
+        'usuarioApellido',
+        'usuarioCorreo',
+        'usuarioTelefono',
+        'usuarioDocumento',
+        'usuarioEstado',
+      ],
+    });
+    return new Map(rows.map((r) => [r.usuarioId, r]));
   }
 
   /**

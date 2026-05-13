@@ -767,6 +767,75 @@ export class InventarioTecnicoService {
     return Array.from(materialesAgrupados.values());
   }
 
+  /**
+   * Stock en manos de técnicos para un material y centro operativo (misma regla que
+   * `MaterialesService.calculateStockBySede`: usuarioSede coincide O sede de la bodega del usuario).
+   * Una sola consulta; evita N+1 en listados de materiales por sede.
+   */
+  async sumCantidadForMaterialInSede(materialId: number, sedeId: number): Promise<number> {
+    const mid = Number(materialId);
+    const sid = Number(sedeId);
+    if (!Number.isFinite(mid) || mid <= 0 || !Number.isFinite(sid) || sid <= 0) return 0;
+    try {
+      const rows = await this.inventarioTecnicoRepository.manager.query<Array<{ stock: string }>>(
+        `SELECT COALESCE(SUM(it.cantidad), 0) AS stock
+         FROM inventario_tecnicos it
+         INNER JOIN usuarios u ON u.usuarioId = it.usuarioId
+         LEFT JOIN bodegas b ON b.bodegaId = u.usuarioBodega
+         WHERE it.cantidad > 0 AND it.materialId = ?
+           AND (
+             (u.usuarioSede IS NOT NULL AND u.usuarioSede = ?)
+             OR (b.sedeId IS NOT NULL AND b.sedeId = ?)
+           )`,
+        [mid, sid, sid],
+      );
+      return Number(rows?.[0]?.stock ?? 0);
+    } catch (error) {
+      console.error(
+        `Error al sumar inventario técnico para material ${mid} y sede ${sid}:`,
+        error,
+      );
+      return 0;
+    }
+  }
+
+  /**
+   * Suma de cantidades en inventario técnico agrupada por materialId para un centro operativo.
+   * Usado por `MaterialesService.findAll` con filtro de sede (una consulta para todo el catálogo).
+   */
+  async sumCantidadByMaterialForSede(sedeId: number): Promise<Map<number, number>> {
+    const sid = Number(sedeId);
+    if (!Number.isFinite(sid) || sid <= 0) return new Map();
+    try {
+      const rows = await this.inventarioTecnicoRepository.manager.query<
+        Array<{ materialId: number; stock: string | number }>
+      >(
+        `SELECT it.materialId AS materialId,
+                COALESCE(SUM(it.cantidad), 0) AS stock
+         FROM inventario_tecnicos it
+         INNER JOIN usuarios u ON u.usuarioId = it.usuarioId
+         LEFT JOIN bodegas b ON b.bodegaId = u.usuarioBodega
+         WHERE it.cantidad > 0
+           AND (
+             (u.usuarioSede IS NOT NULL AND u.usuarioSede = ?)
+             OR (b.sedeId IS NOT NULL AND b.sedeId = ?)
+           )
+         GROUP BY it.materialId`,
+        [sid, sid],
+      );
+      const map = new Map<number, number>();
+      for (const r of rows) {
+        const mid = Number(r.materialId);
+        if (!Number.isFinite(mid)) continue;
+        map.set(mid, Number(r.stock ?? 0));
+      }
+      return map;
+    } catch (error) {
+      console.error(`Error al agregar inventario técnico por material para sede ${sid}:`, error);
+      return new Map();
+    }
+  }
+
   async findByMaterial(materialId: number): Promise<InventarioTecnico[]> {
     return this.inventarioTecnicoRepository.find({
       where: { materialId },

@@ -7,7 +7,7 @@ import {
   forwardRef,
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Repository } from 'typeorm';
+import { In, Repository } from 'typeorm';
 import { Material } from './material.entity';
 import { MaterialBodega } from './material-bodega.entity';
 import { CreateMaterialDto } from './dto/create-material.dto';
@@ -286,24 +286,24 @@ export class MaterialesService {
         const sid = Number(sedeFiltro);
         const ids = await this.bodegasService.findBodegaIdsBySedeId(sid);
         const bodegaIdsEnSede = new Set(ids);
-        const materialesConStockYSede = await Promise.all(
-          allMateriales.map(async (material) => {
-            const stockEnCentroOperativo = await this.calculateStockBySede(
-              material,
-              sid,
-              bodegaIdsEnSede,
-            );
-            const materialBodegasCentro = (material.materialBodegas || []).filter((mb: any) =>
-              this.materialBodegaEnSede(mb, sid, bodegaIdsEnSede),
-            );
-            return {
-              ...material,
-              materialStock: stockEnCentroOperativo,
-              materialBodegas: materialBodegasCentro,
-            };
-          }),
-        );
-        return materialesConStockYSede;
+        const stockTecnicoPorMaterial =
+          await this.inventarioTecnicoService.sumCantidadByMaterialForSede(sid);
+
+        return allMateriales.map((material) => {
+          const stockBodegas = (material.materialBodegas || [])
+            .filter((mb: any) => this.materialBodegaEnSede(mb, sid, bodegaIdsEnSede))
+            .reduce((sum, mb) => sum + Number(mb.stock || 0), 0);
+          const stockTecnicos = stockTecnicoPorMaterial.get(material.materialId) ?? 0;
+          const stockEnCentroOperativo = stockBodegas + stockTecnicos;
+          const materialBodegasCentro = (material.materialBodegas || []).filter((mb: any) =>
+            this.materialBodegaEnSede(mb, sid, bodegaIdsEnSede),
+          );
+          return {
+            ...material,
+            materialStock: stockEnCentroOperativo,
+            materialBodegas: materialBodegasCentro,
+          };
+        });
       }
 
       return allMateriales;
@@ -392,30 +392,33 @@ export class MaterialesService {
       stockTotal += stockBodegas;
     }
 
-    try {
-      const inventariosTecnicos = await this.inventarioTecnicoService.findByMaterial(
-        material.materialId,
-      );
-      const stockTecnicos = inventariosTecnicos
-        .filter((inv) => {
-          const u = inv.usuario as
-            | { usuarioSede?: number; bodega?: { sedeId?: number } }
-            | undefined;
-          if (!u) return false;
-          if (u.usuarioSede != null && Number(u.usuarioSede) === sid) return true;
-          const bSede = u.bodega?.sedeId;
-          return bSede != null && Number(bSede) === sid;
-        })
-        .reduce((sum, inv) => sum + Number(inv.cantidad || 0), 0);
-      stockTotal += stockTecnicos;
-    } catch (error) {
-      console.error(
-        `Error al calcular stock en técnicos para material ${material.materialId} y sede ${sedeId}:`,
-        error,
-      );
-    }
+    const stockTecnicos = await this.inventarioTecnicoService.sumCantidadForMaterialInSede(
+      material.materialId,
+      sid,
+    );
+    stockTotal += stockTecnicos;
 
     return stockTotal;
+  }
+
+  /** Listados de movimientos: evita N consultas `findOne` por material. */
+  async findSummariesByIds(ids: number[]): Promise<Map<number, Partial<Material> & { materialId: number }>> {
+    const uniq = [...new Set(ids.map((n) => Number(n)).filter((n) => Number.isFinite(n) && n > 0))];
+    if (!uniq.length) return new Map();
+    const rows = await this.materialesRepository.find({
+      where: { materialId: In(uniq) },
+      select: [
+        'materialId',
+        'materialCodigo',
+        'materialNombre',
+        'materialStock',
+        'materialPrecio',
+        'materialFoto',
+        'materialEstado',
+        'materialEsMedidor',
+      ],
+    });
+    return new Map(rows.map((r) => [r.materialId, r]));
   }
 
   async findOne(id: number, user?: any): Promise<Material> {

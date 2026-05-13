@@ -177,6 +177,12 @@ export class MovimientosService {
       explicitCodigo ||
       `${createMovimientoDto.movimientoTipo.toUpperCase()}-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
 
+    await this.assertNumeroOrdenUnicoPorGrupo(
+      createMovimientoDto.numeroOrden,
+      movimientoCodigo,
+      [],
+    );
+
     // NO generar identificador único aquí - se generará por cada movimiento individual
     // para evitar conflictos cuando se crean múltiples movimientos con el mismo código
 
@@ -1019,6 +1025,173 @@ export class MovimientosService {
     }
   }
 
+  /**
+   * Fragmento SQL de acceso por rol (misma semántica que el listado paginado).
+   * @param tableAlias alias de `movimientos_inventario` (ej. `movimientos_inventario` o `m`)
+   */
+  private buildMovimientoRoleWhereSql(
+    tableAlias: string,
+    user?: any,
+  ): { sql: string; params: any[] } {
+    const a = tableAlias;
+    if (!user) return { sql: '', params: [] };
+    const rolTipo = user.usuarioRol?.rolTipo || user.role;
+
+    if (rolTipo === 'superadmin' || rolTipo === 'gerencia') {
+      return { sql: '', params: [] };
+    }
+
+    if (rolTipo === 'admin' && user.usuarioSede) {
+      return {
+        sql: ` WHERE EXISTS (
+                SELECT 1 FROM inventarios i
+                INNER JOIN bodegas b ON i.bodegaId = b.bodegaId
+                WHERE i.inventarioId = ${a}.inventarioId
+                  AND b.sedeId = ?
+              )`,
+        params: [user.usuarioSede],
+      };
+    }
+    if (rolTipo === 'almacenista' && user.usuarioSede) {
+      return {
+        sql: ` WHERE EXISTS (
+                SELECT 1 FROM inventarios i
+                INNER JOIN bodegas b ON i.bodegaId = b.bodegaId
+                WHERE i.inventarioId = ${a}.inventarioId
+                  AND b.sedeId = ?
+              )`,
+        params: [user.usuarioSede],
+      };
+    }
+    if (rolTipo === 'admin-internas' && user.usuarioSede) {
+      return {
+        sql: ` WHERE EXISTS (
+                SELECT 1 FROM inventarios i
+                INNER JOIN bodegas b ON i.bodegaId = b.bodegaId
+                WHERE i.inventarioId = ${a}.inventarioId
+                  AND b.sedeId = ? AND b.bodegaTipo = 'internas'
+              )`,
+        params: [user.usuarioSede],
+      };
+    }
+    if (rolTipo === 'admin-redes' && user.usuarioSede) {
+      return {
+        sql: ` WHERE EXISTS (
+                SELECT 1 FROM inventarios i
+                INNER JOIN bodegas b ON i.bodegaId = b.bodegaId
+                WHERE i.inventarioId = ${a}.inventarioId
+                  AND b.sedeId = ? AND b.bodegaTipo = 'redes'
+              )`,
+        params: [user.usuarioSede],
+      };
+    }
+    if (rolTipo === 'bodega-internas') {
+      return {
+        sql: ` WHERE EXISTS (
+                SELECT 1 FROM inventarios i
+                INNER JOIN bodegas b ON i.bodegaId = b.bodegaId
+                WHERE i.inventarioId = ${a}.inventarioId
+                  AND (b.bodegaTipo = 'internas' OR b.bodegaId = ?)
+              )`,
+        params: [user.usuarioBodega || 0],
+      };
+    }
+    if (rolTipo === 'bodega-redes') {
+      return {
+        sql: ` WHERE EXISTS (
+                SELECT 1 FROM inventarios i
+                INNER JOIN bodegas b ON i.bodegaId = b.bodegaId
+                WHERE i.inventarioId = ${a}.inventarioId
+                  AND (b.bodegaTipo = 'redes' OR b.bodegaId = ?)
+              )`,
+        params: [user.usuarioBodega || 0],
+      };
+    }
+    if ((rolTipo === 'tecnico' || rolTipo === 'soldador') && user.usuarioId) {
+      return {
+        sql: ` WHERE (
+                ${a}.usuarioId = ?
+                OR ${a}.tecnicoOrigenId = ?
+                OR EXISTS (
+                  SELECT 1 FROM instalaciones_usuarios iu
+                  WHERE iu.instalacionId = ${a}.instalacionId
+                    AND iu.usuarioId = ?
+                    AND iu.activo = 1
+                )
+              )`,
+        params: [user.usuarioId, user.usuarioId, user.usuarioId],
+      };
+    }
+
+    return { sql: '', params: [] };
+  }
+
+  /**
+   * Búsqueda por código de movimiento, número de orden e identificador único.
+   * Insensible a mayúsculas; en número de orden admite coincidencia ignorando espacios (p. ej. "12 34" vs "1234").
+   */
+  private buildMovimientoTextSearchClause(
+    tableAlias: string,
+    trimmedSearch: string,
+  ): { sql: string; params: any[] } {
+    const p = tableAlias ? `${tableAlias}.` : '';
+    const lower = trimmedSearch.toLowerCase();
+    const pat = `%${lower}%`;
+    const compact = lower.replace(/\s+/g, '');
+    const patCompact = `%${compact}%`;
+    const ordenExpr = `TRIM(COALESCE(CAST(${p}numeroOrden AS CHAR), ''))`;
+    const sql = `(
+      LOWER(COALESCE(${p}movimientoCodigo, '')) LIKE ?
+      OR LOWER(${ordenExpr}) LIKE ?
+      OR LOWER(COALESCE(${p}identificadorUnico, '')) LIKE ?
+      OR REPLACE(LOWER(${ordenExpr}), ' ', '') LIKE ?
+    )`;
+    return { sql, params: [pat, pat, pat, patCompact] };
+  }
+
+  /**
+   * El número de orden debe ser único entre operaciones distintas (cualquier tipo de movimiento).
+   * Varios renglones de la misma operación comparten `movimientoCodigo` y el mismo número de orden.
+   */
+  private async assertNumeroOrdenUnicoPorGrupo(
+    numeroOrdenRaw: string | null | undefined,
+    movimientoCodigoGrupo: string | null | undefined,
+    excludeMovimientoIds: number[],
+  ): Promise<void> {
+    const ordenTrim = numeroOrdenRaw != null ? String(numeroOrdenRaw).trim() : '';
+    if (!ordenTrim) return;
+
+    const norm = ordenTrim.toLowerCase();
+    const codigoGrupo = (movimientoCodigoGrupo ?? '').trim();
+    const exclude = Array.from(
+      new Set((excludeMovimientoIds || []).filter((id) => Number.isFinite(Number(id)) && Number(id) > 0)),
+    );
+
+    let sql = `
+      SELECT m.movimientoId, m.movimientoTipo
+      FROM movimientos_inventario m
+      WHERE LOWER(TRIM(COALESCE(CAST(m.numeroOrden AS CHAR), ''))) = ?
+        AND NOT (COALESCE(m.movimientoCodigo, '') <=> ?)
+    `;
+    const params: any[] = [norm, codigoGrupo];
+
+    if (exclude.length) {
+      sql += ` AND m.movimientoId NOT IN (${exclude.map(() => '?').join(',')})`;
+      params.push(...exclude);
+    }
+    sql += ' LIMIT 1';
+
+    const rows = await this.movimientosRepository.query(sql.trim(), params);
+    if (rows?.length) {
+      const tipo = String(rows[0]?.movimientoTipo || '').toLowerCase();
+      const tipoLabel =
+        tipo === 'entrada' ? 'una entrada' : tipo === 'salida' ? 'una salida' : tipo === 'devolucion' ? 'una devolución' : 'otro movimiento';
+      throw new BadRequestException(
+        `El número de orden "${ordenTrim}" ya está registrado en ${tipoLabel}. Debe ser único entre todas las operaciones de inventario.`,
+      );
+    }
+  }
+
   async findAll(
     paginationDto?: PaginationDto,
     user?: any,
@@ -1028,105 +1201,9 @@ export class MovimientosService {
       const limit = Math.min(50, Math.max(1, Number(paginationDto?.limit) || 50));
       const skip = (page - 1) * limit;
 
-      // Construir condiciones de filtrado según el rol del usuario
-      let whereConditions = '';
-      const queryParams: any[] = [];
-
-      if (user) {
-        const rolTipo = user.usuarioRol?.rolTipo || user.role;
-
-        // SuperAdmin y Gerencia ven todo - no agregar condiciones
-        if (rolTipo !== 'superadmin' && rolTipo !== 'gerencia') {
-          // Admin ve movimientos de su sede
-          if (rolTipo === 'admin' && user.usuarioSede) {
-            whereConditions = `
-              WHERE EXISTS (
-                SELECT 1 FROM inventarios i
-                INNER JOIN bodegas b ON i.bodegaId = b.bodegaId
-                WHERE i.inventarioId = movimientos_inventario.inventarioId
-                  AND b.sedeId = ?
-              )
-            `;
-            queryParams.push(user.usuarioSede);
-          }
-          // Almacenista ve movimientos de su sede
-          else if (rolTipo === 'almacenista' && user.usuarioSede) {
-            whereConditions = `
-              WHERE EXISTS (
-                SELECT 1 FROM inventarios i
-                INNER JOIN bodegas b ON i.bodegaId = b.bodegaId
-                WHERE i.inventarioId = movimientos_inventario.inventarioId
-                  AND b.sedeId = ?
-              )
-            `;
-            queryParams.push(user.usuarioSede);
-          }
-          // Admin Internas ve movimientos de bodegas tipo internas de su sede
-          else if (rolTipo === 'admin-internas' && user.usuarioSede) {
-            whereConditions = `
-              WHERE EXISTS (
-                SELECT 1 FROM inventarios i
-                INNER JOIN bodegas b ON i.bodegaId = b.bodegaId
-                WHERE i.inventarioId = movimientos_inventario.inventarioId
-                  AND b.sedeId = ? AND b.bodegaTipo = 'internas'
-              )
-            `;
-            queryParams.push(user.usuarioSede);
-          }
-          // Admin Redes ve movimientos de bodegas tipo redes de su sede
-          else if (rolTipo === 'admin-redes' && user.usuarioSede) {
-            whereConditions = `
-              WHERE EXISTS (
-                SELECT 1 FROM inventarios i
-                INNER JOIN bodegas b ON i.bodegaId = b.bodegaId
-                WHERE i.inventarioId = movimientos_inventario.inventarioId
-                  AND b.sedeId = ? AND b.bodegaTipo = 'redes'
-              )
-            `;
-            queryParams.push(user.usuarioSede);
-          }
-          // Bodega Internas ve movimientos de bodegas de tipo internas
-          else if (rolTipo === 'bodega-internas') {
-            whereConditions = `
-              WHERE EXISTS (
-                SELECT 1 FROM inventarios i
-                INNER JOIN bodegas b ON i.bodegaId = b.bodegaId
-                WHERE i.inventarioId = movimientos_inventario.inventarioId
-                  AND (b.bodegaTipo = 'internas' OR b.bodegaId = ?)
-              )
-            `;
-            queryParams.push(user.usuarioBodega || 0);
-          }
-          // Bodega Redes ve movimientos de bodegas de tipo redes
-          else if (rolTipo === 'bodega-redes') {
-            whereConditions = `
-              WHERE EXISTS (
-                SELECT 1 FROM inventarios i
-                INNER JOIN bodegas b ON i.bodegaId = b.bodegaId
-                WHERE i.inventarioId = movimientos_inventario.inventarioId
-                  AND (b.bodegaTipo = 'redes' OR b.bodegaId = ?)
-              )
-            `;
-            queryParams.push(user.usuarioBodega || 0);
-          }
-          // Técnico y Soldador ven solo movimientos de instalaciones asignadas a ellos
-          else if ((rolTipo === 'tecnico' || rolTipo === 'soldador') && user.usuarioId) {
-            whereConditions = `
-              WHERE (
-                movimientos_inventario.usuarioId = ?
-                OR movimientos_inventario.tecnicoOrigenId = ?
-                OR EXISTS (
-                  SELECT 1 FROM instalaciones_usuarios iu
-                  WHERE iu.instalacionId = movimientos_inventario.instalacionId
-                    AND iu.usuarioId = ?
-                    AND iu.activo = 1
-                )
-              )
-            `;
-            queryParams.push(user.usuarioId, user.usuarioId, user.usuarioId);
-          }
-        }
-      }
+      const roleWhere = this.buildMovimientoRoleWhereSql('movimientos_inventario', user);
+      let whereConditions = roleWhere.sql;
+      const queryParams: any[] = [...roleWhere.params];
 
       const listQuery = paginationDto as PaginationDto & { movimientoTipo?: string; search?: string };
 
@@ -1137,11 +1214,9 @@ export class MovimientosService {
       }
 
       if (listQuery.search && listQuery.search.trim()) {
-        const term = `%${listQuery.search.trim()}%`;
-        const frag =
-          '(movimientoCodigo LIKE ? OR COALESCE(CAST(numeroOrden AS CHAR), \'\') LIKE ? OR COALESCE(identificadorUnico, \'\') LIKE ?)';
-        whereConditions = whereConditions ? `${whereConditions} AND ${frag}` : ` WHERE ${frag}`;
-        queryParams.push(term, term, term);
+        const { sql, params: sp } = this.buildMovimientoTextSearchClause('', listQuery.search.trim());
+        whereConditions = whereConditions ? `${whereConditions} AND ${sql}` : ` WHERE ${sql}`;
+        queryParams.push(...sp);
       }
 
       // Obtener el total de registros con filtros
@@ -1207,118 +1282,144 @@ export class MovimientosService {
           }),
         );
 
-        const _bodegaMap = new Map<number, any>();
+        const materialIds = Array.from(
+          new Set(
+            rawMovimientos
+              .map((movimiento: any) => movimiento.materialId)
+              .filter((id: any) => id !== null && id !== undefined)
+              .map((id: any) => Number(id))
+              .filter((id: number) => !isNaN(id)),
+          ),
+        ) as number[];
+        const proveedorIds = Array.from(
+          new Set(
+            rawMovimientos
+              .map((movimiento: any) => movimiento.proveedorId)
+              .filter((id: any) => id !== null && id !== undefined)
+              .map((id: any) => Number(id))
+              .filter((id: number) => !isNaN(id)),
+          ),
+        ) as number[];
+        const usuarioIdsSet = new Set<number>();
+        for (const movimiento of rawMovimientos) {
+          const m = movimiento as any;
+          if (m.usuarioId) usuarioIdsSet.add(Number(m.usuarioId));
+          if (m.origenTipo === 'tecnico' && m.tecnicoOrigenId) {
+            usuarioIdsSet.add(Number(m.tecnicoOrigenId));
+          }
+        }
+        const usuarioIds = Array.from(usuarioIdsSet).filter((id) => !isNaN(id) && id > 0);
 
-        const movimientosConRelaciones = await Promise.all(
-          rawMovimientos.map(async (movimiento: any) => {
-            const movimientoConRelaciones: any = { ...movimiento };
+        const [materialMap, proveedorMap, usuarioMap] = await Promise.all([
+          this.materialesService.findSummariesByIds(materialIds),
+          this.proveedoresService.findSummariesByIds(proveedorIds),
+          this.usersService.findSummariesByIds(usuarioIds),
+        ]);
 
-            // Cargar material si existe
-            if (movimiento.materialId) {
-              try {
-                const material = await this.materialesService.findOne(movimiento.materialId);
-                movimientoConRelaciones.material = {
-                  materialId: material.materialId,
-                  materialCodigo: material.materialCodigo,
-                  materialNombre: material.materialNombre,
-                  materialStock: material.materialStock,
-                  materialPrecio: material.materialPrecio,
-                  materialFoto: material.materialFoto,
-                  materialEstado: material.materialEstado,
-                  materialEsMedidor: material.materialEsMedidor || false,
-                };
-              } catch (err) {
-                // Error silencioso al cargar material
-              }
-            }
-
-            if (movimiento.inventarioId) {
-              const inventario = inventarioMap.get(Number(movimiento.inventarioId));
-              if (inventario) {
-                movimientoConRelaciones.inventario = inventario;
-                movimientoConRelaciones.bodega = inventario.bodega ?? null;
-                movimientoConRelaciones.bodegaId =
-                  inventario.bodegaId ?? inventario.bodega?.bodegaId ?? null;
-              }
-            }
-
-            // Cargar proveedor si existe
-            if (movimiento.proveedorId) {
-              try {
-                const proveedor = await this.proveedoresService.findOne(movimiento.proveedorId);
-                movimientoConRelaciones.proveedor = {
-                  proveedorId: proveedor.proveedorId,
-                  proveedorNombre: proveedor.proveedorNombre,
-                  proveedorNit: proveedor.proveedorNit,
-                  proveedorTelefono: proveedor.proveedorTelefono,
-                  proveedorEmail: proveedor.proveedorEmail,
-                  proveedorDireccion: proveedor.proveedorDireccion,
-                  proveedorContacto: proveedor.proveedorContacto,
-                  proveedorEstado: proveedor.proveedorEstado,
-                };
-              } catch (err) {
-                // Error silencioso al cargar proveedor
-              }
-            }
-
-            // Cargar usuario si existe
-            if (movimiento.usuarioId) {
-              try {
-                const usuario = await this.usersService.findOne(movimiento.usuarioId);
-                movimientoConRelaciones.usuario = {
-                  usuarioId: usuario.usuarioId,
-                  usuarioNombre: usuario.usuarioNombre,
-                  usuarioApellido: usuario.usuarioApellido,
-                  usuarioCorreo: usuario.usuarioCorreo,
-                  usuarioTelefono: usuario.usuarioTelefono,
-                  usuarioDocumento: usuario.usuarioDocumento,
-                  usuarioEstado: usuario.usuarioEstado,
-                  // usuarioOficina eliminado - las bodegas ahora pertenecen directamente a sedes
-                };
-              } catch (err) {
-                // Error silencioso al cargar usuario
-              }
-            }
-
-            // Cargar técnico origen si el movimiento viene de un técnico
-            if (movimiento.origenTipo === 'tecnico' && movimiento.tecnicoOrigenId) {
-              try {
-                const tecnicoOrigen = await this.usersService.findOne(movimiento.tecnicoOrigenId);
-                movimientoConRelaciones.tecnicoOrigen = {
-                  usuarioId: tecnicoOrigen.usuarioId,
-                  usuarioNombre: tecnicoOrigen.usuarioNombre,
-                  usuarioApellido: tecnicoOrigen.usuarioApellido,
-                };
-              } catch (err) {
-                // Error silencioso al cargar técnico origen
-              }
-            }
-
-            // oficinaId eliminado - las bodegas ahora pertenecen directamente a sedes
-            // Los datos históricos pueden tener oficinaId pero ya no se usa
-
-            // Cargar instalación si existe
-            if (movimiento.instalacionId) {
-              try {
-                // Usar query directa para obtener la instalación con su código
-                const instalacionRaw = await this.movimientosRepository.query(
-                  'SELECT instalacionId, instalacionCodigo FROM instalaciones WHERE instalacionId = ?',
-                  [movimiento.instalacionId],
-                );
-                if (instalacionRaw && instalacionRaw.length > 0) {
-                  movimientoConRelaciones.instalacion = {
-                    instalacionId: instalacionRaw[0].instalacionId,
-                    instalacionCodigo: instalacionRaw[0].instalacionCodigo,
-                  };
-                }
-              } catch (err) {
-                // Error silencioso al cargar instalación
-              }
-            }
-
-            return movimientoConRelaciones;
-          }),
+        const instalacionIds = Array.from(
+          new Set(
+            rawMovimientos
+              .map((movimiento: any) => movimiento.instalacionId)
+              .filter((id: any) => id !== null && id !== undefined)
+              .map((id: any) => Number(id))
+              .filter((id: number) => !isNaN(id)),
+          ),
         );
+        const instalacionMap = new Map<number, { instalacionId: number; instalacionCodigo: string }>();
+        if (instalacionIds.length > 0) {
+          const placeholders = instalacionIds.map(() => '?').join(',');
+          const instRows = await this.movimientosRepository.query(
+            `SELECT instalacionId, instalacionCodigo FROM instalaciones WHERE instalacionId IN (${placeholders})`,
+            instalacionIds,
+          );
+          for (const r of instRows || []) {
+            instalacionMap.set(Number(r.instalacionId), {
+              instalacionId: Number(r.instalacionId),
+              instalacionCodigo: r.instalacionCodigo,
+            });
+          }
+        }
+
+        const movimientosConRelaciones = rawMovimientos.map((movimiento: any) => {
+          const movimientoConRelaciones: any = { ...movimiento };
+
+          if (movimiento.materialId) {
+            const material = materialMap.get(Number(movimiento.materialId));
+            if (material) {
+              movimientoConRelaciones.material = {
+                materialId: material.materialId,
+                materialCodigo: material.materialCodigo,
+                materialNombre: material.materialNombre,
+                materialStock: material.materialStock,
+                materialPrecio: material.materialPrecio,
+                materialFoto: material.materialFoto,
+                materialEstado: material.materialEstado,
+                materialEsMedidor: material.materialEsMedidor || false,
+              };
+            }
+          }
+
+          if (movimiento.inventarioId) {
+            const inventario = inventarioMap.get(Number(movimiento.inventarioId));
+            if (inventario) {
+              movimientoConRelaciones.inventario = inventario;
+              movimientoConRelaciones.bodega = inventario.bodega ?? null;
+              movimientoConRelaciones.bodegaId =
+                inventario.bodegaId ?? inventario.bodega?.bodegaId ?? null;
+            }
+          }
+
+          if (movimiento.proveedorId) {
+            const proveedor = proveedorMap.get(Number(movimiento.proveedorId));
+            if (proveedor) {
+              movimientoConRelaciones.proveedor = {
+                proveedorId: proveedor.proveedorId,
+                proveedorNombre: proveedor.proveedorNombre,
+                proveedorNit: proveedor.proveedorNit,
+                proveedorTelefono: proveedor.proveedorTelefono,
+                proveedorEmail: proveedor.proveedorEmail,
+                proveedorDireccion: proveedor.proveedorDireccion,
+                proveedorContacto: proveedor.proveedorContacto,
+                proveedorEstado: proveedor.proveedorEstado,
+              };
+            }
+          }
+
+          if (movimiento.usuarioId) {
+            const usuario = usuarioMap.get(Number(movimiento.usuarioId));
+            if (usuario) {
+              movimientoConRelaciones.usuario = {
+                usuarioId: usuario.usuarioId,
+                usuarioNombre: usuario.usuarioNombre,
+                usuarioApellido: usuario.usuarioApellido,
+                usuarioCorreo: usuario.usuarioCorreo,
+                usuarioTelefono: usuario.usuarioTelefono,
+                usuarioDocumento: usuario.usuarioDocumento,
+                usuarioEstado: usuario.usuarioEstado,
+              };
+            }
+          }
+
+          if (movimiento.origenTipo === 'tecnico' && movimiento.tecnicoOrigenId) {
+            const tecnicoOrigen = usuarioMap.get(Number(movimiento.tecnicoOrigenId));
+            if (tecnicoOrigen) {
+              movimientoConRelaciones.tecnicoOrigen = {
+                usuarioId: tecnicoOrigen.usuarioId,
+                usuarioNombre: tecnicoOrigen.usuarioNombre,
+                usuarioApellido: tecnicoOrigen.usuarioApellido,
+              };
+            }
+          }
+
+          if (movimiento.instalacionId) {
+            const inst = instalacionMap.get(Number(movimiento.instalacionId));
+            if (inst) {
+              movimientoConRelaciones.instalacion = inst;
+            }
+          }
+
+          return movimientoConRelaciones;
+        });
 
         return {
           data: movimientosConRelaciones,
@@ -1344,6 +1445,138 @@ export class MovimientosService {
       }
       throw error;
     }
+  }
+
+  /**
+   * Totales por material y tipo (misma visibilidad que el listado). Para tablas tipo Stock sin traer todos los movimientos.
+   */
+  async findTotalesPorMaterial(
+    user?: any,
+  ): Promise<Record<number, { entrada: number; salida: number; devolucion: number }>> {
+    const roleWhere = this.buildMovimientoRoleWhereSql('m', user);
+    const whereBase = roleWhere.sql || ' WHERE 1=1';
+    const sql = `
+      SELECT m.materialId AS materialId, m.movimientoTipo AS movimientoTipo, SUM(m.movimientoCantidad) AS total
+      FROM movimientos_inventario m
+      ${whereBase}
+      GROUP BY m.materialId, m.movimientoTipo
+    `;
+    const rows = await this.movimientosRepository.query(sql, roleWhere.params);
+    const out: Record<number, { entrada: number; salida: number; devolucion: number }> = {};
+    for (const r of rows || []) {
+      const mid = Number(r.materialId);
+      if (!Number.isFinite(mid) || mid <= 0) continue;
+      const tipo = String(r.movimientoTipo || '').toLowerCase();
+      const total = Number(r.total || 0);
+      if (!out[mid]) out[mid] = { entrada: 0, salida: 0, devolucion: 0 };
+      if (tipo === 'entrada') out[mid].entrada += total;
+      else if (tipo === 'salida') out[mid].salida += total;
+      else if (tipo === 'devolucion') out[mid].devolucion += total;
+    }
+    return out;
+  }
+
+  /**
+   * Listado de movimientos agrupados por `movimientoCodigo` (una fila por operación), paginado en servidor.
+   */
+  async findGruposPaginated(
+    user: any,
+    opts: {
+      page: number;
+      limit: number;
+      movimientoTipo: string;
+      search?: string;
+      excludeTrasladoSalidas?: boolean;
+    },
+  ): Promise<{ data: any[]; total: number; page: number; limit: number }> {
+    const page = Math.max(1, Number(opts.page) || 1);
+    const limit = Math.min(50, Math.max(1, Number(opts.limit) || 50));
+    const skip = (page - 1) * limit;
+    const tipo = String(opts.movimientoTipo || '').toLowerCase();
+    if (!['entrada', 'salida', 'devolucion'].includes(tipo)) {
+      return { data: [], total: 0, page, limit };
+    }
+
+    const roleWhere = this.buildMovimientoRoleWhereSql('m', user);
+    let where = roleWhere.sql;
+    const params: any[] = [...roleWhere.params];
+
+    const tipoFrag = 'm.movimientoTipo = ?';
+    where = where ? `${where} AND ${tipoFrag}` : ` WHERE ${tipoFrag}`;
+    params.push(tipo);
+
+    if (opts.excludeTrasladoSalidas && tipo === 'salida') {
+      where += ` AND NOT (
+        LOWER(COALESCE(m.movimientoObservaciones, '')) LIKE '%traslado%'
+        OR UPPER(COALESCE(m.movimientoCodigo, '')) LIKE 'TRA-%'
+        OR UPPER(COALESCE(m.identificadorUnico, '')) LIKE 'TRA-%'
+      )`;
+    }
+
+    if (opts.search && opts.search.trim()) {
+      const { sql, params: sp } = this.buildMovimientoTextSearchClause('m', opts.search.trim());
+      where += ` AND ${sql}`;
+      params.push(...sp);
+    }
+
+    const countSql = `
+      SELECT COUNT(*) AS total FROM (
+        SELECT m.movimientoCodigo
+        FROM movimientos_inventario m
+        ${where}
+        GROUP BY m.movimientoCodigo
+      ) g
+    `;
+    const countRows = await this.movimientosRepository.query(countSql, params);
+    const total = Number(countRows?.[0]?.total ?? 0);
+
+    const dataSql = `
+      SELECT
+        MIN(m.movimientoId) AS movimientoId,
+        m.movimientoCodigo AS movimientoCodigo,
+        MAX(m.fechaCreacion) AS fechaCreacion,
+        COUNT(DISTINCT m.materialId) AS materialesCount,
+        SUM(m.movimientoCantidad) AS totalCantidad,
+        MAX(m.proveedorId) AS proveedorId,
+        MAX(m.numeroOrden) AS numeroOrden,
+        MAX(m.identificadorUnico) AS identificadorUnico
+      FROM movimientos_inventario m
+      ${where}
+      GROUP BY m.movimientoCodigo
+      ORDER BY MAX(m.fechaCreacion) DESC
+      LIMIT ? OFFSET ?
+    `;
+    const dataRows = await this.movimientosRepository.query(dataSql, [...params, limit, skip]);
+
+    const proveedorIds = Array.from(
+      new Set(
+        (dataRows || [])
+          .map((r: any) => Number(r.proveedorId))
+          .filter((id: number) => Number.isFinite(id) && id > 0),
+      ),
+    ) as number[];
+    const proveedorMap = await this.proveedoresService.findSummariesByIds(proveedorIds);
+
+    const data = (dataRows || []).map((r: any) => {
+      const pid = r.proveedorId != null ? Number(r.proveedorId) : null;
+      const prov = pid && proveedorMap.get(pid) ? proveedorMap.get(pid)! : null;
+      const codigo = r.movimientoCodigo || '';
+      const ident = r.identificadorUnico || '';
+      return {
+        movimientoCodigo: codigo,
+        displayCodigo: ident || codigo,
+        identificadorUnico: ident || undefined,
+        movimientoId: Number(r.movimientoId),
+        numeroOrden: r.numeroOrden ? String(r.numeroOrden).trim() : undefined,
+        materialesCount: Number(r.materialesCount || 0),
+        totalCantidad: Number(r.totalCantidad || 0),
+        proveedorNombre: prov?.proveedorNombre || '-',
+        proveedorId: pid && pid > 0 ? pid : undefined,
+        fechaCreacion: r.fechaCreacion,
+      };
+    });
+
+    return { data, total, page, limit };
   }
 
   /**
@@ -1817,6 +2050,16 @@ export class MovimientosService {
     }
     if (updateMovimientoDto.inventarioId !== undefined) {
       movimiento.inventarioId = updateMovimientoDto.inventarioId || null;
+    }
+    if (updateMovimientoDto.numeroOrden !== undefined) {
+      const trimmed =
+        updateMovimientoDto.numeroOrden != null ? String(updateMovimientoDto.numeroOrden).trim() : '';
+      await this.assertNumeroOrdenUnicoPorGrupo(
+        trimmed || null,
+        movimiento.movimientoCodigo ?? null,
+        [movimiento.movimientoId],
+      );
+      movimiento.numeroOrden = trimmed ? trimmed : null;
     }
     // oficinaId eliminado - las bodegas ahora pertenecen directamente a sedes
 

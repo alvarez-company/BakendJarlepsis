@@ -6,7 +6,7 @@ import {
   forwardRef,
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Repository } from 'typeorm';
+import { Brackets, Repository } from 'typeorm';
 import { Traslado, EstadoTraslado } from './traslado.entity';
 import { CreateTrasladoDto } from './dto/create-traslado.dto';
 import { UpdateTrasladoDto } from './dto/update-traslado.dto';
@@ -169,6 +169,18 @@ export class TrasladosService {
       // SuperAdmin y Gerencia ven todo - no aplicar filtros
       const esSuperadminOGerencia = rolTipo === 'superadmin' || rolTipo === 'gerencia';
 
+      if (user && !esSuperadminOGerencia && rolTipo === 'almacenista' && user.usuarioSede) {
+        const sid = Number(user.usuarioSede);
+        queryBuilder.andWhere(
+          new Brackets((qb) => {
+            qb.where('bodegaOrigenSede.sedeId = :almSede', { almSede: sid }).orWhere(
+              'bodegaDestinoSede.sedeId = :almSede',
+              { almSede: sid },
+            );
+          }),
+        );
+      }
+
       const rolesConFiltroBodega = [
         'admin',
         'admin-internas',
@@ -320,6 +332,62 @@ export class TrasladosService {
       }
       throw error;
     }
+  }
+
+  /**
+   * Suma de cantidades por material (no cancelados). Opcional `vistaSedeId` para alinear con filtros por centro en UI.
+   */
+  async findTotalesPorMaterial(user?: any, vistaSedeId?: number): Promise<Record<number, number>> {
+    const qb = this.trasladosRepository
+      .createQueryBuilder('t')
+      .leftJoin('t.bodegaOrigen', 'bo')
+      .leftJoin('t.bodegaDestino', 'bd')
+      .select('t.materialId', 'materialId')
+      .addSelect('COALESCE(SUM(t.trasladoCantidad), 0)', 'total')
+      .where('t.trasladoEstado != :cancelado', { cancelado: EstadoTraslado.CANCELADO });
+
+    const rolTipo = (user?.usuarioRol?.rolTipo || user?.role || '').toLowerCase();
+    const esSuperadminOGerencia = rolTipo === 'superadmin' || rolTipo === 'gerencia';
+
+    const rolesConFiltroBodega = [
+      'admin',
+      'admin-internas',
+      'admin-redes',
+      'bodega-internas',
+      'bodega-redes',
+    ];
+    if (user && !esSuperadminOGerencia && rolesConFiltroBodega.includes(rolTipo)) {
+      const bodegasPermitidas = await this.bodegasService.findAll(user);
+      const bodegaIds = bodegasPermitidas.map((b) => b.bodegaId);
+      if (bodegaIds.length === 0) {
+        qb.andWhere('1 = 0');
+      } else {
+        qb
+          .andWhere('t.bodegaOrigenId IN (:...bodegaIds)', { bodegaIds })
+          .andWhere('t.bodegaDestinoId IN (:...bodegaIds)', { bodegaIds });
+      }
+    }
+
+    const sidRaw = vistaSedeId != null ? Number(vistaSedeId) : NaN;
+    if (Number.isFinite(sidRaw) && sidRaw > 0) {
+      qb.andWhere(
+        new Brackets((q) => {
+          q.where('bo.sedeId = :vistaSede', { vistaSede: sidRaw }).orWhere('bd.sedeId = :vistaSede', {
+            vistaSede: sidRaw,
+          });
+        }),
+      );
+    }
+
+    qb.groupBy('t.materialId');
+    const rows = await qb.getRawMany<{ materialId: number; total: string }>();
+    const out: Record<number, number> = {};
+    for (const r of rows) {
+      const mid = Number(r.materialId);
+      if (!Number.isFinite(mid)) continue;
+      out[mid] = Number(r.total || 0);
+    }
+    return out;
   }
 
   async findAllFetchAllPages(user?: any): Promise<Traslado[]> {

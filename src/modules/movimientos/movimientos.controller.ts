@@ -27,6 +27,7 @@ import {
   ROLES_SUPERADMIN_GERENCIA,
 } from '../../common/constants/roles.constants';
 import { MovimientosListQueryDto } from './dto/movimientos-list-query.dto';
+import { MovimientosGruposQueryDto } from './dto/movimientos-grupos-query.dto';
 import { ImpersonationGuard } from '../auth/guards/impersonation.guard';
 
 @ApiTags('movimientos')
@@ -58,6 +59,28 @@ export class MovimientosController {
       return this.movimientosService.findByInstalacion(+instalacionId);
     }
     return this.movimientosService.findAll(paginationDto, req?.user);
+  }
+
+  @Get('totales-por-material')
+  @Roles(...ROLES_VER_MATERIALES_INVENTARIO)
+  @ApiOperation({ summary: 'Totales de movimientos por material y tipo (misma visibilidad que el listado)' })
+  async findTotalesPorMaterial(@Request() req?: any) {
+    return { data: await this.movimientosService.findTotalesPorMaterial(req?.user) };
+  }
+
+  @Get('grupos')
+  @Roles(...ROLES_VER_MATERIALES_INVENTARIO)
+  @ApiOperation({ summary: 'Movimientos agrupados por código (paginado)' })
+  findGrupos(@Request() req: any, @Query() query: MovimientosGruposQueryDto) {
+    const page = Math.max(1, Number(query.page) || 1);
+    const limit = Math.min(50, Math.max(1, Number(query.limit) || 50));
+    return this.movimientosService.findGruposPaginated(req?.user, {
+      page,
+      limit,
+      movimientoTipo: query.movimientoTipo,
+      search: query.search,
+      excludeTrasladoSalidas: query.excludeTrasladoSalidas === true,
+    });
   }
 
   @Get('codigo/:codigo')
@@ -139,9 +162,21 @@ export class MovimientosController {
           const filterObj = JSON.parse(filters);
           if (filterObj.search) {
             const search = filterObj.search.toLowerCase();
+            const compact = search.replace(/\s+/g, '');
+            const matchOrden = (m: any) => {
+              const no = String(m.numeroOrden ?? '')
+                .toLowerCase()
+                .trim();
+              return (
+                no.includes(search) ||
+                (compact.length > 0 && no.replace(/\s+/g, '').includes(compact))
+              );
+            };
             filteredData = filteredData.filter(
               (m: any) =>
                 m.movimientoCodigo?.toLowerCase().includes(search) ||
+                matchOrden(m) ||
+                m.identificadorUnico?.toLowerCase().includes(search) ||
                 m.material?.materialNombre?.toLowerCase().includes(search) ||
                 m.material?.materialCodigo?.toLowerCase().includes(search),
             );
@@ -244,9 +279,21 @@ export class MovimientosController {
           const filterObj = JSON.parse(filters);
           if (filterObj.search) {
             const search = filterObj.search.toLowerCase();
+            const compact = search.replace(/\s+/g, '');
+            const matchOrden = (m: any) => {
+              const no = String(m.numeroOrden ?? '')
+                .toLowerCase()
+                .trim();
+              return (
+                no.includes(search) ||
+                (compact.length > 0 && no.replace(/\s+/g, '').includes(compact))
+              );
+            };
             filteredData = filteredData.filter(
               (m: any) =>
                 m.movimientoCodigo?.toLowerCase().includes(search) ||
+                matchOrden(m) ||
+                m.identificadorUnico?.toLowerCase().includes(search) ||
                 m.material?.materialNombre?.toLowerCase().includes(search) ||
                 m.material?.materialCodigo?.toLowerCase().includes(search),
             );

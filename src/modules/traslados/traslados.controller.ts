@@ -52,6 +52,17 @@ export class TrasladosController {
     return this.trasladosService.findAll(paginationDto, req?.user);
   }
 
+  @Get('totales-por-material')
+  @Roles(...ROLES_VER_TRASLADOS)
+  @ApiOperation({ summary: 'Suma de traslados por material (excluye cancelados)' })
+  @ApiQuery({ name: 'vistaSedeId', required: false, type: Number })
+  async findTotalesPorMaterial(@Request() req?: any, @Query('vistaSedeId') vistaSedeId?: string) {
+    const raw = vistaSedeId?.trim();
+    const sid = raw ? Number(raw) : NaN;
+    const vista = Number.isFinite(sid) && sid > 0 ? sid : undefined;
+    return { data: await this.trasladosService.findTotalesPorMaterial(req?.user, vista) };
+  }
+
   @Get('codigo/:codigo')
   @Roles(...ROLES_VER_MOVIMIENTOS_CODIGO)
   @ApiOperation({ summary: 'Get traslados by código' })
@@ -131,9 +142,21 @@ export class TrasladosController {
           const filterObj = JSON.parse(filters);
           if (filterObj.search) {
             const search = filterObj.search.toLowerCase();
+            const compact = search.replace(/\s+/g, '');
+            const matchOrden = (t: any) => {
+              const no = String(t.numeroOrden ?? '')
+                .toLowerCase()
+                .trim();
+              return (
+                no.includes(search) ||
+                (compact.length > 0 && no.replace(/\s+/g, '').includes(compact))
+              );
+            };
             filteredData = filteredData.filter(
               (t: any) =>
                 t.trasladoCodigo?.toLowerCase().includes(search) ||
+                matchOrden(t) ||
+                t.identificadorUnico?.toLowerCase().includes(search) ||
                 t.material?.materialNombre?.toLowerCase().includes(search) ||
                 t.material?.materialCodigo?.toLowerCase().includes(search),
             );
@@ -219,9 +242,21 @@ export class TrasladosController {
           const filterObj = JSON.parse(filters);
           if (filterObj.search) {
             const search = filterObj.search.toLowerCase();
+            const compact = search.replace(/\s+/g, '');
+            const matchOrden = (t: any) => {
+              const no = String(t.numeroOrden ?? '')
+                .toLowerCase()
+                .trim();
+              return (
+                no.includes(search) ||
+                (compact.length > 0 && no.replace(/\s+/g, '').includes(compact))
+              );
+            };
             filteredData = filteredData.filter(
               (t: any) =>
                 t.trasladoCodigo?.toLowerCase().includes(search) ||
+                matchOrden(t) ||
+                t.identificadorUnico?.toLowerCase().includes(search) ||
                 t.material?.materialNombre?.toLowerCase().includes(search) ||
                 t.material?.materialCodigo?.toLowerCase().includes(search),
             );
