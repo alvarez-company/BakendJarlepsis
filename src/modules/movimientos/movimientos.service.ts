@@ -39,6 +39,59 @@ function getTipoLabel(tipo: TipoMovimiento): string {
   return String(tipo);
 }
 
+/** Columnas base para listados/historial vía SQL crudo (incluye JSON de seriales). */
+const MOVIMIENTO_LIST_SELECT_SQL = `
+          movimientoId,
+          materialId,
+          movimientoTipo,
+          movimientoCantidad,
+          movimientoPrecioUnitario,
+          movimientoObservaciones,
+          instalacionId,
+          usuarioId,
+          proveedorId,
+          inventarioId,
+          movimientoCodigo,
+          numeroOrden,
+          identificadorUnico,
+          movimientoEstado,
+          estadoMovimientoId,
+          origenTipo,
+          tecnicoOrigenId,
+          numerosMedidor,
+          fechaCreacion,
+          fechaActualizacion`;
+
+function parseNumerosMedidorField(raw: unknown): string[] | null | undefined {
+  if (raw == null) return raw as null | undefined;
+  if (Array.isArray(raw)) {
+    return raw.map((x) => String(x ?? '').trim()).filter(Boolean);
+  }
+  if (typeof raw === 'string') {
+    const t = raw.trim();
+    if (!t) return null;
+    try {
+      const parsed = JSON.parse(t);
+      if (Array.isArray(parsed)) {
+        return parsed.map((x) => String(x ?? '').trim()).filter(Boolean);
+      }
+      return [t];
+    } catch {
+      return [t];
+    }
+  }
+  return null;
+}
+
+function attachNumerosMedidorParsed<T extends Record<string, unknown>>(row: T): T {
+  if (!row || !('numerosMedidor' in row)) return row;
+  const parsed = parseNumerosMedidorField(row.numerosMedidor);
+  if (parsed !== undefined) {
+    (row as any).numerosMedidor = parsed;
+  }
+  return row;
+}
+
 function mapMovimientoGuardadoAResumen(movimientoGuardado: MovimientoInventario): Record<string, unknown> {
   return {
     movimientoId: movimientoGuardado.movimientoId,
@@ -668,16 +721,14 @@ export class MovimientosService {
             const origenEsTecnico =
               createMovimientoDto.origenTipo === 'tecnico' &&
               Boolean(createMovimientoDto.tecnicoOrigenId);
-            if (!origenEsTecnico) {
-              continue;
-            }
+            const origenEsBodega =
+              createMovimientoDto.origenTipo === 'bodega' || !createMovimientoDto.origenTipo;
 
-            // ORIGEN TÉCNICO: el número deja de estar asignado al técnico (pasa a disponible en bodega/centro o salida externa)
-            let bodegaIdDestino: number | null = null;
+            let bodegaIdContexto: number | null = null;
             if (createMovimientoDto.inventarioId) {
               try {
                 const inv = await this.inventariosService.findOne(createMovimientoDto.inventarioId);
-                if (inv?.bodegaId) bodegaIdDestino = inv.bodegaId;
+                if (inv?.bodegaId) bodegaIdContexto = inv.bodegaId;
               } catch {
                 // ignore
               }
@@ -689,20 +740,52 @@ export class MovimientosService {
                 .toLowerCase();
               if (!norm) continue;
               const numeroMedidorEntity = existingMap.get(norm);
-              if (!numeroMedidorEntity) {
-                // Si no existe, crearlo como disponible (ya no pertenece al técnico)
-                await this.numerosMedidorService.create({
-                  materialId: materialIdFinal,
-                  numeroMedidor: numeroMedidor,
-                  estado: EstadoNumeroMedidor.DISPONIBLE,
-                  bodegaId: bodegaIdDestino ?? undefined,
-                  usuarioId: null,
-                });
-              } else {
-                // Liberar del técnico y dejarlo disponible
+
+              if (origenEsTecnico) {
+                if (!numeroMedidorEntity) {
+                  await this.numerosMedidorService.create({
+                    materialId: materialIdFinal,
+                    numeroMedidor: numeroMedidor,
+                    estado: EstadoNumeroMedidor.DISPONIBLE,
+                    bodegaId: bodegaIdContexto ?? undefined,
+                    usuarioId: null,
+                  });
+                } else {
+                  await this.numerosMedidorService.update(numeroMedidorEntity.numeroMedidorId, {
+                    estado: EstadoNumeroMedidor.DISPONIBLE,
+                    bodegaId: bodegaIdContexto ?? undefined,
+                    instalacionId: null,
+                    instalacionMaterialId: null,
+                    usuarioId: null,
+                    inventarioTecnicoId: null,
+                  });
+                }
+                continue;
+              }
+
+              if (origenEsBodega && esSalida) {
+                if (!numeroMedidorEntity) {
+                  throw new BadRequestException(
+                    `El número de medidor "${numeroMedidor}" no existe en el inventario.`,
+                  );
+                }
+                if (
+                  bodegaIdContexto != null &&
+                  numeroMedidorEntity.bodegaId != null &&
+                  Number(numeroMedidorEntity.bodegaId) !== Number(bodegaIdContexto)
+                ) {
+                  throw new BadRequestException(
+                    `El número de medidor "${numeroMedidor}" no pertenece a la bodega de origen seleccionada.`,
+                  );
+                }
+                if (numeroMedidorEntity.usuarioId) {
+                  throw new BadRequestException(
+                    `El número de medidor "${numeroMedidor}" está asignado a un técnico y no puede salir desde bodega.`,
+                  );
+                }
                 await this.numerosMedidorService.update(numeroMedidorEntity.numeroMedidorId, {
                   estado: EstadoNumeroMedidor.DISPONIBLE,
-                  bodegaId: bodegaIdDestino ?? undefined,
+                  bodegaId: null,
                   instalacionId: null,
                   instalacionMaterialId: null,
                   usuarioId: null,
@@ -1228,25 +1311,7 @@ export class MovimientosService {
       // Asegurar que se incluyan origenTipo y tecnicoOrigenId explícitamente
       const selectQuery = `
         SELECT 
-          movimientoId,
-          materialId,
-          movimientoTipo,
-          movimientoCantidad,
-          movimientoPrecioUnitario,
-          movimientoObservaciones,
-          instalacionId,
-          usuarioId,
-          proveedorId,
-          inventarioId,
-          movimientoCodigo,
-          numeroOrden,
-          identificadorUnico,
-          movimientoEstado,
-          estadoMovimientoId,
-          origenTipo,
-          tecnicoOrigenId,
-          fechaCreacion,
-          fechaActualizacion
+          ${MOVIMIENTO_LIST_SELECT_SQL}
         FROM movimientos_inventario 
         ${whereConditions}
         ORDER BY fechaCreacion DESC
@@ -1341,7 +1406,7 @@ export class MovimientosService {
         }
 
         const movimientosConRelaciones = rawMovimientos.map((movimiento: any) => {
-          const movimientoConRelaciones: any = { ...movimiento };
+          const movimientoConRelaciones: any = attachNumerosMedidorParsed({ ...movimiento });
 
           if (movimiento.materialId) {
             const material = materialMap.get(Number(movimiento.materialId));
@@ -1430,7 +1495,7 @@ export class MovimientosService {
       }
 
       return {
-        data: rawMovimientos,
+        data: rawMovimientos.map((m: any) => attachNumerosMedidorParsed({ ...m })),
         total: Number(total),
         page,
         limit,
@@ -1651,17 +1716,9 @@ export class MovimientosService {
     // Cargar material manualmente
     const movimientoConRelaciones: any = { ...movimiento };
 
-    // Parsear numerosMedidor si existe (MySQL devuelve JSON como string)
-    if (movimiento.numerosMedidor) {
-      try {
-        movimientoConRelaciones.numerosMedidor =
-          typeof movimiento.numerosMedidor === 'string'
-            ? JSON.parse(movimiento.numerosMedidor)
-            : movimiento.numerosMedidor;
-      } catch (err) {
-        // Si falla el parse, dejar como está
-        movimientoConRelaciones.numerosMedidor = movimiento.numerosMedidor;
-      }
+    const parsedNumeros = parseNumerosMedidorField(movimiento.numerosMedidor);
+    if (parsedNumeros !== undefined) {
+      movimientoConRelaciones.numerosMedidor = parsedNumeros;
     }
     if (movimiento.materialId) {
       try {
@@ -1764,17 +1821,9 @@ export class MovimientosService {
       movimientos.map(async (movimiento) => {
         const movimientoConRelaciones: any = { ...movimiento };
 
-        // Parsear numerosMedidor si existe (MySQL devuelve JSON como string)
-        if (movimiento.numerosMedidor) {
-          try {
-            movimientoConRelaciones.numerosMedidor =
-              typeof movimiento.numerosMedidor === 'string'
-                ? JSON.parse(movimiento.numerosMedidor)
-                : movimiento.numerosMedidor;
-          } catch (err) {
-            // Si falla el parse, dejar como está
-            movimientoConRelaciones.numerosMedidor = movimiento.numerosMedidor;
-          }
+        const parsedNumeros = parseNumerosMedidorField(movimiento.numerosMedidor);
+        if (parsedNumeros !== undefined) {
+          movimientoConRelaciones.numerosMedidor = parsedNumeros;
         }
 
         if (movimiento.materialId) {
@@ -2050,6 +2099,15 @@ export class MovimientosService {
     }
     if (updateMovimientoDto.inventarioId !== undefined) {
       movimiento.inventarioId = updateMovimientoDto.inventarioId || null;
+    }
+    if (updateMovimientoDto.materiales && updateMovimientoDto.materiales.length > 0) {
+      const primer = updateMovimientoDto.materiales[0];
+      if (primer.numerosMedidor !== undefined) {
+        const nums = Array.isArray(primer.numerosMedidor)
+          ? primer.numerosMedidor.map((x) => String(x || '').trim()).filter(Boolean)
+          : [];
+        movimiento.numerosMedidor = nums.length > 0 ? nums : null;
+      }
     }
     if (updateMovimientoDto.numeroOrden !== undefined) {
       const trimmed =
@@ -2498,7 +2556,7 @@ export class MovimientosService {
 
     const movimientosConRelaciones = await Promise.all(
       movimientosDesc.map(async (movimiento: any) => {
-        const movimientoConRelaciones: any = { ...movimiento };
+        const movimientoConRelaciones: any = attachNumerosMedidorParsed({ ...movimiento });
 
         // Agregar información de stock
         const stockInfo = stockPorMovimiento.get(movimiento.movimientoId);
@@ -2620,6 +2678,7 @@ export class MovimientosService {
           m.movimientoEstado,
           m.origenTipo,
           m.tecnicoOrigenId,
+          m.numerosMedidor,
           m.fechaCreacion,
           m.fechaActualizacion
         FROM movimientos_inventario m
@@ -2667,42 +2726,6 @@ export class MovimientosService {
     );
     const bodegasIds = bodegas.map((b: any) => b.bodegaId);
 
-    let rawPorInventario: any[] = [];
-    if (bodegasIds.length > 0) {
-      const allInventarios = await this.inventariosService.findAll(user);
-      const inventarios = allInventarios.filter(
-        (inv) => bodegasIds.includes(inv.bodegaId) && inv.inventarioEstado,
-      );
-      const inventariosIds = inventarios.map((inv) => inv.inventarioId);
-      if (inventariosIds.length > 0) {
-        rawPorInventario = await this.movimientosRepository.query(
-          `SELECT 
-          m.movimientoId,
-          m.materialId,
-          m.movimientoTipo,
-          m.movimientoCantidad,
-          m.movimientoPrecioUnitario,
-          m.movimientoObservaciones,
-          m.instalacionId,
-          m.usuarioId,
-          m.proveedorId,
-          m.inventarioId,
-          m.movimientoCodigo,
-          m.numeroOrden,
-          m.identificadorUnico,
-          m.movimientoEstado,
-          m.origenTipo,
-          m.tecnicoOrigenId,
-          m.fechaCreacion,
-          m.fechaActualizacion
-        FROM movimientos_inventario m
-        WHERE m.inventarioId IN (${inventariosIds.map(() => '?').join(',')})
-        ORDER BY m.fechaCreacion ASC`,
-          inventariosIds,
-        );
-      }
-    }
-
     const selectCols = `m.movimientoId,
           m.materialId,
           m.movimientoTipo,
@@ -2719,8 +2742,28 @@ export class MovimientosService {
           m.movimientoEstado,
           m.origenTipo,
           m.tecnicoOrigenId,
+          m.numerosMedidor,
           m.fechaCreacion,
           m.fechaActualizacion`;
+
+    let rawPorInventario: any[] = [];
+    if (bodegasIds.length > 0) {
+      const allInventarios = await this.inventariosService.findAll(user);
+      const inventarios = allInventarios.filter(
+        (inv) => bodegasIds.includes(inv.bodegaId) && inv.inventarioEstado,
+      );
+      const inventariosIds = inventarios.map((inv) => inv.inventarioId);
+      if (inventariosIds.length > 0) {
+        rawPorInventario = await this.movimientosRepository.query(
+          `SELECT 
+          ${selectCols}
+        FROM movimientos_inventario m
+        WHERE m.inventarioId IN (${inventariosIds.map(() => '?').join(',')})
+        ORDER BY m.fechaCreacion ASC`,
+          inventariosIds,
+        );
+      }
+    }
 
     const rawEntradaSinInventario = await this.movimientosRepository.query(
       `SELECT ${selectCols}
@@ -2892,7 +2935,7 @@ export class MovimientosService {
 
     return await Promise.all(
       rawMovimientos.map(async (movimiento: any) => {
-        const movimientoEnriquecido: any = { ...movimiento };
+        const movimientoEnriquecido: any = attachNumerosMedidorParsed({ ...movimiento });
 
         // Cargar material
         try {
