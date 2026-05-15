@@ -41,6 +41,8 @@
     "reconcile:materiales:huerfanos": "ts-node scripts/reconcile-materiales-huerfanos.ts",
     "db:reset": "node scripts/reset-database.js",
     "db:reset:yes": "node scripts/reset-database.js --yes",
+    "inventory:reset": "node scripts/reset-inventario-operativo.js",
+    "inventory:reset:yes": "node scripts/reset-inventario-operativo.js --yes",
     "user:delete": "node scripts/delete-user-cascade.js",
     "docker:db:up": "docker-compose up -d mysql",
     "docker:db:down": "docker-compose down",
