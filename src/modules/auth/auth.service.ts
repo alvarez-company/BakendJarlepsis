@@ -82,6 +82,13 @@ export class AuthService {
           usuarioSede: user.usuarioSede,
           usuarioBodega: user.usuarioBodega,
           usuarioFoto: user.usuarioFoto,
+          usuarioRol: user.usuarioRol
+            ? {
+                rolId: user.usuarioRol.rolId,
+                rolNombre: user.usuarioRol.rolNombre,
+                rolTipo: user.usuarioRol.rolTipo,
+              }
+            : undefined,
         },
       };
     } catch (error) {
@@ -133,6 +140,13 @@ export class AuthService {
           usuarioSede: user.usuarioSede,
           usuarioBodega: user.usuarioBodega,
           usuarioFoto: user.usuarioFoto,
+          usuarioRol: user.usuarioRol
+            ? {
+                rolId: user.usuarioRol.rolId,
+                rolNombre: user.usuarioRol.rolNombre,
+                rolTipo: user.usuarioRol.rolTipo,
+              }
+            : undefined,
         },
       };
     } catch (error) {
