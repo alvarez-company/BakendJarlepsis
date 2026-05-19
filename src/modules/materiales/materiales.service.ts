@@ -522,7 +522,9 @@ export class MaterialesService {
     const _updated = await this.materialesRepository.save(material);
 
     if (bodegas) {
-      await this.materialesBodegasRepository.delete({ materialId: material.materialId });
+      // Solo actualizar las bodegas enviadas en el payload (merge).
+      // Antes se hacía DELETE de todas las filas y se perdía el stock del centro operativo
+      // registrado por entradas de inventario en otras bodegas.
       await this.applyBodegaDistribution(
         material.materialId,
         bodegas,

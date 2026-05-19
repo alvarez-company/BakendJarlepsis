@@ -39,6 +39,7 @@
     "reconcile:medidores:ubicacion": "ts-node scripts/reconcile-medidores-ubicacion.ts",
     "reconcile:medidores:huerfanos": "ts-node scripts/reconcile-medidores-huerfanos.ts",
     "reconcile:materiales:huerfanos": "ts-node scripts/reconcile-materiales-huerfanos.ts",
+    "reconcile:stock-bodegas": "node scripts/rebuild-materiales-bodegas-from-movimientos.ts --apply",
     "db:reset": "node scripts/reset-database.js",
     "db:reset:yes": "node scripts/reset-database.js --yes",
     "inventory:reset": "node scripts/reset-inventario-operativo.js",

@@ -77,20 +77,49 @@ async function main() {
 
     if (!apply) return;
 
-    // Upsert. No tocamos precioPromedio aquí.
-    // Ojo: `materiales_bodegas` tiene UNIQUE(materialId,bodegaId).
+    const materialIds = [...new Set(computed.map((r) => r.materialId))];
+    if (materialIds.length > 0) {
+      const placeholders = materialIds.map(() => '?').join(',');
+      await conn.query(
+        `DELETE FROM materiales_bodegas WHERE materialId IN (${placeholders})`,
+        materialIds,
+      );
+    }
+
     for (const r of computed) {
+      if (r.stock === 0) continue;
       await conn.query(
         `
         INSERT INTO materiales_bodegas (materialId, bodegaId, stock)
         VALUES (?, ?, ?)
-        ON DUPLICATE KEY UPDATE stock = VALUES(stock)
         `,
         [r.materialId, r.bodegaId, r.stock],
       );
     }
 
-    console.log('[rebuild-materiales-bodegas] OK');
+    if (materialIds.length > 0) {
+      const ph = materialIds.map(() => '?').join(',');
+      await conn.query(
+        `
+      UPDATE materiales m
+      LEFT JOIN (
+        SELECT materialId, COALESCE(SUM(stock), 0) AS stockBodegas
+        FROM materiales_bodegas
+        GROUP BY materialId
+      ) mb ON mb.materialId = m.materialId
+      LEFT JOIN (
+        SELECT materialId, COALESCE(SUM(cantidad), 0) AS stockTecnicos
+        FROM inventario_tecnicos
+        GROUP BY materialId
+      ) it ON it.materialId = m.materialId
+      SET m.materialStock = COALESCE(mb.stockBodegas, 0) + COALESCE(it.stockTecnicos, 0)
+      WHERE m.materialId IN (${ph})
+    `,
+        materialIds,
+      );
+    }
+
+    console.log('[rebuild-materiales-bodegas] OK (materiales_bodegas + materialStock sincronizados)');
   } finally {
     await conn.end();
   }
