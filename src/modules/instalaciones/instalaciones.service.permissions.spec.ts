@@ -239,7 +239,7 @@ describe('InstalacionesService - Permisos', () => {
       ).resolves.toBeDefined();
     });
 
-    it('should deny almacenista from updating installation', async () => {
+    it('should deny almacenista from updating installation fields other than anexoPdf', async () => {
       const user = { usuarioRol: { rolTipo: 'almacenista' }, usuarioId: 1 };
       mockUsersService.findOne.mockResolvedValue(user);
       jest.spyOn(service, 'findOne').mockResolvedValue(mockInstalacion as any);
@@ -250,6 +250,19 @@ describe('InstalacionesService - Permisos', () => {
       await expect(service.update(1, { instalacionCodigo: 'INST-002' }, 1, user)).rejects.toThrow(
         'No tienes permisos para editar instalaciones',
       );
+    });
+
+    it('should allow almacenista to update only anexoPdf', async () => {
+      const user = { usuarioRol: { rolTipo: 'almacenista' }, usuarioId: 1 };
+      mockUsersService.findOne.mockResolvedValue(user);
+      const inst = { ...mockInstalacion, anexoPdf: null };
+      jest.spyOn(service, 'findOne').mockResolvedValue(inst as any);
+      mockRepository.save.mockImplementation(async (e) => e);
+
+      await expect(
+        service.update(1, { anexoPdf: null }, 1, user),
+      ).resolves.toBeDefined();
+      expect(mockRepository.save).toHaveBeenCalled();
     });
 
     it('should allow admin (centro operativo) to update installation', async () => {

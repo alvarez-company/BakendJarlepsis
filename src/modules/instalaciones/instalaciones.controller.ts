@@ -25,6 +25,7 @@ import { Roles } from '../../common/decorators/roles.decorator';
 import {
   ROLES_INSTALACIONES,
   ROLES_EDITAR_INSTALACIONES,
+  ROLES_GESTIONAR_ANEXO_PDF_INSTALACION,
   ROLES_ELIMINAR_INSTALACIONES,
   ROLES_EXPORT_METROGAS,
   ROLES_GESTION_BODEGAS,
@@ -74,7 +75,7 @@ export class InstalacionesController {
   }
 
   @Patch(':id')
-  @Roles(...ROLES_EDITAR_INSTALACIONES)
+  @Roles(...ROLES_GESTIONAR_ANEXO_PDF_INSTALACION)
   @ApiOperation({ summary: 'Update an instalacion' })
   update(
     @Param('id') id: string,

@@ -208,6 +208,20 @@ export const ROLES_EDITAR_INSTALACIONES = [
   'bodega-redes',
 ] as const;
 
+/** Anexo PDF administrativo: almacenista y gerencia (sin editar el resto de la instalación) */
+export const ROLES_GESTIONAR_ANEXO_PDF_INSTALACION = [
+  'superadmin',
+  'gerencia',
+  'admin',
+  'admin-internas',
+  'admin-redes',
+  'almacenista',
+  'tecnico',
+  'soldador',
+  'bodega-internas',
+  'bodega-redes',
+] as const;
+
 /** Roles que eliminan instalaciones (solo bodega) */
 export const ROLES_ELIMINAR_INSTALACIONES = [
   'superadmin',

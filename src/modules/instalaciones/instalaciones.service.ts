@@ -104,6 +104,16 @@ export class InstalacionesService {
     );
   }
 
+  /** Solo actualización de anexoPdf (p. ej. almacenista sin editar el resto de la instalación). */
+  private esActualizacionSoloAnexoPdf(dto: Record<string, unknown>): boolean {
+    if (!Object.prototype.hasOwnProperty.call(dto, 'anexoPdf')) return false;
+    for (const key of Object.keys(dto)) {
+      if (key === 'anexoPdf') continue;
+      if ((dto as any)[key] !== undefined) return false;
+    }
+    return true;
+  }
+
   /**
    * Valida y persiste el contrato redes_v2 (solo filas fijas en proyectos_redes + actividades + metrajes ZV/ACO/CO).
    */
@@ -1392,9 +1402,15 @@ export class InstalacionesService {
     if (user) {
       const rolTipo = user.usuarioRol?.rolTipo || user.role;
 
-      // Almacenista no puede editar instalaciones (solo lectura)
+      // Almacenista: solo anexo PDF administrativo (no editar otros campos)
       if (rolTipo === 'almacenista') {
-        throw new BadRequestException('No tienes permisos para editar instalaciones');
+        if (!this.esActualizacionSoloAnexoPdf(updateInstalacionDto as Record<string, unknown>)) {
+          throw new BadRequestException('No tienes permisos para editar instalaciones');
+        }
+        instalacion.anexoPdf = this.normalizarAnexoPdfParaPersistencia(
+          updateInstalacionDto.anexoPdf,
+        );
+        return await this.instalacionesRepository.save(instalacion);
       }
 
       // Usar instalacionTipo si existe; si no, fallback al nombre del tipo de instalación (legacy)
