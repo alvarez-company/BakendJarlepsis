@@ -624,18 +624,25 @@ export class NumerosMedidorService {
   /**
    * Obtiene números de medidor disponibles (en inventario) para un material
    */
-  async obtenerDisponibles(materialId: number, cantidad: number): Promise<NumeroMedidor[]> {
-    const disponibles = await this.numerosMedidorRepository.find({
-      where: {
-        materialId,
-        estado: EstadoNumeroMedidor.DISPONIBLE,
-      },
-      take: cantidad,
-    });
+  async obtenerDisponibles(
+    materialId: number,
+    cantidad: number,
+    bodegaId?: number,
+  ): Promise<NumeroMedidor[]> {
+    const qb = this.numerosMedidorRepository
+      .createQueryBuilder('n')
+      .where('n.materialId = :materialId', { materialId })
+      .andWhere('n.estado = :estado', { estado: EstadoNumeroMedidor.DISPONIBLE });
+
+    if (bodegaId != null && Number(bodegaId) > 0) {
+      qb.andWhere('(n.bodegaId = :bodegaId OR n.bodegaId IS NULL)', { bodegaId: Number(bodegaId) });
+    }
+
+    const disponibles = await qb.take(cantidad).getMany();
 
     if (disponibles.length < cantidad) {
       throw new BadRequestException(
-        `No hay suficientes números de medidor disponibles. Disponibles: ${disponibles.length}, Requeridos: ${cantidad}`,
+        `No hay suficientes números de medidor disponibles${bodegaId ? ' en la bodega seleccionada' : ''}. Disponibles: ${disponibles.length}, Requeridos: ${cantidad}`,
       );
     }
 

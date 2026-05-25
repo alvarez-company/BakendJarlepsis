@@ -18,6 +18,7 @@ import { InventarioTecnicoService } from '../inventario-tecnico/inventario-tecni
 import { NumerosMedidorService } from '../numeros-medidor/numeros-medidor.service';
 import { MaterialesService } from '../materiales/materiales.service';
 import { instalacionPermiteTecnicoGestionarMaterialesUtilizados } from '../instalaciones/estado-instalacion.codes';
+import { EstadoNumeroMedidor } from '../numeros-medidor/numero-medidor.entity';
 
 @Injectable()
 export class InstalacionesMaterialesService {
@@ -154,46 +155,56 @@ export class InstalacionesMaterialesService {
       ) {
         const numerosMedidorIds: number[] = [];
 
-        for (const numeroMedidor of createDto.numerosMedidor) {
-          // Asegurar que el número de medidor se guarde correctamente sin modificaciones
-          const numeroMedidorParaGuardar = numeroMedidor?.trim() || numeroMedidor;
+        const instalacionParaNumeros = await this.instalacionesService.findOne(
+          createDto.instalacionId,
+          requestingUser,
+        );
+        const tecnicoInventarioId = this.resolveTecnicoInventarioTarget(
+          instalacionParaNumeros,
+          requestingUser,
+        );
 
-          // Buscar si ya existe este número de medidor
-          let numeroMedidorEntity =
+        for (const numeroMedidor of createDto.numerosMedidor) {
+          const numeroMedidorParaGuardar = numeroMedidor?.trim() || numeroMedidor;
+          if (!numeroMedidorParaGuardar) continue;
+
+          const numeroMedidorEntity =
             await this.numerosMedidorService.findByNumero(numeroMedidorParaGuardar);
 
           if (!numeroMedidorEntity) {
-            // Crear nuevo número de medidor si no existe
-            numeroMedidorEntity = await this.numerosMedidorService.create({
-              materialId: createDto.materialId,
-              numeroMedidor: numeroMedidorParaGuardar,
-              estado: 'en_instalacion' as any,
-              instalacionId: createDto.instalacionId,
-              instalacionMaterialId: materialGuardado.instalacionMaterialId,
-            });
-          } else {
-            // Actualizar número de medidor existente
-            // Preservar usuarioId e inventarioTecnicoId si existen para mantener trazabilidad
-            const updateData: any = {
-              estado: 'en_instalacion' as any,
-              instalacionId: createDto.instalacionId,
-              instalacionMaterialId: materialGuardado.instalacionMaterialId,
-            };
+            throw new BadRequestException(
+              `El número de medidor "${numeroMedidorParaGuardar}" no existe en el inventario.`,
+            );
+          }
+          if (numeroMedidorEntity.materialId !== createDto.materialId) {
+            throw new BadRequestException(
+              `El número de medidor "${numeroMedidorParaGuardar}" no corresponde al material seleccionado.`,
+            );
+          }
 
-            // Solo limpiar usuarioId e inventarioTecnicoId si no existían previamente
-            // Esto mantiene la trazabilidad de dónde vino el número
-            if (!numeroMedidorEntity.usuarioId && !numeroMedidorEntity.inventarioTecnicoId) {
-              updateData.usuarioId = null;
-              updateData.inventarioTecnicoId = null;
-            }
-
-            numeroMedidorEntity = await this.numerosMedidorService.update(
-              numeroMedidorEntity.numeroMedidorId,
-              updateData,
+          if (numeroMedidorEntity.estado !== EstadoNumeroMedidor.ASIGNADO_TECNICO) {
+            throw new BadRequestException(
+              `El número de medidor "${numeroMedidorParaGuardar}" no está asignado a un técnico.`,
+            );
+          }
+          if (
+            tecnicoInventarioId == null ||
+            Number(numeroMedidorEntity.usuarioId) !== Number(tecnicoInventarioId)
+          ) {
+            throw new BadRequestException(
+              `El número de medidor "${numeroMedidorParaGuardar}" no pertenece a tu inventario de técnico.`,
             );
           }
 
           numerosMedidorIds.push(numeroMedidorEntity.numeroMedidorId);
+        }
+
+        if (numerosMedidorIds.length > 0) {
+          await this.numerosMedidorService.asignarAInstalacion(
+            numerosMedidorIds,
+            createDto.instalacionId,
+            materialGuardado.instalacionMaterialId,
+          );
         }
       } else {
         // Si no se proporcionaron números, obtener números asignados al técnico automáticamente

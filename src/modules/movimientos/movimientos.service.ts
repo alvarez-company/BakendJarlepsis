@@ -211,20 +211,6 @@ export class MovimientosService {
     const isSuperadminOGerencia = rolTipo === 'superadmin' || rolTipo === 'gerencia';
 
     const explicitCodigo = createMovimientoDto.movimientoCodigo?.trim();
-    if (explicitCodigo) {
-      const existentes = await this.movimientosRepository.find({
-        where: {
-          movimientoCodigo: explicitCodigo,
-          movimientoTipo: createMovimientoDto.movimientoTipo,
-        },
-        order: { movimientoId: 'ASC' },
-      });
-      if (existentes.length > 0) {
-        return existentes.map(
-          (m) => mapMovimientoGuardadoAResumen(m),
-        ) as unknown as MovimientoInventario[];
-      }
-    }
 
     const movimientoCodigo =
       explicitCodigo ||
@@ -467,6 +453,23 @@ export class MovimientosService {
 
     // Procesar cada material del array
     for (const materialDto of createMovimientoDto.materiales) {
+      // Idempotencia por línea (mismo código de grupo + tipo + material), no por grupo completo
+      if (explicitCodigo) {
+        const existenteLinea = await this.movimientosRepository.findOne({
+          where: {
+            movimientoCodigo: explicitCodigo,
+            movimientoTipo: createMovimientoDto.movimientoTipo,
+            materialId: materialDto.materialId,
+          },
+        });
+        if (existenteLinea) {
+          movimientosCreados.push(
+            mapMovimientoGuardadoAResumen(existenteLinea) as unknown as MovimientoInventario,
+          );
+          continue;
+        }
+      }
+
       // Verificar que el material existe
       let material = await this.materialesService.findOne(materialDto.materialId);
       let materialIdFinal = materialDto.materialId;
@@ -947,62 +950,33 @@ export class MovimientosService {
         }
       }
 
-      // Procesar cada asignación a técnico
+      // Procesar cada asignación a técnico (delegar en InventarioTecnicoService: evita doble salida/stock)
       for (const asignacion of createMovimientoDto.asignacionesTecnicos) {
         try {
-          // Asignar materiales al técnico
-          await this.inventarioTecnicoService.asignarMateriales(asignacion.usuarioId, {
-            materiales: asignacion.materiales,
-          });
-
-          // Si hay inventario de sede, crear movimientos de salida automáticos
-          if (inventarioSede && inventarioSede.inventarioId && inventarioSede.bodegaId) {
-            const salidaCodigo = `SALIDA-TECNICO-${asignacion.usuarioId}-${Date.now()}`;
-
-            // Crear salidas para cada material asignado
-            for (const materialAsignado of asignacion.materiales) {
-              try {
-                // Verificar que el material existe
-                await this.materialesService.findOne(materialAsignado.materialId);
-
-                // Crear movimiento de salida desde la sede/bodega
-                const salidaData: any = {
-                  movimientoTipo: TipoMovimiento.SALIDA,
-                  materialId: materialAsignado.materialId,
-                  movimientoCantidad: materialAsignado.cantidad,
-                  movimientoObservaciones: `Asignación automática a técnico desde entrada. ${createMovimientoDto.movimientoObservaciones || ''}`,
-                  usuarioId: createMovimientoDto.usuarioId,
-                  inventarioId: inventarioSede.inventarioId,
-                  movimientoCodigo: salidaCodigo,
-                  movimientoEstado: EstadoMovimiento.COMPLETADA, // Completar automáticamente
-                };
-
-                const identificadorUnicoSalida = await this.generarIdentificadorUnico(
-                  TipoMovimiento.SALIDA,
-                );
-                salidaData.identificadorUnico = identificadorUnicoSalida;
-
-                const salida = this.movimientosRepository.create(salidaData);
-                const _salidaGuardada = (await this.movimientosRepository.save(
-                  salida,
-                )) as unknown as MovimientoInventario;
-
-                // Ajustar stock (reducir de bodega/sede)
-                await this.ajustarStockMovimiento(
-                  materialAsignado.materialId,
-                  TipoMovimiento.SALIDA,
-                  materialAsignado.cantidad,
-                  inventarioSede.bodegaId,
-                );
-              } catch (error) {
-                console.error(
-                  `Error al crear salida para material ${materialAsignado.materialId}:`,
-                  error,
-                );
-                // Continuar con los demás materiales aunque falle uno
-              }
-            }
+          if (!inventarioSede?.inventarioId) {
+            console.warn(
+              `Entrada con asignación a técnico ${asignacion.usuarioId}: sin inventario/bodega destino; se omite asignación de stock.`,
+            );
+            continue;
           }
+
+          const idemAsig = explicitCodigo
+            ? `${explicitCodigo}-TECNICO-${asignacion.usuarioId}`
+            : undefined;
+
+          await this.inventarioTecnicoService.asignarMateriales(
+            asignacion.usuarioId,
+            {
+              materiales: asignacion.materiales,
+              inventarioId: inventarioSede.inventarioId,
+              usuarioAsignadorId: createMovimientoDto.usuarioId,
+              observaciones:
+                createMovimientoDto.movimientoObservaciones ||
+                'Asignación automática a técnico desde entrada',
+              idempotencyKey: idemAsig,
+            },
+            requestingUser,
+          );
         } catch (error) {
           console.error(`Error al asignar materiales al técnico ${asignacion.usuarioId}:`, error);
           // Continuar con los demás técnicos aunque falle uno
@@ -3021,5 +2995,17 @@ export class MovimientosService {
 
     // Usar el campo materialEsMedidor para determinar si es medidor
     return Boolean(material.materialEsMedidor);
+  }
+
+  /** Líneas de movimiento ya registradas con el mismo código de grupo y tipo. */
+  async countLineasPorCodigoYTipo(
+    movimientoCodigo: string,
+    movimientoTipo: TipoMovimiento,
+  ): Promise<number> {
+    const codigo = String(movimientoCodigo || '').trim();
+    if (!codigo) return 0;
+    return this.movimientosRepository.count({
+      where: { movimientoCodigo: codigo, movimientoTipo },
+    });
   }
 }

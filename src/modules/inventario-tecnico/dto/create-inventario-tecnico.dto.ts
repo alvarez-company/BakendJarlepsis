@@ -80,6 +80,15 @@ export class AssignMaterialesToTecnicoDto {
   @IsString()
   @IsOptional()
   observaciones?: string;
+
+  @ApiProperty({
+    required: false,
+    description:
+      'Clave de idempotencia del cliente (reintentos / doble envío). Si ya existe una asignación con este código para el mismo técnico, se devuelve el inventario actual sin duplicar.',
+  })
+  @IsString()
+  @IsOptional()
+  idempotencyKey?: string;
 }
 
 export class ReturnMaterialesToBodegaDto {

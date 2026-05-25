@@ -22,6 +22,7 @@ import { MaterialesService } from '../materiales/materiales.service';
 import { NotificacionesService } from '../notificaciones/notificaciones.service';
 import { UsersService } from '../users/users.service';
 import { NumerosMedidorService } from '../numeros-medidor/numeros-medidor.service';
+import { EstadoNumeroMedidor } from '../numeros-medidor/numero-medidor.entity';
 import { TransferenciasTecnicosService } from '../transferencias-tecnicos/transferencias-tecnicos.service';
 
 @Injectable()
@@ -71,14 +72,26 @@ export class InventarioTecnicoService {
     dto: AssignMaterialesToTecnicoDto,
     requestingUser?: any,
   ): Promise<InventarioTecnico[]> {
+    if (!dto?.materiales?.length) {
+      throw new BadRequestException('Debe enviar al menos un material');
+    }
+
+    const idempotencyKey = dto.idempotencyKey?.trim() || undefined;
+    if (idempotencyKey) {
+      const asignacionPrevia = await this.asignacionesTecnicosService.findByCodigo(idempotencyKey);
+      if (asignacionPrevia && Number(asignacionPrevia.usuarioId) === Number(usuarioId)) {
+        return this.findByUsuario(usuarioId, requestingUser);
+      }
+    }
+
     const resultados: InventarioTecnico[] = [];
 
     // Si hay inventarioId, crear movimientos de salida automáticamente
     // Usar usuarioAsignadorId si está disponible, sino usar el usuarioId del técnico
     const usuarioAsignador = dto.usuarioAsignadorId || usuarioId;
 
-    // El código se generará automáticamente en el servicio de asignaciones
-    const asignacionCodigo: string | undefined = undefined;
+    let bodegaIdOrigen: number | null = null;
+    let esOrigenCentro = false;
 
     if (dto.inventarioId) {
       try {
@@ -110,9 +123,10 @@ export class InventarioTecnicoService {
                 );
               }
             } else if (userSedeId != null && userSedeId > 0) {
-              if (bodegaTipo !== 'centro' || Number(inventario?.bodega?.sedeId) !== userSedeId) {
+              const invSedeId = Number(inventario?.bodega?.sedeId);
+              if (!Number.isFinite(invSedeId) || invSedeId !== userSedeId) {
                 throw new BadRequestException(
-                  'No tienes permisos para asignar materiales fuera del inventario del centro operativo.',
+                  'No tienes permisos para asignar materiales fuera de tu centro operativo.',
                 );
               }
             }
@@ -133,46 +147,51 @@ export class InventarioTecnicoService {
           }
         }
         const bodegaId = inventario.bodegaId ?? inventario.bodega?.bodegaId;
+        bodegaIdOrigen = bodegaId != null ? Number(bodegaId) : null;
+        esOrigenCentro = String(inventario?.bodega?.bodegaTipo || '').toLowerCase() === 'centro';
 
-        if (bodegaId) {
-          const salidaCodigo = `SALIDA-TECNICO-${usuarioId}-${Date.now()}`;
+        // Desde bodega centro: no descontar stock del centro; solo incrementa inventario del técnico.
+        if (bodegaId && !esOrigenCentro) {
+          const salidaCodigo = idempotencyKey
+            ? `SALIDA-ASIG-${idempotencyKey}`
+            : `SALIDA-TECNICO-${usuarioId}-${Date.now()}`;
 
-          // Crear movimiento de salida para cada material
-          for (const material of dto.materiales) {
-            try {
-              // Crear el movimiento de salida
-              const movimientosCreados = await this.movimientosService.create(
-                {
-                  movimientoTipo: TipoMovimiento.SALIDA,
-                  materiales: [
-                    {
-                      materialId: material.materialId,
-                      movimientoCantidad: material.cantidad,
-                    },
-                  ],
-                  inventarioId: dto.inventarioId,
-                  usuarioId: usuarioAsignador,
-                  movimientoObservaciones:
-                    dto.observaciones || `Asignación de material a técnico ${usuarioId}`,
-                  movimientoCodigo: salidaCodigo,
-                },
-                requestingUser,
-              );
+          const salidasExistentes = idempotencyKey
+            ? await this.movimientosService.countLineasPorCodigoYTipo(
+                salidaCodigo,
+                TipoMovimiento.SALIDA,
+              )
+            : 0;
+          const omitirSalidas =
+            idempotencyKey != null && salidasExistentes >= dto.materiales.length;
 
-              // Completar automáticamente el movimiento para que se reste el stock
-              if (movimientosCreados && movimientosCreados.length > 0) {
-                for (const movimiento of movimientosCreados) {
-                  if (movimiento.movimientoEstado !== EstadoMovimiento.COMPLETADA) {
-                    await this.movimientosService.actualizarEstado(
-                      movimiento.movimientoId,
-                      EstadoMovimiento.COMPLETADA,
-                    );
-                  }
+          if (!omitirSalidas) {
+            const movimientosSalida = await this.movimientosService.create(
+              {
+                movimientoTipo: TipoMovimiento.SALIDA,
+                materiales: dto.materiales.map((material) => ({
+                  materialId: material.materialId,
+                  movimientoCantidad: material.cantidad,
+                })),
+                inventarioId: dto.inventarioId,
+                usuarioId: usuarioAsignador,
+                movimientoObservaciones:
+                  dto.observaciones || `Asignación de material a técnico ${usuarioId}`,
+                movimientoCodigo: salidaCodigo,
+                movimientoEstado: EstadoMovimiento.PENDIENTE,
+              },
+              requestingUser,
+            );
+
+            if (movimientosSalida?.length) {
+              for (const movimiento of movimientosSalida) {
+                if (movimiento.movimientoEstado !== EstadoMovimiento.COMPLETADA) {
+                  await this.movimientosService.actualizarEstado(
+                    movimiento.movimientoId,
+                    EstadoMovimiento.COMPLETADA,
+                  );
                 }
               }
-            } catch (error) {
-              console.error(`Error al crear salida para material ${material.materialId}:`, error);
-              throw error; // Lanzar error para que se detenga la asignación si falla
             }
           }
         }
@@ -265,50 +284,57 @@ export class InventarioTecnicoService {
         if (cantidadAsignada > 0) {
           // Si se proporcionaron números de medidor específicos, usarlos
           if (material.numerosMedidor && material.numerosMedidor.length > 0) {
-            // Guardar los números proporcionados
             numerosAsignadosPorMaterial.set(material.materialId, material.numerosMedidor);
 
-            // Procesar números en paralelo
-            const procesosNumeros = material.numerosMedidor.map(async (numeroMedidor) => {
-              try {
-                // Buscar si ya existe este número de medidor
-                let numeroMedidorEntity =
-                  await this.numerosMedidorService.findByNumero(numeroMedidor);
+            const numerosMedidorIds: number[] = [];
+            for (const numeroMedidor of material.numerosMedidor) {
+              const numeroLimpio = String(numeroMedidor || '').trim();
+              if (!numeroLimpio) continue;
 
-                if (!numeroMedidorEntity) {
-                  // Crear nuevo número de medidor
-                  numeroMedidorEntity = await this.numerosMedidorService.create({
-                    materialId: material.materialId,
-                    numeroMedidor: numeroMedidor,
-                    estado: 'asignado_tecnico' as any,
-                    usuarioId: usuarioId,
-                    inventarioTecnicoId: inventarioTecnicoItem.inventarioTecnicoId,
-                  });
-                } else {
-                  // Actualizar número de medidor existente
-                  numeroMedidorEntity = await this.numerosMedidorService.update(
-                    numeroMedidorEntity.numeroMedidorId,
-                    {
-                      estado: 'asignado_tecnico' as any,
-                      usuarioId: usuarioId,
-                      inventarioTecnicoId: inventarioTecnicoItem.inventarioTecnicoId,
-                    },
-                  );
-                }
-                return numeroMedidorEntity;
-              } catch (error) {
-                console.error(`Error al procesar número de medidor ${numeroMedidor}:`, error);
-                return null;
+              const numeroMedidorEntity =
+                await this.numerosMedidorService.findByNumero(numeroLimpio);
+
+              if (!numeroMedidorEntity) {
+                throw new BadRequestException(
+                  `El número de medidor "${numeroLimpio}" no existe en el inventario.`,
+                );
               }
-            });
+              if (numeroMedidorEntity.materialId !== material.materialId) {
+                throw new BadRequestException(
+                  `El número de medidor "${numeroLimpio}" no corresponde al material seleccionado.`,
+                );
+              }
+              if (numeroMedidorEntity.estado !== EstadoNumeroMedidor.DISPONIBLE) {
+                throw new BadRequestException(
+                  `El número de medidor "${numeroLimpio}" no está disponible (estado: ${numeroMedidorEntity.estado}).`,
+                );
+              }
+              if (
+                bodegaIdOrigen != null &&
+                numeroMedidorEntity.bodegaId != null &&
+                Number(numeroMedidorEntity.bodegaId) !== bodegaIdOrigen
+              ) {
+                throw new BadRequestException(
+                  `El número de medidor "${numeroLimpio}" no pertenece a la bodega de origen seleccionada.`,
+                );
+              }
+              numerosMedidorIds.push(numeroMedidorEntity.numeroMedidorId);
+            }
 
-            await Promise.all(procesosNumeros);
+            if (numerosMedidorIds.length > 0) {
+              await this.numerosMedidorService.asignarATecnico(
+                numerosMedidorIds,
+                usuarioId,
+                inventarioTecnicoItem.inventarioTecnicoId,
+              );
+            }
           } else {
             // Si no se proporcionaron números, obtener números disponibles automáticamente
             try {
               const numerosDisponibles = await this.numerosMedidorService.obtenerDisponibles(
                 material.materialId,
                 cantidadAsignada,
+                bodegaIdOrigen ?? undefined,
               );
 
               if (numerosDisponibles.length > 0) {
@@ -378,7 +404,7 @@ export class InventarioTecnicoService {
         });
 
         asignacionCreada = await this.asignacionesTecnicosService.create({
-          asignacionCodigo: asignacionCodigo, // undefined = se generará automáticamente
+          asignacionCodigo: idempotencyKey || undefined, // undefined = se generará automáticamente
           numeroOrden: dto.numeroOrden,
           usuarioId,
           inventarioId: dto.inventarioId,
@@ -477,52 +503,41 @@ export class InventarioTecnicoService {
 
     const usuarioAsignador = dto.usuarioAsignadorId || requestingUser?.usuarioId || usuarioId;
     const codigo = `TRASLADO-TECNICO-BODEGA-${usuarioId}-${Date.now()}`;
+    const materialesPayload = dto.materiales.map((m) => ({
+      materialId: m.materialId,
+      movimientoCantidad: m.cantidad,
+      numerosMedidor: m.numerosMedidor,
+    }));
 
-    // 1) Salida desde técnico (descuenta inventario técnico)
-    for (const m of dto.materiales) {
-      await this.movimientosService.create(
-        {
-          movimientoTipo: TipoMovimiento.SALIDA,
-          materiales: [
-            {
-              materialId: m.materialId,
-              movimientoCantidad: m.cantidad,
-              numerosMedidor: m.numerosMedidor,
-            } as any,
-          ],
-          usuarioId: usuarioAsignador,
-          movimientoCodigo: codigo,
-          movimientoObservaciones: dto.observaciones || 'Retorno de materiales de técnico a bodega',
-          numeroOrden: dto.numeroOrden,
-          origenTipo: 'tecnico',
-          tecnicoOrigenId: usuarioId,
-          inventarioId: null,
-        } as any,
-        requestingUser,
-      );
-    }
+    // 1) Salida desde técnico (descuenta inventario técnico) — un grupo, una línea por material
+    await this.movimientosService.create(
+      {
+        movimientoTipo: TipoMovimiento.SALIDA,
+        materiales: materialesPayload as any,
+        usuarioId: usuarioAsignador,
+        movimientoCodigo: codigo,
+        movimientoObservaciones: dto.observaciones || 'Retorno de materiales de técnico a bodega',
+        numeroOrden: dto.numeroOrden,
+        origenTipo: 'tecnico',
+        tecnicoOrigenId: usuarioId,
+        inventarioId: null,
+      } as any,
+      requestingUser,
+    );
 
-    // 2) Entrada hacia bodega destino (aumenta stock)
-    for (const m of dto.materiales) {
-      await this.movimientosService.create(
-        {
-          movimientoTipo: TipoMovimiento.ENTRADA,
-          materiales: [
-            {
-              materialId: m.materialId,
-              movimientoCantidad: m.cantidad,
-              numerosMedidor: m.numerosMedidor,
-            } as any,
-          ],
-          usuarioId: usuarioAsignador,
-          inventarioId: inventarioDestino.inventarioId,
-          movimientoCodigo: codigo,
-          movimientoObservaciones: dto.observaciones || 'Retorno de materiales de técnico a bodega',
-          numeroOrden: dto.numeroOrden,
-        } as any,
-        requestingUser,
-      );
-    }
+    // 2) Entrada hacia bodega destino (aumenta stock en bodega)
+    await this.movimientosService.create(
+      {
+        movimientoTipo: TipoMovimiento.ENTRADA,
+        materiales: materialesPayload as any,
+        usuarioId: usuarioAsignador,
+        inventarioId: inventarioDestino.inventarioId,
+        movimientoCodigo: codigo,
+        movimientoObservaciones: dto.observaciones || 'Retorno de materiales de técnico a bodega',
+        numeroOrden: dto.numeroOrden,
+      } as any,
+      requestingUser,
+    );
 
     return this.findByUsuario(usuarioId, requestingUser);
   }
@@ -665,32 +680,30 @@ export class InventarioTecnicoService {
         }
       }
 
-      // 6) Movimiento solo trazabilidad: el stock en inventario_tecnico ya se ajustó arriba.
-      // Si el movimiento queda COMPLETADA por defecto, MovimientosService volvería a descontar del técnico origen.
-      await this.movimientosService.create(
-        {
-          movimientoTipo: TipoMovimiento.SALIDA,
-          materiales: [
-            {
-              materialId,
-              movimientoCantidad: cantidad,
-              numerosMedidor: m.numerosMedidor,
-            } as any,
-          ],
-          usuarioId: usuarioAsignador,
-          movimientoCodigo: codigo,
-          movimientoObservaciones:
-            dto.observaciones ||
-            `Traslado entre técnicos: ${usuarioOrigenId} → ${dto.usuarioDestinoId}`,
-          numeroOrden: dto.numeroOrden,
-          origenTipo: 'tecnico',
-          tecnicoOrigenId: usuarioOrigenId,
-          inventarioId: null,
-          movimientoEstado: EstadoMovimiento.PENDIENTE,
-        } as any,
-        requestingUser,
-      );
     }
+
+    // 6) Movimiento solo trazabilidad (PENDIENTE: no vuelve a descontar inventario técnico)
+    await this.movimientosService.create(
+      {
+        movimientoTipo: TipoMovimiento.SALIDA,
+        materiales: dto.materiales.map((m) => ({
+          materialId: m.materialId,
+          movimientoCantidad: m.cantidad,
+          numerosMedidor: m.numerosMedidor,
+        })) as any,
+        usuarioId: usuarioAsignador,
+        movimientoCodigo: codigo,
+        movimientoObservaciones:
+          dto.observaciones ||
+          `Traslado entre técnicos: ${usuarioOrigenId} → ${dto.usuarioDestinoId}`,
+        numeroOrden: dto.numeroOrden,
+        origenTipo: 'tecnico',
+        tecnicoOrigenId: usuarioOrigenId,
+        inventarioId: null,
+        movimientoEstado: EstadoMovimiento.PENDIENTE,
+      } as any,
+      requestingUser,
+    );
 
     // Devolver inventario actualizado de ambos técnicos
     const [invOrigenUpd, invDestUpd] = await Promise.all([
@@ -763,8 +776,47 @@ export class InventarioTecnicoService {
       }
     });
 
-    // Convertir el Map a un array y devolverlo
-    return Array.from(materialesAgrupados.values());
+    let resultado = Array.from(materialesAgrupados.values());
+
+    try {
+      const numerosTecnico = await this.numerosMedidorService.findByUsuario(usuarioId);
+      const porMaterial = new Map<number, number>();
+      for (const n of numerosTecnico) {
+        if (
+          n.estado === EstadoNumeroMedidor.ASIGNADO_TECNICO &&
+          Number(n.usuarioId) === Number(usuarioId)
+        ) {
+          porMaterial.set(n.materialId, (porMaterial.get(n.materialId) || 0) + 1);
+        }
+      }
+
+      const idsEnResultado = new Set(resultado.map((r) => r.materialId));
+      for (const item of resultado) {
+        if (!item.material?.materialEsMedidor) continue;
+        const porSeriales = porMaterial.get(item.materialId);
+        if (porSeriales != null && porSeriales > 0) {
+          item.cantidad = porSeriales;
+        }
+      }
+
+      for (const [materialId, count] of porMaterial.entries()) {
+        if (idsEnResultado.has(materialId) || count <= 0) continue;
+        const material = await this.materialesService.findOne(materialId).catch(() => null);
+        if (!material?.materialEsMedidor) continue;
+        resultado.push({
+          inventarioTecnicoId: 0,
+          usuarioId,
+          materialId,
+          cantidad: count,
+          material,
+          usuario: resultado[0]?.usuario,
+        } as InventarioTecnico);
+      }
+    } catch (error) {
+      console.error('Error al enriquecer inventario técnico con números de medidor:', error);
+    }
+
+    return resultado;
   }
 
   /**
