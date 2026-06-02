@@ -133,11 +133,17 @@ export class InstalacionesMaterialesService {
     );
     this.assertTecnicoPuedeGestionarMateriales(instalacionParaEstado?.estado, requestingUser);
 
+    await this.validarStockDisponibleTecnico(
+      instalacionParaEstado,
+      createDto.materialId,
+      createDto.cantidad,
+      esMedidor,
+      requestingUser,
+    );
+
     const instalacionMaterial = this.instalacionMaterialRepository.create(createDto);
     const materialGuardado = await this.instalacionMaterialRepository.save(instalacionMaterial);
 
-    // Descontar del inventario del técnico asignado cuando se agrega un material
-    // Esto se hace inmediatamente cuando el técnico registra el material desde la app móvil
     await this.descontarMaterialDelTecnico(
       createDto.instalacionId,
       createDto.materialId,
@@ -387,136 +393,208 @@ export class InstalacionesMaterialesService {
       updateDto.cantidad !== undefined ? Number(updateDto.cantidad) : cantidadAnterior;
     const diferencia = cantidadNueva - cantidadAnterior;
 
-    // Actualizar el registro
-    Object.assign(instalacionMaterial, updateDto);
-    const materialActualizado = await this.instalacionMaterialRepository.save(instalacionMaterial);
-
-    // Manejar números de medidor si el material es de categoría "medidor" y la cantidad cambió
-    try {
-      const material = await this.materialesService.findOne(instalacionMaterial.materialId);
-      const esMedidor = await this.esMaterialMedidor(material);
-
-      if (esMedidor && diferencia !== 0 && instalacionMaterial.instalacionId) {
-        const instalacion = await this.instalacionesService.findOne(
-          instalacionMaterial.instalacionId,
-        );
-
-        const tecnicoId = this.resolveTecnicoInventarioTarget(instalacion, requestingUser);
-        if (instalacion && tecnicoId != null) {
-          // Obtener números de medidor actuales asignados a esta instalación para este material
-          const numerosMedidorInstalacion = await this.numerosMedidorService.findByInstalacion(
-            instalacionMaterial.instalacionId,
-          );
-          const numerosDelMaterial = numerosMedidorInstalacion.filter(
-            (n) =>
-              n.materialId === instalacionMaterial.materialId &&
-              n.instalacionMaterialId === instalacionMaterial.instalacionMaterialId &&
-              (n.estado === 'en_instalacion' || n.estado === 'instalado'),
-          );
-
-          const cantidadNumericaNueva = Math.round(cantidadNueva);
-          const cantidadNumericaAnterior = Math.round(cantidadAnterior);
-
-          if (diferencia > 0) {
-            // Si aumentó la cantidad, asignar más números de medidor del técnico
-            const numerosNecesarios = cantidadNumericaNueva - cantidadNumericaAnterior;
-            const numerosMedidorTecnico = await this.numerosMedidorService.findByUsuario(tecnicoId);
-            const numerosDisponiblesTecnico = numerosMedidorTecnico.filter(
-              (n) =>
-                n.materialId === instalacionMaterial.materialId && n.estado === 'asignado_tecnico',
-            );
-
-            const numerosAAsignar = numerosDisponiblesTecnico.slice(0, numerosNecesarios);
-            if (numerosAAsignar.length > 0) {
-              await this.numerosMedidorService.asignarAInstalacion(
-                numerosAAsignar.map((n) => n.numeroMedidorId),
-                instalacionMaterial.instalacionId,
-                instalacionMaterial.instalacionMaterialId,
-              );
-            }
-          } else if (diferencia < 0) {
-            // Si disminuyó la cantidad, liberar números de medidor (volver al técnico)
-            const numerosALiberar = Math.abs(diferencia);
-            const numerosParaLiberar = numerosDelMaterial.slice(0, numerosALiberar);
-
-            if (numerosParaLiberar.length > 0) {
-              // Obtener inventario técnico para este material
-              const inventarioTecnico =
-                await this.inventarioTecnicoService.findByUsuario(tecnicoId);
-              const inventarioItem = inventarioTecnico.find(
-                (inv) =>
-                  inv.materialId === instalacionMaterial.materialId && inv.usuarioId === tecnicoId,
-              );
-
-              if (inventarioItem) {
-                // Liberar de instalación y volver a asignar al técnico
-                for (const numero of numerosParaLiberar) {
-                  await this.numerosMedidorService.update(numero.numeroMedidorId, {
-                    estado: 'asignado_tecnico' as any,
-                    instalacionId: null,
-                    instalacionMaterialId: null,
-                    usuarioId: tecnicoId,
-                    inventarioTecnicoId: inventarioItem.inventarioTecnicoId,
-                  });
-                }
-              } else {
-                // Si no hay inventario técnico, liberar completamente
-                await this.numerosMedidorService.liberarDeInstalacion(
-                  numerosParaLiberar.map((n) => n.numeroMedidorId),
-                );
-              }
-            }
-          }
-        }
-      }
-    } catch (error) {
-      console.error(
-        `Error al manejar números de medidor al actualizar material de instalación:`,
-        error,
-      );
-      // No lanzar error para no interrumpir la actualización
+    if (updateDto.cantidad !== undefined && cantidadNueva < 0) {
+      throw new BadRequestException('La cantidad no puede ser negativa.');
     }
 
-    // Si la cantidad cambió y hay diferencia, ajustar inventario del técnico asignado
+    const material = await this.materialesService.findOne(instalacionMaterial.materialId);
+    const esMedidor = await this.esMaterialMedidor(material);
+
+    if (esMedidor && updateDto.cantidad !== undefined && cantidadNueva !== 1) {
+      throw new BadRequestException(
+        'Para medidores, la cantidad debe ser exactamente 1 por instalación.',
+      );
+    }
+
     if (diferencia !== 0 && instalacionMaterial.instalacionId) {
-      try {
-        // Obtener la instalación para encontrar el técnico asignado
-        const instalacion = await this.instalacionesService.findOne(
+      await this.validarCambioCantidadConInventarioTecnico(
+        instalacionMaterial,
+        instalacionUpdate,
+        diferencia,
+        esMedidor,
+        requestingUser,
+      );
+    }
+
+    if (diferencia !== 0 && instalacionMaterial.instalacionId) {
+      await this.aplicarCambioCantidadInventarioTecnico(
+        instalacionMaterial,
+        instalacionUpdate,
+        diferencia,
+        esMedidor,
+        requestingUser,
+      );
+    }
+
+    Object.assign(instalacionMaterial, updateDto);
+    return this.instalacionMaterialRepository.save(instalacionMaterial);
+  }
+
+  private async validarCambioCantidadConInventarioTecnico(
+    instalacionMaterial: InstalacionMaterial,
+    instalacion: any,
+    diferencia: number,
+    esMedidor: boolean,
+    requestingUser?: any,
+  ): Promise<void> {
+    if (diferencia <= 0) {
+      return;
+    }
+    await this.validarStockDisponibleTecnico(
+      instalacion,
+      instalacionMaterial.materialId,
+      Math.round(diferencia),
+      esMedidor,
+      requestingUser,
+    );
+  }
+
+  /** Valida stock (y seriales si es medidor) del técnico asignado a la instalación. */
+  private async validarStockDisponibleTecnico(
+    instalacion: any,
+    materialId: number,
+    cantidadRequerida: number,
+    esMedidor: boolean,
+    requestingUser?: any,
+  ): Promise<void> {
+    const unidades = Math.round(Number(cantidadRequerida || 0));
+    if (unidades <= 0) {
+      return;
+    }
+
+    const tecnicoId = this.resolveTecnicoInventarioTarget(instalacion, requestingUser);
+    if (tecnicoId == null) {
+      throw new BadRequestException(
+        'No se encontró un técnico asignado a la instalación para validar el inventario.',
+      );
+    }
+
+    const inventarioTecnico = await this.inventarioTecnicoService.findByUsuario(tecnicoId);
+    const inventarioItem = inventarioTecnico.find(
+      (inv) => inv.materialId === materialId && inv.usuarioId === tecnicoId,
+    );
+    const stockDisponible = Number(inventarioItem?.cantidad || 0);
+
+    if (stockDisponible < unidades) {
+      throw new BadRequestException(
+        `El técnico no tiene stock suficiente. Disponible en inventario: ${Math.round(stockDisponible)}, se requieren ${unidades} unidad(es).`,
+      );
+    }
+
+    if (esMedidor) {
+      const numerosMedidorTecnico = await this.numerosMedidorService.findByUsuario(tecnicoId);
+      const serialesDisponibles = numerosMedidorTecnico.filter(
+        (n) =>
+          n.materialId === materialId &&
+          n.estado === EstadoNumeroMedidor.ASIGNADO_TECNICO &&
+          Number(n.usuarioId) === Number(tecnicoId),
+      );
+
+      if (serialesDisponibles.length < unidades) {
+        throw new BadRequestException(
+          `El técnico no tiene números de medidor disponibles. Seriales en inventario: ${serialesDisponibles.length}, se requieren ${unidades}.`,
+        );
+      }
+    }
+  }
+
+  /**
+   * Ajusta inventario del técnico y seriales al cambiar la cantidad registrada en la instalación.
+   */
+  private async aplicarCambioCantidadInventarioTecnico(
+    instalacionMaterial: InstalacionMaterial,
+    instalacion: any,
+    diferencia: number,
+    esMedidor: boolean,
+    requestingUser?: any,
+  ): Promise<void> {
+    const tecnicoId = this.resolveTecnicoInventarioTarget(instalacion, requestingUser);
+    if (tecnicoId == null) {
+      return;
+    }
+
+    const unidades = Math.round(Math.abs(diferencia));
+
+    if (diferencia > 0) {
+      await this.descontarMaterialDelTecnico(
+        instalacionMaterial.instalacionId,
+        instalacionMaterial.materialId,
+        unidades,
+        requestingUser,
+        { validarStock: true },
+      );
+
+      if (esMedidor) {
+        const numerosMedidorTecnico = await this.numerosMedidorService.findByUsuario(tecnicoId);
+        const numerosDisponiblesTecnico = numerosMedidorTecnico.filter(
+          (n) =>
+            n.materialId === instalacionMaterial.materialId &&
+            n.estado === EstadoNumeroMedidor.ASIGNADO_TECNICO &&
+            Number(n.usuarioId) === Number(tecnicoId),
+        );
+        const numerosAAsignar = numerosDisponiblesTecnico.slice(0, unidades);
+
+        if (numerosAAsignar.length < unidades) {
+          throw new BadRequestException(
+            `No hay suficientes números de medidor del técnico para completar el aumento de cantidad.`,
+          );
+        }
+
+        await this.numerosMedidorService.asignarAInstalacion(
+          numerosAAsignar.map((n) => n.numeroMedidorId),
+          instalacionMaterial.instalacionId,
+          instalacionMaterial.instalacionMaterialId,
+        );
+      }
+      return;
+    }
+
+    if (diferencia < 0) {
+      await this.devolverMaterialAlTecnico(
+        instalacionMaterial.instalacionId,
+        instalacionMaterial.materialId,
+        unidades,
+        requestingUser,
+      );
+
+      if (esMedidor) {
+        const numerosMedidorInstalacion = await this.numerosMedidorService.findByInstalacion(
           instalacionMaterial.instalacionId,
         );
+        const numerosDelMaterial = numerosMedidorInstalacion.filter(
+          (n) =>
+            n.materialId === instalacionMaterial.materialId &&
+            n.instalacionMaterialId === instalacionMaterial.instalacionMaterialId &&
+            (n.estado === EstadoNumeroMedidor.EN_INSTALACION ||
+              n.estado === EstadoNumeroMedidor.INSTALADO),
+        );
 
-        if (instalacion) {
-          const tecnicoId = this.resolveTecnicoInventarioTarget(instalacion, requestingUser);
-          if (tecnicoId != null) {
-            // Obtener el inventario del técnico para este material
-            const inventarioTecnico = await this.inventarioTecnicoService.findByUsuario(tecnicoId);
-            const inventarioItem = inventarioTecnico.find(
-              (inv) =>
-                inv.materialId === instalacionMaterial.materialId && inv.usuarioId === tecnicoId,
-            );
+        const numerosParaLiberar = numerosDelMaterial.slice(0, unidades);
+        if (numerosParaLiberar.length > 0) {
+          const inventarioTecnico = await this.inventarioTecnicoService.findByUsuario(tecnicoId);
+          const inventarioItem = inventarioTecnico.find(
+            (inv) =>
+              inv.materialId === instalacionMaterial.materialId && inv.usuarioId === tecnicoId,
+          );
 
-            if (inventarioItem) {
-              // Si la cantidad aumentó, restar del inventario del técnico
-              // Si la cantidad disminuyó, agregar al inventario del técnico
-              const cantidadActual = Number(inventarioItem.cantidad || 0);
-              const nuevaCantidad = Math.max(0, cantidadActual - diferencia);
-
-              await this.inventarioTecnicoService.update(inventarioItem.inventarioTecnicoId, {
-                cantidad: nuevaCantidad,
+          if (inventarioItem) {
+            for (const numero of numerosParaLiberar) {
+              await this.numerosMedidorService.update(numero.numeroMedidorId, {
+                estado: EstadoNumeroMedidor.ASIGNADO_TECNICO as any,
+                instalacionId: null,
+                instalacionMaterialId: null,
+                usuarioId: tecnicoId,
+                inventarioTecnicoId: inventarioItem.inventarioTecnicoId,
               });
             }
+          } else {
+            await this.numerosMedidorService.liberarDeInstalacion(
+              numerosParaLiberar.map((n) => n.numeroMedidorId),
+            );
           }
         }
-      } catch (error) {
-        console.error(
-          `[InstalacionesMaterialesService] Error al ajustar inventario técnico:`,
-          error,
-        );
-        // No lanzar error para no interrumpir la actualización del material
       }
     }
-
-    return materialActualizado;
   }
 
   async remove(id: number, requestingUser?: any): Promise<void> {
@@ -584,39 +662,46 @@ export class InstalacionesMaterialesService {
     materialId: number,
     cantidad: number,
     requestingUser?: any,
+    options?: { validarStock?: boolean },
   ): Promise<void> {
-    try {
-      const instalacion = await this.instalacionesService.findOne(instalacionId);
-      const tecnicoId = this.resolveTecnicoInventarioTarget(instalacion, requestingUser);
-      if (tecnicoId == null) {
-        return;
+    const instalacion = await this.instalacionesService.findOne(instalacionId);
+    const tecnicoId = this.resolveTecnicoInventarioTarget(instalacion, requestingUser);
+    if (tecnicoId == null) {
+      if (options?.validarStock) {
+        throw new BadRequestException(
+          'No se encontró un técnico asignado a la instalación para descontar del inventario.',
+        );
       }
-      const cantidadNumerica = Math.round(Number(cantidad || 0));
+      return;
+    }
+    const cantidadNumerica = Math.round(Number(cantidad || 0));
 
-      if (cantidadNumerica <= 0) {
-        return;
-      }
+    if (cantidadNumerica <= 0) {
+      return;
+    }
 
-      // Obtener el inventario del técnico para este material
-      const inventarioTecnico = await this.inventarioTecnicoService.findByUsuario(tecnicoId);
-      const inventarioItem = inventarioTecnico.find(
-        (inv) => inv.materialId === materialId && inv.usuarioId === tecnicoId,
+    const inventarioTecnico = await this.inventarioTecnicoService.findByUsuario(tecnicoId);
+    const inventarioItem = inventarioTecnico.find(
+      (inv) => inv.materialId === materialId && inv.usuarioId === tecnicoId,
+    );
+
+    const cantidadActual = Number(inventarioItem?.cantidad || 0);
+
+    if (options?.validarStock && cantidadActual < cantidadNumerica) {
+      throw new BadRequestException(
+        `Stock insuficiente en inventario del técnico. Disponible: ${Math.round(cantidadActual)}, requerido: ${cantidadNumerica}.`,
       );
+    }
 
-      if (inventarioItem) {
-        const cantidadActual = Number(inventarioItem.cantidad || 0);
-        const nuevaCantidad = Math.max(0, cantidadActual - cantidadNumerica);
-
-        await this.inventarioTecnicoService.update(inventarioItem.inventarioTecnicoId, {
-          cantidad: nuevaCantidad,
-        });
-      }
-    } catch (error) {
-      console.error(
-        `[InstalacionesMaterialesService] Error al descontar material del técnico:`,
-        error,
+    if (inventarioItem) {
+      const nuevaCantidad = Math.max(0, cantidadActual - cantidadNumerica);
+      await this.inventarioTecnicoService.update(inventarioItem.inventarioTecnicoId, {
+        cantidad: nuevaCantidad,
+      });
+    } else if (options?.validarStock) {
+      throw new BadRequestException(
+        'El técnico no tiene este material en su inventario para descontar la cantidad solicitada.',
       );
-      // No lanzar error para no interrumpir la creación del material
     }
   }
 
