@@ -18,7 +18,6 @@ import {
   normalizeBrowserOrigin,
 } from './common/utils/node-env';
 
-/** Puerto HTTP: Cloud Run inyecta PORT; si viene vacío o inválido, no usar 4100 en Cloud Run (enrutamiento fallaría). */
 function resolveListenPort(): number {
   const raw = process.env.PORT;
   const parsed =
