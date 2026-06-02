@@ -36,9 +36,14 @@ export class NumerosMedidorController {
     body: {
       materialId: number;
       items: Array<{ numeroMedidor: string; bodegaId?: number }>;
+      // Compatibilidad con clientes legacy (web) que envían { numerosMedidor: string[] }
+      numerosMedidor?: string[];
     },
   ) {
-    const items = body.items ?? [];
+    const itemsFromLegacy = Array.isArray(body.numerosMedidor)
+      ? body.numerosMedidor.map((n) => ({ numeroMedidor: n }))
+      : [];
+    const items = Array.isArray(body.items) && body.items.length ? body.items : itemsFromLegacy;
     return this.numerosMedidorService.crearMultiples(body.materialId, items);
   }
 

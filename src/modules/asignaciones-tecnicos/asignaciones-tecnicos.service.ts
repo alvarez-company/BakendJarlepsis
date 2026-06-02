@@ -16,6 +16,7 @@ import { MaterialesService } from '../materiales/materiales.service';
 import { InventariosService } from '../inventarios/inventarios.service';
 import { AuditoriaService } from '../auditoria/auditoria.service';
 import { TipoEntidad } from '../auditoria/auditoria.entity';
+import type { AuditoriaEliminacion } from '../auditoria/auditoria.entity';
 
 @Injectable()
 export class AsignacionesTecnicosService {
@@ -322,6 +323,44 @@ export class AsignacionesTecnicosService {
       fechaActualizacion: asignacion.fechaActualizacion,
     };
 
+    // Snapshot de números de medidor (para auditoría/restauración)
+    try {
+      const snapshot: any[] = [];
+      if (Array.isArray(asignacion.materiales)) {
+        for (const mat of asignacion.materiales) {
+          const numeros = Array.isArray(mat?.numerosMedidor) ? mat.numerosMedidor : [];
+          for (const numeroStr of numeros) {
+            try {
+              const n = await this.numerosMedidorService.findByNumero(numeroStr);
+              if (n) {
+                snapshot.push({
+                  numeroMedidorId: n.numeroMedidorId,
+                  materialId: n.materialId,
+                  numeroMedidor: n.numeroMedidor,
+                  estado: n.estado,
+                  inventarioTecnicoId: n.inventarioTecnicoId ?? null,
+                  instalacionMaterialId: n.instalacionMaterialId ?? null,
+                  usuarioId: n.usuarioId ?? null,
+                  instalacionId: n.instalacionId ?? null,
+                  bodegaId: n.bodegaId ?? null,
+                  observaciones: n.observaciones ?? null,
+                });
+              } else {
+                snapshot.push({ numeroMedidor: numeroStr, missing: true, materialId: mat?.materialId });
+              }
+            } catch {
+              snapshot.push({ numeroMedidor: numeroStr, error: true, materialId: mat?.materialId });
+            }
+          }
+        }
+      }
+      if (snapshot.length > 0) {
+        (datosEliminados as any).numerosMedidorSnapshot = snapshot;
+      }
+    } catch {
+      // no bloquear eliminación por auditoría
+    }
+
     // Revertir todo lo relacionado con la asignación
     try {
       // 1. Buscar y eliminar movimientos de salida asociados
@@ -348,6 +387,8 @@ export class AsignacionesTecnicosService {
             return esSalida && mismoInventario && observacionIncluyeAsignacion;
           });
 
+          const movimientosEliminadosIds: number[] = [];
+
           // Eliminar cada movimiento de salida que corresponda a los materiales de esta asignación
           for (const movimiento of movimientosAsociados) {
             try {
@@ -363,6 +404,7 @@ export class AsignacionesTecnicosService {
                   Number(movimiento.movimientoCantidad) - Number(materialAsignacion.cantidad),
                 ) < 0.01
               ) {
+                movimientosEliminadosIds.push(movimiento.movimientoId);
                 await this.movimientosService.remove(movimiento.movimientoId, usuarioId);
               }
             } catch (error) {
@@ -371,6 +413,10 @@ export class AsignacionesTecnicosService {
                 error,
               );
             }
+          }
+
+          if (movimientosEliminadosIds.length > 0) {
+            (datosEliminados as any).movimientosEliminadosIds = movimientosEliminadosIds;
           }
         }
       } catch (error) {
@@ -509,5 +555,95 @@ export class AsignacionesTecnicosService {
 
     // Eliminar la asignación
     await this.asignacionesRepository.remove(asignacion);
+  }
+
+  async restablecerDesdeAuditoria(
+    auditoria: AuditoriaEliminacion,
+    usuarioId: number,
+  ): Promise<{ ok: true; asignacionTecnicoId: number; movimientosRestaurados: number[] }> {
+    const data: any = auditoria?.datosEliminados ?? null;
+    const asignacionTecnicoId = Number(data?.asignacionTecnicoId || 0);
+    if (!Number.isFinite(asignacionTecnicoId) || asignacionTecnicoId <= 0) {
+      throw new BadRequestException('Auditoría inválida: no contiene asignacionTecnicoId');
+    }
+
+    const existente = await this.asignacionesRepository.findOne({
+      where: { asignacionTecnicoId } as any,
+    });
+    if (existente) {
+      throw new BadRequestException(
+        `La asignación ${asignacionTecnicoId} ya existe; no se puede restablecer.`,
+      );
+    }
+
+    // 1) Restaurar la asignación
+    const asignacionNueva = this.asignacionesRepository.create({
+      ...data,
+      asignacionTecnicoId,
+      fechaCreacion: data.fechaCreacion ? new Date(data.fechaCreacion) : undefined,
+      fechaActualizacion: data.fechaActualizacion ? new Date(data.fechaActualizacion) : undefined,
+    } as any);
+    await this.asignacionesRepository.save(asignacionNueva as any);
+
+    // 2) Restaurar inventario técnico (bodega→técnico) y reasignar seriales al técnico
+    const tecnicoId = Number(data.usuarioId || 0);
+    const materiales = Array.isArray(data.materiales) ? data.materiales : [];
+    if (tecnicoId > 0) {
+      const invTecnico = await this.inventarioTecnicoService.findByUsuario(tecnicoId);
+      for (const m of materiales) {
+        const materialId = Number(m?.materialId || 0);
+        const cantidad = Number(m?.cantidad || 0);
+        if (!materialId || cantidad <= 0) continue;
+
+        const existingInv = invTecnico.find((x) => x.materialId === materialId && x.usuarioId === tecnicoId);
+        let inventarioTecnicoId: number | null = null;
+        if (existingInv) {
+          inventarioTecnicoId = existingInv.inventarioTecnicoId;
+          await this.inventarioTecnicoService.update(existingInv.inventarioTecnicoId, {
+            cantidad: Number(existingInv.cantidad || 0) + cantidad,
+          } as any);
+        } else {
+          const created = await this.inventarioTecnicoService.create({
+            usuarioId: tecnicoId,
+            materialId,
+            cantidad,
+          } as any);
+          inventarioTecnicoId = created.inventarioTecnicoId;
+        }
+
+        // Seriales (si aplica)
+        const numeros = Array.isArray(m?.numerosMedidor) ? m.numerosMedidor : [];
+        if (inventarioTecnicoId && numeros.length > 0) {
+          const ids: number[] = [];
+          for (const numeroStr of numeros) {
+            const ent = await this.numerosMedidorService.findByNumero(String(numeroStr));
+            if (ent && ent.materialId === materialId) ids.push(ent.numeroMedidorId);
+          }
+          if (ids.length > 0) {
+            await this.numerosMedidorService.asignarATecnico(ids, tecnicoId, inventarioTecnicoId);
+          }
+        }
+      }
+    }
+
+    // 3) Restaurar movimientos de salida asociados (para re-aplicar stock bodega)
+    const movimientosIds: number[] = Array.isArray(data.movimientosEliminadosIds)
+      ? data.movimientosEliminadosIds.map((v: any) => Number(v)).filter((n: number) => Number.isFinite(n) && n > 0)
+      : [];
+    const auditoriasMov = movimientosIds.length
+      ? await this.auditoriaService.findAll({ tipoEntidad: TipoEntidad.MOVIMIENTO, entidadIds: movimientosIds })
+      : [];
+
+    const restaurados: number[] = [];
+    for (const a of auditoriasMov) {
+      try {
+        const res = await this.movimientosService.restablecerDesdeAuditoria(a, usuarioId);
+        restaurados.push(res.movimientoId);
+      } catch {
+        // continuar
+      }
+    }
+
+    return { ok: true, asignacionTecnicoId, movimientosRestaurados: restaurados };
   }
 }

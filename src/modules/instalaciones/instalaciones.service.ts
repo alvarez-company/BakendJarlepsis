@@ -28,6 +28,7 @@ import { GruposService } from '../grupos/grupos.service';
 import { TipoGrupo } from '../grupos/grupo.entity';
 import { AuditoriaService } from '../auditoria/auditoria.service';
 import { TipoEntidad } from '../auditoria/auditoria.entity';
+import type { AuditoriaEliminacion } from '../auditoria/auditoria.entity';
 import { EstadosInstalacionService } from '../estados-instalacion/estados-instalacion.service';
 import { InstalacionesMaterialesService } from '../instalaciones-materiales/instalaciones-materiales.service';
 import { UsersService } from '../users/users.service';
@@ -1641,6 +1642,27 @@ export class InstalacionesService {
       fechaActualizacion: instalacion.fechaActualizacion,
     };
 
+    // Snapshot de números de medidor asignados a esta instalación (para auditoría/restauración)
+    try {
+      const nums = await this.numerosMedidorService.findByInstalacion(id);
+      if (Array.isArray(nums) && nums.length > 0) {
+        (datosEliminados as any).numerosMedidorSnapshot = nums.map((n) => ({
+          numeroMedidorId: n.numeroMedidorId,
+          materialId: n.materialId,
+          numeroMedidor: n.numeroMedidor,
+          estado: n.estado,
+          inventarioTecnicoId: n.inventarioTecnicoId ?? null,
+          instalacionMaterialId: n.instalacionMaterialId ?? null,
+          usuarioId: n.usuarioId ?? null,
+          instalacionId: n.instalacionId ?? null,
+          bodegaId: n.bodegaId ?? null,
+          observaciones: n.observaciones ?? null,
+        }));
+      }
+    } catch {
+      // no bloquear eliminación por auditoría
+    }
+
     // Eliminar todas las asignaciones de usuarios asociadas a esta instalación
     try {
       await this.instalacionesUsuariosService.desasignarTodos(id);
@@ -1673,8 +1695,10 @@ export class InstalacionesService {
       );
 
       // Eliminar cada salida (esto revertirá los stocks automáticamente)
+      const movimientosEliminadosIds: number[] = [];
       for (const salida of salidasAsociadas) {
         try {
+          movimientosEliminadosIds.push(salida.movimientoId);
           await this.movimientosService.remove(salida.movimientoId, usuarioId);
         } catch (error) {
           console.error(
@@ -1682,6 +1706,9 @@ export class InstalacionesService {
             error,
           );
         }
+      }
+      if (movimientosEliminadosIds.length > 0) {
+        (datosEliminados as any).movimientosEliminadosIds = movimientosEliminadosIds;
       }
     } catch (error) {
       console.error('Error al buscar y eliminar salidas asociadas:', error);
@@ -1720,6 +1747,74 @@ export class InstalacionesService {
 
     // Eliminar la instalación
     await this.instalacionesRepository.remove(instalacion);
+  }
+
+  async restablecerDesdeAuditoria(
+    auditoria: AuditoriaEliminacion,
+    usuarioId: number,
+  ): Promise<{ ok: true; instalacionId: number; materialesRestaurados: number; movimientosRestaurados: number[] }> {
+    const data: any = auditoria?.datosEliminados ?? null;
+    const instalacionId = Number(data?.instalacionId || 0);
+    if (!Number.isFinite(instalacionId) || instalacionId <= 0) {
+      throw new BadRequestException('Auditoría inválida: no contiene instalacionId');
+    }
+
+    const existente = await this.instalacionesRepository.findOne({ where: { instalacionId } as any });
+    if (existente) {
+      throw new BadRequestException(`La instalación ${instalacionId} ya existe; no se puede restablecer.`);
+    }
+
+    // 1) Restaurar instalación
+    const instalacionNueva = this.instalacionesRepository.create({
+      ...data,
+      instalacionId,
+      fechaCreacion: data.fechaCreacion ? new Date(data.fechaCreacion) : undefined,
+      fechaActualizacion: data.fechaActualizacion ? new Date(data.fechaActualizacion) : undefined,
+    } as any);
+    await this.instalacionesRepository.save(instalacionNueva as any);
+
+    // 2) Restaurar materiales usados en instalación (esto vuelve a descontar de técnico y asigna seriales a instalación)
+    let materialesRestaurados = 0;
+    try {
+      const materialesInstalados = Array.isArray(data.materialesInstalados) ? data.materialesInstalados : [];
+      for (const m of materialesInstalados) {
+        const materialId = Number(m?.materialId || 0);
+        const cantidad = Number(m?.cantidad || 0);
+        if (!materialId || cantidad <= 0) continue;
+        await this.instalacionesMaterialesService.create(
+          {
+            instalacionId,
+            materialId,
+            cantidad,
+            numerosMedidor: Array.isArray(m?.numerosMedidor) ? m.numerosMedidor : undefined,
+          } as any,
+          undefined,
+        );
+        materialesRestaurados += 1;
+      }
+    } catch {
+      // continuar aunque falle algún material
+    }
+
+    // 3) Restaurar movimientos asociados eliminados (si existían)
+    const movimientosIds: number[] = Array.isArray(data.movimientosEliminadosIds)
+      ? data.movimientosEliminadosIds.map((v: any) => Number(v)).filter((n: number) => Number.isFinite(n) && n > 0)
+      : [];
+    const auditoriasMov = movimientosIds.length
+      ? await this.auditoriaService.findAll({ tipoEntidad: TipoEntidad.MOVIMIENTO, entidadIds: movimientosIds })
+      : [];
+
+    const restaurados: number[] = [];
+    for (const a of auditoriasMov) {
+      try {
+        const res = await this.movimientosService.restablecerDesdeAuditoria(a, usuarioId);
+        restaurados.push(res.movimientoId);
+      } catch {
+        // continuar
+      }
+    }
+
+    return { ok: true, instalacionId, materialesRestaurados, movimientosRestaurados: restaurados };
   }
 
   /**

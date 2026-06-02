@@ -49,6 +49,7 @@ import { HealthModule } from './modules/health/health.module';
 import { NumerosMedidorModule } from './modules/numeros-medidor/numeros-medidor.module';
 import { SearchModule } from './modules/search/search.module';
 import { AuditoriaInventarioModule } from './modules/auditoria-inventario/auditoria-inventario.module';
+import { AuditoriaEliminacionesModule } from './modules/auditoria/auditoria-eliminaciones.module';
 import { UploadModule } from './modules/upload/upload.module';
 import { PushTokensModule } from './modules/push-tokens/push-tokens.module';
 import { isDevelopmentNodeEnv } from './common/utils/node-env';
@@ -166,6 +167,7 @@ import { isDevelopmentNodeEnv } from './common/utils/node-env';
     NumerosMedidorModule,
     SearchModule,
     AuditoriaInventarioModule,
+    AuditoriaEliminacionesModule,
     UploadModule,
     PushTokensModule,
   ],

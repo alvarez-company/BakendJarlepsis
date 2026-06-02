@@ -20,6 +20,7 @@ import { ProveedoresService } from '../proveedores/proveedores.service';
 import { UsersService } from '../users/users.service';
 import { AuditoriaService } from '../auditoria/auditoria.service';
 import { TipoEntidad } from '../auditoria/auditoria.entity';
+import type { AuditoriaEliminacion } from '../auditoria/auditoria.entity';
 import { AuditoriaInventarioService } from '../auditoria-inventario/auditoria-inventario.service';
 import { TipoCambioInventario } from '../auditoria-inventario/auditoria-inventario.entity';
 import { InventarioTecnicoService } from '../inventario-tecnico/inventario-tecnico.service';
@@ -2179,6 +2180,53 @@ export class MovimientosService {
       fechaActualizacion: movimiento.fechaActualizacion,
     };
 
+    // Snapshot de números de medidor para auditoría/restauración
+    try {
+      if (movimiento.numerosMedidor) {
+        let numerosMedidorArray: string[] = [];
+        if (typeof movimiento.numerosMedidor === 'string') {
+          try {
+            numerosMedidorArray = JSON.parse(movimiento.numerosMedidor);
+          } catch {
+            numerosMedidorArray = [];
+          }
+        } else if (Array.isArray(movimiento.numerosMedidor)) {
+          numerosMedidorArray = movimiento.numerosMedidor;
+        }
+        if (numerosMedidorArray.length > 0) {
+          const snapshot: any[] = [];
+          for (const numeroStr of numerosMedidorArray) {
+            try {
+              const n = await this.numerosMedidorService.findByNumero(numeroStr);
+              if (n) {
+                snapshot.push({
+                  numeroMedidorId: n.numeroMedidorId,
+                  materialId: n.materialId,
+                  numeroMedidor: n.numeroMedidor,
+                  estado: n.estado,
+                  inventarioTecnicoId: n.inventarioTecnicoId ?? null,
+                  instalacionMaterialId: n.instalacionMaterialId ?? null,
+                  usuarioId: n.usuarioId ?? null,
+                  instalacionId: n.instalacionId ?? null,
+                  bodegaId: n.bodegaId ?? null,
+                  observaciones: n.observaciones ?? null,
+                  fechaCreacion: n.fechaCreacion ?? null,
+                  fechaActualizacion: n.fechaActualizacion ?? null,
+                });
+              } else {
+                snapshot.push({ numeroMedidor: numeroStr, missing: true });
+              }
+            } catch {
+              snapshot.push({ numeroMedidor: numeroStr, error: true });
+            }
+          }
+          (datosEliminados as any).numerosMedidorSnapshot = snapshot;
+        }
+      }
+    } catch {
+      // no bloquear eliminación por auditoría
+    }
+
     // Revertir stock si el movimiento estaba completado y tiene inventario/bodega
     const movimientoCompletado = movimiento.movimientoEstado === EstadoMovimiento.COMPLETADA;
 
@@ -2355,6 +2403,116 @@ export class MovimientosService {
       // Para otros errores, intentar eliminar directamente
       await this.movimientosRepository.remove(movimiento);
     }
+  }
+
+  async restablecerDesdeAuditoria(
+    auditoria: AuditoriaEliminacion,
+    usuarioId: number,
+  ): Promise<{ ok: true; movimientoId: number }> {
+    const data: any = auditoria?.datosEliminados ?? null;
+    if (!data?.movimientoId) {
+      throw new BadRequestException('Auditoría inválida: no contiene movimientoId');
+    }
+
+    const movimientoId = Number(data.movimientoId);
+    const existente = await this.movimientosRepository.findOne({ where: { movimientoId } });
+    if (existente) {
+      throw new BadRequestException(`El movimiento ${movimientoId} ya existe; no se puede restablecer.`);
+    }
+
+    // 1) Restaurar registro de movimiento (mismo ID si está libre)
+    const movimientoNuevo = this.movimientosRepository.create({
+      ...data,
+      movimientoId,
+      fechaCreacion: data.fechaCreacion ? new Date(data.fechaCreacion) : undefined,
+      fechaActualizacion: data.fechaActualizacion ? new Date(data.fechaActualizacion) : undefined,
+    } as any);
+    await this.movimientosRepository.save(movimientoNuevo as any);
+
+    // 2) Restaurar números de medidor al estado previo (si aplica)
+    const snapshot: any[] = Array.isArray(data.numerosMedidorSnapshot) ? data.numerosMedidorSnapshot : [];
+    if (snapshot.length > 0) {
+      for (const s of snapshot) {
+        const numeroMedidor = String(s?.numeroMedidor || '').trim();
+        if (!numeroMedidor) continue;
+
+        const materialId = Number(s?.materialId || data.materialId);
+        const estado = s?.estado;
+
+        let entity = await this.numerosMedidorService.findByNumero(numeroMedidor);
+        if (!entity) {
+          // Si no existe (p.ej. se eliminó al borrar una entrada), recrearlo
+          try {
+            entity = await this.numerosMedidorService.create({
+              materialId,
+              numeroMedidor,
+              estado,
+              inventarioTecnicoId: s?.inventarioTecnicoId ?? undefined,
+              instalacionMaterialId: s?.instalacionMaterialId ?? undefined,
+              usuarioId: s?.usuarioId ?? undefined,
+              instalacionId: s?.instalacionId ?? undefined,
+              bodegaId: s?.bodegaId ?? undefined,
+              observaciones: s?.observaciones ?? undefined,
+            } as any);
+          } catch (e) {
+            // Si falla por duplicado concurrente, reintentar obtener y actualizar
+            entity = await this.numerosMedidorService.findByNumero(numeroMedidor);
+          }
+        }
+
+        if (entity) {
+          await this.numerosMedidorService.update(entity.numeroMedidorId, {
+            estado,
+            inventarioTecnicoId: s?.inventarioTecnicoId ?? null,
+            instalacionMaterialId: s?.instalacionMaterialId ?? null,
+            usuarioId: s?.usuarioId ?? null,
+            instalacionId: s?.instalacionId ?? null,
+            bodegaId: s?.bodegaId ?? null,
+            observaciones: s?.observaciones ?? null,
+          } as any);
+        }
+      }
+    }
+
+    // 3) Re-aplicar stock (al borrar se revirtió; al restablecer se debe re-ejecutar)
+    const movimientoCompletado = data.movimientoEstado === EstadoMovimiento.COMPLETADA;
+    const inventarioId = Number(data.inventarioId || 0);
+    if (movimientoCompletado && Number.isFinite(inventarioId) && inventarioId > 0) {
+      const inventario = await this.inventariosService.findOne(inventarioId);
+      const bodegaId = inventario?.bodegaId || inventario?.bodega?.bodegaId;
+      if (bodegaId) {
+        const tipoStr = String(data.movimientoTipo).toLowerCase();
+        const cantidad = Number(data.movimientoCantidad || 0);
+        if (cantidad > 0) {
+          // Original:
+          // - entrada suma stock
+          // - salida/devolucion restan stock
+          let delta = 0;
+          if (tipoStr === 'entrada' || data.movimientoTipo === TipoMovimiento.ENTRADA) delta = cantidad;
+          if (tipoStr === 'salida' || data.movimientoTipo === TipoMovimiento.SALIDA) delta = -cantidad;
+          if (tipoStr === 'devolucion' || data.movimientoTipo === TipoMovimiento.DEVOLUCION) delta = -cantidad;
+          if (delta !== 0) {
+            await this.materialesService.ajustarStock(Number(data.materialId), delta, bodegaId);
+          }
+        }
+      }
+    }
+
+    // 4) Registrar auditoría de restauración (como eliminación con motivo distinto)
+    try {
+      await this.auditoriaService.registrarEliminacion(
+        TipoEntidad.MOVIMIENTO,
+        movimientoId,
+        { auditoriaOrigenId: auditoria.auditoriaId, ...data },
+        usuarioId,
+        'Restablecimiento de movimiento',
+        `Movimiento restablecido desde auditoría ${auditoria.auditoriaId}`,
+      );
+    } catch {
+      // no bloquear
+    }
+
+    return { ok: true, movimientoId };
   }
 
   async actualizarEstado(

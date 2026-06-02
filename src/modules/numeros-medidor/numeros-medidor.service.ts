@@ -16,9 +16,9 @@ import { BodegasService } from '../bodegas/bodegas.service';
 export class NumerosMedidorService {
   constructor(
     @InjectRepository(NumeroMedidor)
-    private numerosMedidorRepository: Repository<NumeroMedidor>,
+    private readonly numerosMedidorRepository: Repository<NumeroMedidor>,
     @Inject(forwardRef(() => MaterialesService))
-    private materialesService: MaterialesService,
+    private readonly materialesService: MaterialesService,
     @Inject(forwardRef(() => BodegasService))
     private readonly bodegasService: BodegasService,
   ) {}
@@ -410,21 +410,22 @@ export class NumerosMedidorService {
   }
 
   async findByNumero(numeroMedidor: string): Promise<NumeroMedidor | null> {
-    // Normalizar el número para búsqueda case-insensitive
-    const numeroNormalizado = numeroMedidor.trim().toLowerCase();
+    const numeroNormalizado = this.normalizeNumero(numeroMedidor);
+    if (!numeroNormalizado) return null;
 
-    // Buscar todos y filtrar por normalización
-    const todos = await this.numerosMedidorRepository.find({
-      relations: [
-        'material',
-        'material.categoria',
-        'usuario',
-        'inventarioTecnico',
-        'instalacionMaterial',
-      ],
-    });
+    // Query case-insensitive (evita cargar toda la tabla)
+    const row = await this.numerosMedidorRepository
+      .createQueryBuilder('n')
+      .leftJoinAndSelect('n.material', 'material')
+      .leftJoinAndSelect('material.categoria', 'categoria')
+      .leftJoinAndSelect('n.usuario', 'usuario')
+      .leftJoinAndSelect('n.inventarioTecnico', 'inventarioTecnico')
+      .leftJoinAndSelect('n.instalacionMaterial', 'instalacionMaterial')
+      .where('LOWER(TRIM(n.numeroMedidor)) = :num', { num: numeroNormalizado })
+      .limit(1)
+      .getOne();
 
-    return todos.find((n) => n.numeroMedidor.trim().toLowerCase() === numeroNormalizado) || null;
+    return row ?? null;
   }
 
   async update(id: number, updateDto: UpdateNumeroMedidorDto): Promise<NumeroMedidor> {
@@ -494,9 +495,9 @@ export class NumerosMedidorService {
       numero.estado = EstadoNumeroMedidor.EN_INSTALACION;
       numero.instalacionId = instalacionId;
       numero.instalacionMaterialId = instalacionMaterialId;
-      // Limpiar asignación a técnico si estaba asignado
-      numero.inventarioTecnicoId = null;
-      numero.usuarioId = null;
+      // IMPORTANTE: No limpiar usuarioId/inventarioTecnicoId.
+      // Se conservan para permitir devolver el serial al técnico al revertir
+      // (p. ej. al eliminar material usado en instalación) y para trazabilidad.
       resultados.push(await this.numerosMedidorRepository.save(numero));
     }
 

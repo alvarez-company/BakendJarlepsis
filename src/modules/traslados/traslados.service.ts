@@ -17,6 +17,7 @@ import { BodegasService } from '../bodegas/bodegas.service';
 import { TipoMovimiento } from '../movimientos/movimiento-inventario.entity';
 import { AuditoriaService } from '../auditoria/auditoria.service';
 import { TipoEntidad } from '../auditoria/auditoria.entity';
+import type { AuditoriaEliminacion } from '../auditoria/auditoria.entity';
 import { NumerosMedidorService } from '../numeros-medidor/numeros-medidor.service';
 import { Bodega } from '../bodegas/bodega.entity';
 
@@ -743,16 +744,63 @@ export class TrasladosService {
       fechaActualizacion: traslado.fechaActualizacion,
     };
 
+    // Snapshot de números de medidor (para auditoría/restauración)
+    try {
+      if (traslado.numerosMedidor) {
+        let numerosMedidorArray: string[] = [];
+        if (typeof traslado.numerosMedidor === 'string') {
+          try {
+            numerosMedidorArray = JSON.parse(traslado.numerosMedidor);
+          } catch {
+            numerosMedidorArray = [];
+          }
+        } else if (Array.isArray(traslado.numerosMedidor)) {
+          numerosMedidorArray = traslado.numerosMedidor;
+        }
+        if (numerosMedidorArray.length > 0) {
+          const snapshot: any[] = [];
+          for (const numeroStr of numerosMedidorArray) {
+            try {
+              const n = await this.numerosMedidorService.findByNumero(numeroStr);
+              if (n) {
+                snapshot.push({
+                  numeroMedidorId: n.numeroMedidorId,
+                  materialId: n.materialId,
+                  numeroMedidor: n.numeroMedidor,
+                  estado: n.estado,
+                  inventarioTecnicoId: n.inventarioTecnicoId ?? null,
+                  instalacionMaterialId: n.instalacionMaterialId ?? null,
+                  usuarioId: n.usuarioId ?? null,
+                  instalacionId: n.instalacionId ?? null,
+                  bodegaId: n.bodegaId ?? null,
+                  observaciones: n.observaciones ?? null,
+                });
+              } else {
+                snapshot.push({ numeroMedidor: numeroStr, missing: true });
+              }
+            } catch {
+              snapshot.push({ numeroMedidor: numeroStr, error: true });
+            }
+          }
+          (datosEliminados as any).numerosMedidorSnapshot = snapshot;
+        }
+      }
+    } catch {
+      // no bloquear eliminación por auditoría
+    }
+
     // Si el traslado está completado, revertir todo
     if (traslado.trasladoEstado === EstadoTraslado.COMPLETADO) {
       try {
         // Revertir eliminando movimientos asociados (SALIDA + ENTRADA) del código del traslado.
         const codigoMovimiento =
           traslado.trasladoCodigo || traslado.identificadorUnico || `TRA-${traslado.trasladoId}`;
+        const movimientosEliminadosIds: number[] = [];
         try {
           const movimientosAsociados = await this.movimientosService.findByCodigo(codigoMovimiento);
           for (const movimiento of movimientosAsociados) {
             try {
+              movimientosEliminadosIds.push(movimiento.movimientoId);
               await this.movimientosService.remove(movimiento.movimientoId, usuarioId);
             } catch (error) {
               console.error(
@@ -763,6 +811,10 @@ export class TrasladosService {
           }
         } catch (error) {
           console.error('Error al buscar y eliminar movimientos asociados al traslado:', error);
+        }
+        if (movimientosEliminadosIds.length > 0) {
+          (datosEliminados as any).movimientosEliminadosIds = movimientosEliminadosIds;
+          (datosEliminados as any).codigoMovimiento = codigoMovimiento;
         }
 
         // Revertir números de medidor a la bodega de origen si el material es medidor
@@ -834,5 +886,57 @@ export class TrasladosService {
 
     // Eliminar el traslado
     await this.trasladosRepository.remove(traslado);
+  }
+
+  async restablecerDesdeAuditoria(
+    auditoria: AuditoriaEliminacion,
+    usuarioId: number,
+  ): Promise<{ ok: true; trasladoId: number; movimientosRestaurados: number[] }> {
+    const data: any = auditoria?.datosEliminados ?? null;
+    const trasladoId = Number(data?.trasladoId || data?.id || 0);
+    if (!Number.isFinite(trasladoId) || trasladoId <= 0) {
+      throw new BadRequestException('Auditoría inválida: no contiene trasladoId');
+    }
+
+    const existente = await this.trasladosRepository.findOne({ where: { trasladoId } as any });
+    if (existente) {
+      throw new BadRequestException(`El traslado ${trasladoId} ya existe; no se puede restablecer.`);
+    }
+
+    const trasladoNuevo = this.trasladosRepository.create({
+      ...data,
+      trasladoId,
+      fechaCreacion: data.fechaCreacion ? new Date(data.fechaCreacion) : undefined,
+      fechaActualizacion: data.fechaActualizacion ? new Date(data.fechaActualizacion) : undefined,
+    } as any);
+    await this.trasladosRepository.save(trasladoNuevo as any);
+
+    // Restaurar movimientos asociados (si fueron eliminados)
+    const movimientosIds: number[] = Array.isArray(data.movimientosEliminadosIds)
+      ? data.movimientosEliminadosIds.map((v: any) => Number(v)).filter((n: number) => Number.isFinite(n) && n > 0)
+      : [];
+    const codigoMovimiento = String(data.codigoMovimiento || data.trasladoCodigo || data.identificadorUnico || `TRA-${trasladoId}`);
+
+    let auditoriasMov: AuditoriaEliminacion[] = [];
+    if (movimientosIds.length > 0) {
+      auditoriasMov = await this.auditoriaService.findAll({
+        tipoEntidad: TipoEntidad.MOVIMIENTO,
+        entidadIds: movimientosIds,
+      });
+    } else if (codigoMovimiento) {
+      auditoriasMov = await this.auditoriaService.findMovimientosEliminadosPorCodigo(codigoMovimiento);
+    }
+
+    const restaurados: number[] = [];
+    for (const a of auditoriasMov) {
+      try {
+        const res = await this.movimientosService.restablecerDesdeAuditoria(a, usuarioId);
+        restaurados.push(res.movimientoId);
+      } catch (e) {
+        // continuar
+      }
+    }
+
+    return { ok: true, trasladoId, movimientosRestaurados: restaurados };
   }
 }
