@@ -104,10 +104,8 @@ import { isDevelopmentNodeEnv } from './common/utils/node-env';
           retryDelay: 2000,
           // Opciones para conexiones remotas: mantener conexión viva y timeout más tolerante
           extra: {
-            connectionLimit: 20, // Aumentado de 10 a 20 para manejar más conexiones simultáneas
-            connectTimeout: 60000, // 60 segundos para establecer conexión
-            acquireTimeout: 60000, // 60 segundos para adquirir conexión del pool
-            timeout: 60000, // 60 segundos para ejecutar queries
+            connectionLimit: 20,
+            connectTimeout: 60000,
             enableKeepAlive: true,
             keepAliveInitialDelay: 0,
             waitForConnections: true,
