@@ -300,6 +300,135 @@ export class InstalacionesMaterialesService {
     return materiales;
   }
 
+  /**
+   * Suma de cantidades consumidas en instalaciones por material (excluye desaprobados).
+   * Misma visibilidad por rol/sede que el listado de instalaciones.
+   */
+  async findTotalesPorMaterial(user?: any, vistaSedeId?: number): Promise<Record<number, number>> {
+    const { sql: whereExtra, params } = this.buildInstalacionMaterialTotalesWhere(user, vistaSedeId);
+    const sql = `
+      SELECT im.materialId AS materialId, SUM(im.cantidad) AS total
+      FROM instalaciones_materiales im
+      INNER JOIN instalaciones i ON i.instalacionId = im.instalacionId
+      WHERE (im.materialAprobado IS NULL OR im.materialAprobado = 1)
+      ${whereExtra}
+      GROUP BY im.materialId
+    `;
+    const rows = await this.instalacionMaterialRepository.query(sql, params);
+    const out: Record<number, number> = {};
+    for (const r of rows || []) {
+      const mid = Number(r.materialId);
+      if (!Number.isFinite(mid) || mid <= 0) continue;
+      out[mid] = Number(r.total || 0);
+    }
+    return out;
+  }
+
+  private buildInstalacionMaterialTotalesWhere(
+    user?: any,
+    vistaSedeId?: number,
+  ): { sql: string; params: any[] } {
+    const clauses: string[] = [];
+    const params: any[] = [];
+
+    const rolTipo = String(user?.usuarioRol?.rolTipo || user?.role || '').toLowerCase();
+    const esGlobal = !user || rolTipo === 'superadmin' || rolTipo === 'gerencia';
+    const rawSede = user?.usuarioSede;
+    const usuarioSede =
+      rawSede != null && rawSede !== '' && Number(rawSede) !== 0 ? Number(rawSede) : null;
+
+    let sedeScope: number | null = null;
+    const sid = vistaSedeId != null ? Number(vistaSedeId) : NaN;
+    if (Number.isFinite(sid) && sid > 0) {
+      sedeScope = sid;
+    } else if (
+      !esGlobal &&
+      (rolTipo === 'admin' || rolTipo === 'almacenista') &&
+      usuarioSede != null
+    ) {
+      sedeScope = usuarioSede;
+    }
+
+    if (rolTipo === 'tecnico' || rolTipo === 'soldador') {
+      if (user?.usuarioId) {
+        clauses.push(`EXISTS (
+          SELECT 1 FROM instalaciones_usuarios iu
+          WHERE iu.instalacionId = i.instalacionId AND iu.usuarioId = ?
+        )`);
+        params.push(Number(user.usuarioId));
+      } else {
+        clauses.push('1 = 0');
+      }
+    } else if (rolTipo === 'bodega-internas' || rolTipo === 'bodega-redes') {
+      if (user?.usuarioBodega) {
+        clauses.push('i.bodegaId = ?');
+        params.push(Number(user.usuarioBodega));
+      } else {
+        clauses.push('1 = 0');
+      }
+    } else if (rolTipo === 'admin-internas' && usuarioSede != null) {
+      clauses.push(`(
+        EXISTS (
+          SELECT 1 FROM bodegas b
+          WHERE b.bodegaId = i.bodegaId AND b.sedeId = ? AND b.bodegaTipo = 'internas'
+        )
+        OR (
+          i.bodegaId IS NULL
+          AND i.instalacionTipo = 'internas'
+          AND (
+            i.usuarioRegistra = ?
+            OR EXISTS (
+              SELECT 1 FROM usuarios ur
+              WHERE ur.usuarioId = i.usuarioRegistra AND ur.usuarioSede = ?
+            )
+          )
+        )
+      )`);
+      params.push(usuarioSede, Number(user.usuarioId), usuarioSede);
+    } else if (rolTipo === 'admin-redes' && usuarioSede != null) {
+      clauses.push(`(
+        EXISTS (
+          SELECT 1 FROM bodegas b
+          WHERE b.bodegaId = i.bodegaId AND b.sedeId = ? AND b.bodegaTipo = 'redes'
+        )
+        OR (
+          i.bodegaId IS NULL
+          AND i.instalacionTipo = 'redes'
+          AND (
+            i.usuarioRegistra = ?
+            OR EXISTS (
+              SELECT 1 FROM usuarios ur
+              WHERE ur.usuarioId = i.usuarioRegistra AND ur.usuarioSede = ?
+            )
+          )
+        )
+      )`);
+      params.push(usuarioSede, Number(user.usuarioId), usuarioSede);
+    } else if (sedeScope != null && sedeScope > 0) {
+      clauses.push(`(
+        EXISTS (
+          SELECT 1 FROM bodegas b
+          WHERE b.bodegaId = i.bodegaId AND b.sedeId = ?
+        )
+        OR EXISTS (
+          SELECT 1 FROM instalaciones_usuarios iu
+          INNER JOIN usuarios u ON u.usuarioId = iu.usuarioId
+          WHERE iu.instalacionId = i.instalacionId AND u.usuarioSede = ?
+        )
+        OR EXISTS (
+          SELECT 1 FROM usuarios ur
+          WHERE ur.usuarioId = i.usuarioRegistra AND ur.usuarioSede = ?
+        )
+      )`);
+      params.push(sedeScope, sedeScope, sedeScope);
+    }
+
+    if (clauses.length === 0) {
+      return { sql: '', params };
+    }
+    return { sql: ` AND ${clauses.join(' AND ')}`, params };
+  }
+
   async findAll(): Promise<InstalacionMaterial[]> {
     // No cargar la relación instalacion para evitar que TypeORM intente cargar cliente automáticamente
     return this.instalacionMaterialRepository.find({

@@ -3,6 +3,7 @@ import { TypeOrmModule } from '@nestjs/typeorm';
 import { TrasladosController } from './traslados.controller';
 import { TrasladosService } from './traslados.service';
 import { Traslado } from './traslado.entity';
+import { TransferenciaTecnico } from '../transferencias-tecnicos/transferencia-tecnico.entity';
 import { MovimientosModule } from '../movimientos/movimientos.module';
 import { MaterialesModule } from '../materiales/materiales.module';
 import { InventariosModule } from '../inventarios/inventarios.module';
@@ -15,7 +16,7 @@ import { UsersModule } from '../users/users.module';
 
 @Module({
   imports: [
-    TypeOrmModule.forFeature([Traslado]),
+    TypeOrmModule.forFeature([Traslado, TransferenciaTecnico]),
     MovimientosModule,
     MaterialesModule,
     InventariosModule,

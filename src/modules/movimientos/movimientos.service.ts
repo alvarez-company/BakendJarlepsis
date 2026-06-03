@@ -1487,31 +1487,171 @@ export class MovimientosService {
     }
   }
 
+  /** Movimientos de traslado bodega→bodega (también generan filas en movimientos_inventario). */
+  private static readonly SQL_FRAG_IS_TRASLADO_BODEGA = `(
+    LOWER(COALESCE(m.movimientoObservaciones, '')) LIKE '%traslado%'
+    OR UPPER(COALESCE(m.movimientoCodigo, '')) LIKE 'TRA-%'
+    OR UPPER(COALESCE(m.identificadorUnico, '')) LIKE 'TRA-%'
+  )`;
+
+  /** Salidas por asignación bodega→técnico. */
+  private static readonly SQL_FRAG_IS_ASIGNACION = `(
+    UPPER(COALESCE(m.movimientoCodigo, '')) LIKE 'SALIDA-ASIG%'
+    OR UPPER(COALESCE(m.movimientoCodigo, '')) LIKE 'SALIDA-TECNICO%'
+    OR LOWER(COALESCE(m.movimientoObservaciones, '')) LIKE '%asignación de material%'
+    OR LOWER(COALESCE(m.movimientoObservaciones, '')) LIKE '%asignacion de material%'
+  )`;
+
+  /** Retorno técnico→bodega (par salida+entrada; no es entrada/salida operativa). */
+  private static readonly SQL_FRAG_IS_RETORNO_TECNICO = `(
+    UPPER(COALESCE(m.movimientoCodigo, '')) LIKE 'TRASLADO-TECNICO-BODEGA%'
+    OR LOWER(COALESCE(m.movimientoObservaciones, '')) LIKE '%retorno de materiales de técnico%'
+  )`;
+
+  /** Traslado técnico→técnico (trazabilidad; stock ya se movió en inventario_tecnicos). */
+  private static readonly SQL_FRAG_IS_TRASLADO_TECNICO = `(
+    LOWER(COALESCE(m.movimientoObservaciones, '')) LIKE '%traslado entre técnicos%'
+  )`;
+
+  private buildMovimientoSedeScopeClause(
+    tableAlias: string,
+    sedeId: number,
+  ): { sql: string; params: any[] } {
+    const a = tableAlias;
+    return {
+      sql: `(
+        EXISTS (
+          SELECT 1 FROM inventarios i
+          INNER JOIN bodegas b ON i.bodegaId = b.bodegaId
+          WHERE i.inventarioId = ${a}.inventarioId AND b.sedeId = ?
+        )
+        OR EXISTS (
+          SELECT 1 FROM users u
+          WHERE u.usuarioId = ${a}.tecnicoOrigenId AND u.usuarioSede = ?
+        )
+      )`,
+      params: [sedeId, sedeId],
+    };
+  }
+
+  private buildMovimientoTotalesWhereClauses(
+    user?: any,
+    vistaSedeId?: number,
+  ): { sql: string; params: any[] } {
+    const clauses: string[] = [`m.movimientoEstado = 'completada'`];
+    const params: any[] = [];
+
+    const rolTipo = String(user?.usuarioRol?.rolTipo || user?.role || '').toLowerCase();
+    const esGlobal = !user || rolTipo === 'superadmin' || rolTipo === 'gerencia';
+
+    let sedeScope: number | null = null;
+    const sid = vistaSedeId != null ? Number(vistaSedeId) : NaN;
+    if (Number.isFinite(sid) && sid > 0) {
+      sedeScope = sid;
+    } else if (
+      !esGlobal &&
+      (rolTipo === 'admin' || rolTipo === 'almacenista') &&
+      user?.usuarioSede
+    ) {
+      sedeScope = Number(user.usuarioSede);
+    }
+
+    if (sedeScope != null && sedeScope > 0) {
+      const scope = this.buildMovimientoSedeScopeClause('m', sedeScope);
+      clauses.push(scope.sql);
+      params.push(...scope.params);
+    } else if (!esGlobal) {
+      const roleWhere = this.buildMovimientoRoleWhereSql('m', user);
+      if (roleWhere.sql) {
+        clauses.push(roleWhere.sql.replace(/^\s*WHERE\s+/i, ''));
+        params.push(...roleWhere.params);
+      }
+    }
+
+    return { sql: ` WHERE ${clauses.join(' AND ')}`, params };
+  }
+
   /**
    * Totales por material y tipo (misma visibilidad que el listado). Para tablas tipo Stock sin traer todos los movimientos.
+   * Excluye traslados y asignaciones de entradas/salidas puras; solo movimientos completados.
    */
   async findTotalesPorMaterial(
     user?: any,
-  ): Promise<Record<number, { entrada: number; salida: number; devolucion: number }>> {
-    const roleWhere = this.buildMovimientoRoleWhereSql('m', user);
-    const whereBase = roleWhere.sql || ' WHERE 1=1';
+    vistaSedeId?: number,
+  ): Promise<
+    Record<number, { entrada: number; salida: number; devolucion: number; asignacion: number }>
+  > {
+    const trasladoBodega = MovimientosService.SQL_FRAG_IS_TRASLADO_BODEGA;
+    const asignacion = MovimientosService.SQL_FRAG_IS_ASIGNACION;
+    const retornoTecnico = MovimientosService.SQL_FRAG_IS_RETORNO_TECNICO;
+    const trasladoTecnico = MovimientosService.SQL_FRAG_IS_TRASLADO_TECNICO;
+
+    const { sql: whereBase, params } = this.buildMovimientoTotalesWhereClauses(user, vistaSedeId);
     const sql = `
-      SELECT m.materialId AS materialId, m.movimientoTipo AS movimientoTipo, SUM(m.movimientoCantidad) AS total
+      SELECT m.materialId AS materialId,
+        SUM(CASE
+          WHEN m.movimientoTipo = 'entrada'
+            AND NOT ${trasladoBodega}
+            AND NOT ${retornoTecnico}
+          THEN m.movimientoCantidad ELSE 0 END) AS entrada,
+        SUM(CASE
+          WHEN m.movimientoTipo = 'salida'
+            AND NOT ${trasladoBodega}
+            AND NOT ${asignacion}
+            AND NOT ${retornoTecnico}
+            AND NOT ${trasladoTecnico}
+          THEN m.movimientoCantidad ELSE 0 END) AS salida,
+        SUM(CASE
+          WHEN m.movimientoTipo = 'devolucion'
+          THEN m.movimientoCantidad ELSE 0 END) AS devolucion,
+        SUM(CASE
+          WHEN m.movimientoTipo = 'salida' AND ${asignacion}
+          THEN m.movimientoCantidad ELSE 0 END) AS asignacion
       FROM movimientos_inventario m
       ${whereBase}
-      GROUP BY m.materialId, m.movimientoTipo
+      GROUP BY m.materialId
     `;
-    const rows = await this.movimientosRepository.query(sql, roleWhere.params);
-    const out: Record<number, { entrada: number; salida: number; devolucion: number }> = {};
+    const rows = await this.movimientosRepository.query(sql, params);
+    const out: Record<
+      number,
+      { entrada: number; salida: number; devolucion: number; asignacion: number }
+    > = {};
     for (const r of rows || []) {
       const mid = Number(r.materialId);
       if (!Number.isFinite(mid) || mid <= 0) continue;
-      const tipo = String(r.movimientoTipo || '').toLowerCase();
-      const total = Number(r.total || 0);
-      if (!out[mid]) out[mid] = { entrada: 0, salida: 0, devolucion: 0 };
-      if (tipo === 'entrada') out[mid].entrada += total;
-      else if (tipo === 'salida') out[mid].salida += total;
-      else if (tipo === 'devolucion') out[mid].devolucion += total;
+      out[mid] = {
+        entrada: Number(r.entrada || 0),
+        salida: Number(r.salida || 0),
+        devolucion: Number(r.devolucion || 0),
+        asignacion: Number(r.asignacion || 0),
+      };
+    }
+    return out;
+  }
+
+  /**
+   * Cantidades retornadas de técnico a bodega (una línea por material, lado salida).
+   */
+  async findTotalesRetornoTecnicoPorMaterial(
+    user?: any,
+    vistaSedeId?: number,
+  ): Promise<Record<number, number>> {
+    const retornoTecnico = MovimientosService.SQL_FRAG_IS_RETORNO_TECNICO;
+    const { sql: whereBase, params } = this.buildMovimientoTotalesWhereClauses(user, vistaSedeId);
+    const sql = `
+      SELECT m.materialId AS materialId, SUM(m.movimientoCantidad) AS total
+      FROM movimientos_inventario m
+      ${whereBase}
+        AND m.movimientoTipo = 'salida'
+        AND ${retornoTecnico}
+      GROUP BY m.materialId
+    `;
+    const rows = await this.movimientosRepository.query(sql, params);
+    const out: Record<number, number> = {};
+    for (const r of rows || []) {
+      const mid = Number(r.materialId);
+      if (!Number.isFinite(mid) || mid <= 0) continue;
+      out[mid] = Number(r.total || 0);
     }
     return out;
   }

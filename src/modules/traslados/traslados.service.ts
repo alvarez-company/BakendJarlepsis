@@ -20,12 +20,15 @@ import { TipoEntidad } from '../auditoria/auditoria.entity';
 import type { AuditoriaEliminacion } from '../auditoria/auditoria.entity';
 import { NumerosMedidorService } from '../numeros-medidor/numeros-medidor.service';
 import { Bodega } from '../bodegas/bodega.entity';
+import { TransferenciaTecnico } from '../transferencias-tecnicos/transferencia-tecnico.entity';
 
 @Injectable()
 export class TrasladosService {
   constructor(
     @InjectRepository(Traslado)
     private trasladosRepository: Repository<Traslado>,
+    @InjectRepository(TransferenciaTecnico)
+    private transferenciasTecnicosRepository: Repository<TransferenciaTecnico>,
     @Inject(forwardRef(() => MovimientosService))
     private movimientosService: MovimientosService,
     @Inject(forwardRef(() => MaterialesService))
@@ -339,13 +342,20 @@ export class TrasladosService {
    * Suma de cantidades por material (no cancelados). Opcional `vistaSedeId` para alinear con filtros por centro en UI.
    */
   async findTotalesPorMaterial(user?: any, vistaSedeId?: number): Promise<Record<number, number>> {
+    const out: Record<number, number> = {};
+
+    const merge = (materialId: number, qty: number) => {
+      if (!Number.isFinite(materialId) || materialId <= 0 || !Number.isFinite(qty) || qty <= 0) return;
+      out[materialId] = (out[materialId] || 0) + qty;
+    };
+
     const qb = this.trasladosRepository
       .createQueryBuilder('t')
       .leftJoin('t.bodegaOrigen', 'bo')
       .leftJoin('t.bodegaDestino', 'bd')
       .select('t.materialId', 'materialId')
       .addSelect('COALESCE(SUM(t.trasladoCantidad), 0)', 'total')
-      .where('t.trasladoEstado != :cancelado', { cancelado: EstadoTraslado.CANCELADO });
+      .where('t.trasladoEstado = :completado', { completado: EstadoTraslado.COMPLETADO });
 
     const rolTipo = (user?.usuarioRol?.rolTipo || user?.role || '').toLowerCase();
     const esSuperadminOGerencia = rolTipo === 'superadmin' || rolTipo === 'gerencia';
@@ -382,12 +392,32 @@ export class TrasladosService {
 
     qb.groupBy('t.materialId');
     const rows = await qb.getRawMany<{ materialId: number; total: string }>();
-    const out: Record<number, number> = {};
     for (const r of rows) {
-      const mid = Number(r.materialId);
-      if (!Number.isFinite(mid)) continue;
-      out[mid] = Number(r.total || 0);
+      merge(Number(r.materialId), Number(r.total || 0));
     }
+
+    const retornos = await this.movimientosService.findTotalesRetornoTecnicoPorMaterial(
+      user,
+      vistaSedeId,
+    );
+    for (const [mid, qty] of Object.entries(retornos)) {
+      merge(Number(mid), Number(qty));
+    }
+
+    const ttQb = this.transferenciasTecnicosRepository
+      .createQueryBuilder('tt')
+      .leftJoin('users', 'uo', 'uo.usuarioId = tt.usuarioOrigenId');
+    if (Number.isFinite(sidRaw) && sidRaw > 0) {
+      ttQb.andWhere('uo.usuarioSede = :vistaSede', { vistaSede: sidRaw });
+    }
+    const transferencias = await ttQb.getMany();
+    for (const tt of transferencias) {
+      const materiales = Array.isArray(tt.materiales) ? tt.materiales : [];
+      for (const m of materiales) {
+        merge(Number(m.materialId), Number(m.cantidad || 0));
+      }
+    }
+
     return out;
   }
 

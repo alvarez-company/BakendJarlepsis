@@ -64,8 +64,15 @@ export class MovimientosController {
   @Get('totales-por-material')
   @Roles(...ROLES_VER_MATERIALES_INVENTARIO)
   @ApiOperation({ summary: 'Totales de movimientos por material y tipo (misma visibilidad que el listado)' })
-  async findTotalesPorMaterial(@Request() req?: any) {
-    return { data: await this.movimientosService.findTotalesPorMaterial(req?.user) };
+  @ApiQuery({ name: 'vistaSedeId', required: false, type: Number })
+  async findTotalesPorMaterial(
+    @Request() req?: any,
+    @Query('vistaSedeId') vistaSedeId?: string,
+  ) {
+    const raw = vistaSedeId?.trim();
+    const sid = raw ? Number(raw) : NaN;
+    const vista = Number.isFinite(sid) && sid > 0 ? sid : undefined;
+    return { data: await this.movimientosService.findTotalesPorMaterial(req?.user, vista) };
   }
 
   @Get('grupos')

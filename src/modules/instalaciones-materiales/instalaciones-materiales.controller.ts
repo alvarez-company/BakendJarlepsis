@@ -9,8 +9,9 @@ import {
   Patch,
   UseGuards,
   Req,
+  Query,
 } from '@nestjs/common';
-import { ApiTags, ApiBearerAuth, ApiOperation } from '@nestjs/swagger';
+import { ApiTags, ApiBearerAuth, ApiOperation, ApiQuery } from '@nestjs/swagger';
 import { InstalacionesMaterialesService } from './instalaciones-materiales.service';
 import {
   CreateInstalacionMaterialDto,
@@ -25,6 +26,7 @@ import {
   ROLES_VER_INVENTARIO_TECNICO,
   ROLES_VER_CATALOGOS_ADMIN,
   ROLES_APROBAR_ASIGNACIONES,
+  ROLES_VER_MATERIALES_INVENTARIO,
 } from '../../common/constants/roles.constants';
 
 @ApiTags('instalaciones-materiales')
@@ -64,6 +66,20 @@ export class InstalacionesMaterialesController {
   @ApiOperation({ summary: 'Obtener materiales utilizados en una instalación específica' })
   findByInstalacion(@Param('instalacionId') instalacionId: string) {
     return this.service.findByInstalacion(+instalacionId);
+  }
+
+  @Get('totales-por-material')
+  @Roles(...ROLES_VER_MATERIALES_INVENTARIO)
+  @ApiOperation({ summary: 'Suma de materiales consumidos en instalaciones por material' })
+  @ApiQuery({ name: 'vistaSedeId', required: false, type: Number })
+  async findTotalesPorMaterial(
+    @Req() req: { user?: any },
+    @Query('vistaSedeId') vistaSedeId?: string,
+  ) {
+    const raw = vistaSedeId?.trim();
+    const sid = raw ? Number(raw) : NaN;
+    const vista = Number.isFinite(sid) && sid > 0 ? sid : undefined;
+    return { data: await this.service.findTotalesPorMaterial(req?.user, vista) };
   }
 
   @Get('material/:materialId')

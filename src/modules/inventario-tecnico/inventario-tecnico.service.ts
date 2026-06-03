@@ -91,7 +91,6 @@ export class InventarioTecnicoService {
     const usuarioAsignador = dto.usuarioAsignadorId || usuarioId;
 
     let bodegaIdOrigen: number | null = null;
-    let esOrigenCentro = false;
 
     if (dto.inventarioId) {
       try {
@@ -148,10 +147,9 @@ export class InventarioTecnicoService {
         }
         const bodegaId = inventario.bodegaId ?? inventario.bodega?.bodegaId;
         bodegaIdOrigen = bodegaId != null ? Number(bodegaId) : null;
-        esOrigenCentro = String(inventario?.bodega?.bodegaTipo || '').toLowerCase() === 'centro';
 
-        // Desde bodega centro: no descontar stock del centro; solo incrementa inventario del técnico.
-        if (bodegaId && !esOrigenCentro) {
+        // Descontar stock de la bodega origen (incluye bodega centro operativo).
+        if (bodegaId) {
           const salidaCodigo = idempotencyKey
             ? `SALIDA-ASIG-${idempotencyKey}`
             : `SALIDA-TECNICO-${usuarioId}-${Date.now()}`;
