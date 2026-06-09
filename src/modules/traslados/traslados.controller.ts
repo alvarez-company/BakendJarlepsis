@@ -52,6 +52,15 @@ export class TrasladosController {
     return this.trasladosService.findAll(paginationDto, req?.user);
   }
 
+  @Get('unificado')
+  @Roles(...ROLES_VER_TRASLADOS)
+  @ApiOperation({
+    summary: 'Listado completo: traslados bodega + transferencias técnico→técnico',
+  })
+  findAllUnificado(@Request() req?: any) {
+    return this.trasladosService.findAllFetchAllPages(req?.user);
+  }
+
   @Get('totales-por-material')
   @Roles(...ROLES_VER_TRASLADOS)
   @ApiOperation({ summary: 'Suma de traslados por material (excluye cancelados)' })

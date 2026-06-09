@@ -468,6 +468,9 @@ export class NumerosMedidorService {
       numero.estado = EstadoNumeroMedidor.ASIGNADO_TECNICO;
       numero.usuarioId = usuarioId;
       numero.inventarioTecnicoId = inventarioTecnicoId;
+      numero.bodegaId = null;
+      numero.instalacionId = null;
+      numero.instalacionMaterialId = null;
       resultados.push(await this.numerosMedidorRepository.save(numero));
     }
 

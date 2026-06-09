@@ -21,6 +21,7 @@ import type { AuditoriaEliminacion } from '../auditoria/auditoria.entity';
 import { NumerosMedidorService } from '../numeros-medidor/numeros-medidor.service';
 import { Bodega } from '../bodegas/bodega.entity';
 import { TransferenciaTecnico } from '../transferencias-tecnicos/transferencia-tecnico.entity';
+import { UsersService } from '../users/users.service';
 
 @Injectable()
 export class TrasladosService {
@@ -41,6 +42,8 @@ export class TrasladosService {
     private auditoriaService: AuditoriaService,
     @Inject(forwardRef(() => NumerosMedidorService))
     private numerosMedidorService: NumerosMedidorService,
+    @Inject(forwardRef(() => UsersService))
+    private usersService: UsersService,
   ) {}
 
   private async generarIdentificadorUnico(): Promise<string> {
@@ -197,9 +200,24 @@ export class TrasladosService {
         const bodegasPermitidas = await this.bodegasService.findAll(user);
         const bodegaIds = bodegasPermitidas.map((b) => b.bodegaId);
         if (bodegaIds.length > 0) {
-          queryBuilder
-            .andWhere('traslado.bodegaOrigenId IN (:...bodegaIds)', { bodegaIds })
-            .andWhere('traslado.bodegaDestinoId IN (:...bodegaIds)', { bodegaIds });
+          queryBuilder.andWhere(
+            new Brackets((qb) => {
+              qb.where('traslado.bodegaOrigenId IN (:...bodegaIds)', { bodegaIds }).orWhere(
+                'traslado.bodegaDestinoId IN (:...bodegaIds)',
+                { bodegaIds },
+              );
+            }),
+          );
+        } else if (user.usuarioSede) {
+          const sid = Number(user.usuarioSede);
+          queryBuilder.andWhere(
+            new Brackets((qb) => {
+              qb.where('bodegaOrigenSede.sedeId = :admSede', { admSede: sid }).orWhere(
+                'bodegaDestinoSede.sedeId = :admSede',
+                { admSede: sid },
+              );
+            }),
+          );
         } else {
           queryBuilder.andWhere('1 = 0');
         }
@@ -421,6 +439,79 @@ export class TrasladosService {
     return out;
   }
 
+  /** Transferencias técnico→técnico como filas compatibles con el listado de traslados. */
+  private async findTransferenciasTecnicosAsTraslados(user?: any): Promise<Traslado[]> {
+    const rolTipo = (user?.usuarioRol?.rolTipo || user?.role || '').toLowerCase();
+    const esSuperadminOGerencia = rolTipo === 'superadmin' || rolTipo === 'gerencia';
+
+    const qb = this.transferenciasTecnicosRepository
+      .createQueryBuilder('tt')
+      .orderBy('tt.fechaCreacion', 'DESC');
+
+    if (user && !esSuperadminOGerencia && user.usuarioSede) {
+      const sid = Number(user.usuarioSede);
+      qb.leftJoin('users', 'uo', 'uo.usuarioId = tt.usuarioOrigenId')
+        .leftJoin('users', 'ud', 'ud.usuarioId = tt.usuarioDestinoId')
+        .andWhere(
+          new Brackets((q) => {
+            q.where('uo.usuarioSede = :ttSede', { ttSede: sid }).orWhere('ud.usuarioSede = :ttSede', {
+              ttSede: sid,
+            });
+          }),
+        );
+    }
+
+    const transferencias = await qb.getMany();
+    if (transferencias.length === 0) return [];
+
+    const userIds = new Set<number>();
+    for (const tt of transferencias) {
+      userIds.add(tt.usuarioOrigenId);
+      userIds.add(tt.usuarioDestinoId);
+    }
+
+    const nombresPorUsuario = new Map<number, string>();
+    await Promise.all(
+      [...userIds].map(async (uid) => {
+        try {
+          const u = await this.usersService.findOne(uid, user);
+          const nombre = [u?.usuarioNombre, u?.usuarioApellido].filter(Boolean).join(' ').trim();
+          nombresPorUsuario.set(uid, nombre || `Usuario ${uid}`);
+        } catch {
+          nombresPorUsuario.set(uid, `Usuario ${uid}`);
+        }
+      }),
+    );
+
+    const filas: Traslado[] = [];
+    for (const tt of transferencias) {
+      const origenNombre = nombresPorUsuario.get(tt.usuarioOrigenId) || `Usuario ${tt.usuarioOrigenId}`;
+      const destinoNombre =
+        nombresPorUsuario.get(tt.usuarioDestinoId) || `Usuario ${tt.usuarioDestinoId}`;
+      const materiales = Array.isArray(tt.materiales) ? tt.materiales : [];
+      for (const m of materiales) {
+        filas.push({
+          trasladoId: tt.transferenciaTecnicoId,
+          materialId: Number(m.materialId),
+          bodegaOrigenId: 0,
+          bodegaDestinoId: 0,
+          trasladoCantidad: Number(m.cantidad || 0),
+          trasladoEstado: EstadoTraslado.COMPLETADO,
+          trasladoCodigo: tt.codigo,
+          identificadorUnico: `TRA-TT-${tt.transferenciaTecnicoId}`,
+          numerosMedidor: m.numerosMedidor,
+          usuarioId: tt.usuarioAsignadorId ?? tt.usuarioOrigenId,
+          numeroOrden: tt.numeroOrden ?? undefined,
+          fechaCreacion: tt.fechaCreacion,
+          fechaActualizacion: tt.fechaCreacion,
+          bodegaOrigen: { bodegaNombre: `Técnico: ${origenNombre}` } as any,
+          bodegaDestino: { bodegaNombre: `Técnico: ${destinoNombre}` } as any,
+        } as Traslado);
+      }
+    }
+    return filas;
+  }
+
   async findAllFetchAllPages(user?: any): Promise<Traslado[]> {
     const PAGE_SIZE = 50;
     const PAGES_PER_WINDOW = 20;
@@ -444,7 +535,10 @@ export class TrasladosService {
       }
     }
 
-    return acc;
+    const transferenciasTecnicos = await this.findTransferenciasTecnicosAsTraslados(user);
+    return [...acc, ...transferenciasTecnicos].sort(
+      (a, b) => new Date(b.fechaCreacion).getTime() - new Date(a.fechaCreacion).getTime(),
+    );
   }
 
   async findOne(id: number, user?: any): Promise<Traslado> {
@@ -473,7 +567,7 @@ export class TrasladosService {
         const bodegasPermitidas = await this.bodegasService.findAll(user);
         const bodegaIds = new Set(bodegasPermitidas.map((b) => b.bodegaId));
         const permitido =
-          bodegaIds.has(traslado.bodegaOrigenId) && bodegaIds.has(traslado.bodegaDestinoId);
+          bodegaIds.has(traslado.bodegaOrigenId) || bodegaIds.has(traslado.bodegaDestinoId);
         if (!permitido) {
           throw new NotFoundException(`Traslado con ID ${id} no encontrado`);
         }

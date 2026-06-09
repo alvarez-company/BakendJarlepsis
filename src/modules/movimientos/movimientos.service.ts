@@ -668,10 +668,11 @@ export class MovimientosService {
         } as any);
       }
 
-      // Manejar números de medidor si se proporcionan
+      const movimientoCompletado = await this.resolveMovimientoCompletado(movimientoGuardado);
+
+      // Manejar números de medidor solo si el movimiento impacta inventario (no auditoría pendiente)
       try {
-        // Si se proporcionan números de medidor, procesarlos (el servicio marcará automáticamente el material como medidor)
-        if (numerosMedidorInput.length > 0) {
+        if (numerosMedidorInput.length > 0 && movimientoCompletado) {
           const tipoMovimiento = createMovimientoDto.movimientoTipo;
           const esEntrada = tipoMovimiento === TipoMovimiento.ENTRADA;
           const esSalida = tipoMovimiento === TipoMovimiento.SALIDA;
@@ -808,40 +809,6 @@ export class MovimientosService {
           `Error al registrar números de medidor: ${error instanceof Error ? error.message : String(error)}`,
         );
       }
-
-      // Ajustar stock según el tipo de movimiento (solo si el movimiento está completado)
-      // No ajustar stock para movimientos pendientes (como las salidas automáticas)
-      // Importante: en algunas BD legacy `movimientoEstado` es TINYINT (default 1),
-      // mientras que en código existe enum string (pendiente/completada/cancelada).
-      // Para no "perder" stock, tratamos como completada cuando:
-      // - estadoMovimientoId apunta a un estado 'completada'
-      // - movimientoEstado es 'completada'
-      // - movimientoEstado es numérico 1 (legacy: completada)
-      const movimientoCompletado = await (async (): Promise<boolean> => {
-        const raw = (movimientoGuardado as any)?.movimientoEstado;
-        if (raw == null) return true; // compat: si no viene, asumir completada
-        if (typeof raw === 'number') return raw === 1;
-        const rawNum = Number(raw);
-        if (Number.isFinite(rawNum)) return rawNum === 1;
-        const rawStr = String(raw).toLowerCase();
-        if (rawStr === EstadoMovimiento.COMPLETADA) return true;
-
-        const estadoId = (movimientoGuardado as any)?.estadoMovimientoId;
-        if (estadoId != null && Number.isFinite(Number(estadoId))) {
-          try {
-            const row = await this.movimientosRepository.manager.query<
-              Array<{ estadoCodigo: string }>
-            >(`SELECT estadoCodigo FROM estados_movimiento WHERE estadoMovimientoId = ? LIMIT 1`, [
-              Number(estadoId),
-            ]);
-            const codigo = String(row?.[0]?.estadoCodigo || '').toLowerCase();
-            return codigo === EstadoMovimiento.COMPLETADA;
-          } catch {
-            // ignorar
-          }
-        }
-        return false;
-      })();
 
       if (movimientoCompletado) {
         const tipoMovimiento = createMovimientoDto.movimientoTipo;
@@ -1035,6 +1002,34 @@ export class MovimientosService {
     // La sincronización ya se hace dentro de ajustarStock, pero la dejamos explícita aquí por claridad
   }
 
+  /** Movimientos pendientes (p. ej. trazabilidad T→T) no deben tocar stock ni seriales. */
+  private async resolveMovimientoCompletado(movimientoGuardado: MovimientoInventario): Promise<boolean> {
+    const raw = (movimientoGuardado as any)?.movimientoEstado;
+    if (raw == null) return true;
+    if (typeof raw === 'number') return raw === 1;
+    const rawNum = Number(raw);
+    if (Number.isFinite(rawNum)) return rawNum === 1;
+    const rawStr = String(raw).toLowerCase();
+    if (rawStr === EstadoMovimiento.COMPLETADA || rawStr === 'completada') return true;
+    if (rawStr === EstadoMovimiento.PENDIENTE || rawStr === 'pendiente') return false;
+    if (rawStr === EstadoMovimiento.CANCELADA || rawStr === 'cancelada') return false;
+
+    const estadoId = (movimientoGuardado as any)?.estadoMovimientoId;
+    if (estadoId != null && Number.isFinite(Number(estadoId))) {
+      try {
+        const row = await this.movimientosRepository.manager.query<Array<{ estadoCodigo: string }>>(
+          `SELECT estadoCodigo FROM estados_movimiento WHERE estadoMovimientoId = ? LIMIT 1`,
+          [Number(estadoId)],
+        );
+        const codigo = String(row?.[0]?.estadoCodigo || '').toLowerCase();
+        return codigo === EstadoMovimiento.COMPLETADA || codigo === 'completada';
+      } catch {
+        // ignorar
+      }
+    }
+    return false;
+  }
+
   private async ajustarInventarioTecnicoMovimiento(
     materialId: number,
     tipo: TipoMovimiento,
@@ -1087,83 +1082,123 @@ export class MovimientosService {
    * Fragmento SQL de acceso por rol (misma semántica que el listado paginado).
    * @param tableAlias alias de `movimientos_inventario` (ej. `movimientos_inventario` o `m`)
    */
+  private buildMovimientoInventarioBodegaClause(
+    tableAlias: string,
+    opts: { sedeId?: number; bodegaTipo?: string; bodegaId?: number },
+  ): { frag: string; params: any[] } {
+    const a = tableAlias;
+    if (opts.bodegaId != null && Number(opts.bodegaId) > 0) {
+      const tipoSql = opts.bodegaTipo ? ` AND (b.bodegaTipo = ? OR b.bodegaId = ?)` : ` AND b.bodegaId = ?`;
+      const params = opts.bodegaTipo
+        ? [opts.bodegaTipo, Number(opts.bodegaId)]
+        : [Number(opts.bodegaId)];
+      return {
+        frag: `EXISTS (
+          SELECT 1 FROM inventarios i
+          INNER JOIN bodegas b ON i.bodegaId = b.bodegaId
+          WHERE i.inventarioId = ${a}.inventarioId${tipoSql}
+        )`,
+        params,
+      };
+    }
+    const tipoSql = opts.bodegaTipo ? ` AND b.bodegaTipo = ?` : '';
+    const params: any[] = opts.sedeId != null ? [opts.sedeId] : [];
+    if (opts.bodegaTipo) params.push(opts.bodegaTipo);
+    return {
+      frag: `EXISTS (
+        SELECT 1 FROM inventarios i
+        INNER JOIN bodegas b ON i.bodegaId = b.bodegaId
+        WHERE i.inventarioId = ${a}.inventarioId AND b.sedeId = ?${tipoSql}
+      )`,
+      params,
+    };
+  }
+
+  private buildMovimientoTecnicoOrigenSedeClause(
+    tableAlias: string,
+    sedeId: number,
+  ): { frag: string; params: any[] } {
+    return {
+      frag: `EXISTS (
+        SELECT 1 FROM users u
+        WHERE u.usuarioId = ${tableAlias}.tecnicoOrigenId AND u.usuarioSede = ?
+      )`,
+      params: [sedeId],
+    };
+  }
+
+  private buildMovimientoTecnicoOrigenBodegaClause(
+    tableAlias: string,
+    bodegaId: number,
+  ): { frag: string; params: any[] } {
+    return {
+      frag: `EXISTS (
+        SELECT 1 FROM users u
+        INNER JOIN bodegas b ON b.bodegaId = ?
+        WHERE u.usuarioId = ${tableAlias}.tecnicoOrigenId AND u.usuarioSede = b.sedeId
+      )`,
+      params: [bodegaId],
+    };
+  }
+
+  private combineMovimientoWhereOr(clauses: { frag: string; params: any[] }[]): {
+    sql: string;
+    params: any[];
+  } {
+    if (!clauses.length) return { sql: '', params: [] };
+    return {
+      sql: ` WHERE (${clauses.map((c) => c.frag).join(' OR ')})`,
+      params: clauses.flatMap((c) => c.params),
+    };
+  }
+
   private buildMovimientoRoleWhereSql(
     tableAlias: string,
     user?: any,
   ): { sql: string; params: any[] } {
     const a = tableAlias;
     if (!user) return { sql: '', params: [] };
-    const rolTipo = user.usuarioRol?.rolTipo || user.role;
+    const rolTipo = String(user.usuarioRol?.rolTipo || user.role || '').toLowerCase();
 
     if (rolTipo === 'superadmin' || rolTipo === 'gerencia') {
       return { sql: '', params: [] };
     }
 
-    if (rolTipo === 'admin' && user.usuarioSede) {
-      return {
-        sql: ` WHERE EXISTS (
-                SELECT 1 FROM inventarios i
-                INNER JOIN bodegas b ON i.bodegaId = b.bodegaId
-                WHERE i.inventarioId = ${a}.inventarioId
-                  AND b.sedeId = ?
-              )`,
-        params: [user.usuarioSede],
-      };
+    const rawSede = user.usuarioSede;
+    const usuarioSede =
+      rawSede != null && rawSede !== '' && Number(rawSede) !== 0 ? Number(rawSede) : null;
+
+    if ((rolTipo === 'admin' || rolTipo === 'almacenista') && usuarioSede != null) {
+      return this.combineMovimientoWhereOr([
+        this.buildMovimientoInventarioBodegaClause(a, { sedeId: usuarioSede }),
+        this.buildMovimientoTecnicoOrigenSedeClause(a, usuarioSede),
+      ]);
     }
-    if (rolTipo === 'almacenista' && user.usuarioSede) {
-      return {
-        sql: ` WHERE EXISTS (
-                SELECT 1 FROM inventarios i
-                INNER JOIN bodegas b ON i.bodegaId = b.bodegaId
-                WHERE i.inventarioId = ${a}.inventarioId
-                  AND b.sedeId = ?
-              )`,
-        params: [user.usuarioSede],
-      };
+    if (rolTipo === 'admin-internas' && usuarioSede != null) {
+      return this.combineMovimientoWhereOr([
+        this.buildMovimientoInventarioBodegaClause(a, { sedeId: usuarioSede, bodegaTipo: 'internas' }),
+        this.buildMovimientoTecnicoOrigenSedeClause(a, usuarioSede),
+      ]);
     }
-    if (rolTipo === 'admin-internas' && user.usuarioSede) {
-      return {
-        sql: ` WHERE EXISTS (
-                SELECT 1 FROM inventarios i
-                INNER JOIN bodegas b ON i.bodegaId = b.bodegaId
-                WHERE i.inventarioId = ${a}.inventarioId
-                  AND b.sedeId = ? AND b.bodegaTipo = 'internas'
-              )`,
-        params: [user.usuarioSede],
-      };
+    if (rolTipo === 'admin-redes' && usuarioSede != null) {
+      return this.combineMovimientoWhereOr([
+        this.buildMovimientoInventarioBodegaClause(a, { sedeId: usuarioSede, bodegaTipo: 'redes' }),
+        this.buildMovimientoTecnicoOrigenSedeClause(a, usuarioSede),
+      ]);
     }
-    if (rolTipo === 'admin-redes' && user.usuarioSede) {
-      return {
-        sql: ` WHERE EXISTS (
-                SELECT 1 FROM inventarios i
-                INNER JOIN bodegas b ON i.bodegaId = b.bodegaId
-                WHERE i.inventarioId = ${a}.inventarioId
-                  AND b.sedeId = ? AND b.bodegaTipo = 'redes'
-              )`,
-        params: [user.usuarioSede],
-      };
+    if (rolTipo === 'bodega-internas' && user.usuarioBodega) {
+      const bid = Number(user.usuarioBodega);
+      return this.combineMovimientoWhereOr([
+        this.buildMovimientoInventarioBodegaClause(a, { bodegaId: bid, bodegaTipo: 'internas' }),
+        this.buildMovimientoTecnicoOrigenBodegaClause(a, bid),
+      ]);
     }
-    if (rolTipo === 'bodega-internas') {
-      return {
-        sql: ` WHERE EXISTS (
-                SELECT 1 FROM inventarios i
-                INNER JOIN bodegas b ON i.bodegaId = b.bodegaId
-                WHERE i.inventarioId = ${a}.inventarioId
-                  AND (b.bodegaTipo = 'internas' OR b.bodegaId = ?)
-              )`,
-        params: [user.usuarioBodega || 0],
-      };
-    }
-    if (rolTipo === 'bodega-redes') {
-      return {
-        sql: ` WHERE EXISTS (
-                SELECT 1 FROM inventarios i
-                INNER JOIN bodegas b ON i.bodegaId = b.bodegaId
-                WHERE i.inventarioId = ${a}.inventarioId
-                  AND (b.bodegaTipo = 'redes' OR b.bodegaId = ?)
-              )`,
-        params: [user.usuarioBodega || 0],
-      };
+    if (rolTipo === 'bodega-redes' && user.usuarioBodega) {
+      const bid = Number(user.usuarioBodega);
+      return this.combineMovimientoWhereOr([
+        this.buildMovimientoInventarioBodegaClause(a, { bodegaId: bid, bodegaTipo: 'redes' }),
+        this.buildMovimientoTecnicoOrigenBodegaClause(a, bid),
+      ]);
     }
     if ((rolTipo === 'tecnico' || rolTipo === 'soldador') && user.usuarioId) {
       return {
@@ -1686,11 +1721,11 @@ export class MovimientosService {
     params.push(tipo);
 
     if (opts.excludeTrasladoSalidas && tipo === 'salida') {
-      where += ` AND NOT (
-        LOWER(COALESCE(m.movimientoObservaciones, '')) LIKE '%traslado%'
-        OR UPPER(COALESCE(m.movimientoCodigo, '')) LIKE 'TRA-%'
-        OR UPPER(COALESCE(m.identificadorUnico, '')) LIKE 'TRA-%'
-      )`;
+      const trasladoBodega = MovimientosService.SQL_FRAG_IS_TRASLADO_BODEGA;
+      const asignacion = MovimientosService.SQL_FRAG_IS_ASIGNACION;
+      const retornoTecnico = MovimientosService.SQL_FRAG_IS_RETORNO_TECNICO;
+      const trasladoTecnico = MovimientosService.SQL_FRAG_IS_TRASLADO_TECNICO;
+      where += ` AND NOT (${trasladoBodega}) AND NOT (${asignacion}) AND NOT (${retornoTecnico}) AND NOT (${trasladoTecnico})`;
     }
 
     if (opts.search && opts.search.trim()) {
@@ -1719,7 +1754,10 @@ export class MovimientosService {
         SUM(m.movimientoCantidad) AS totalCantidad,
         MAX(m.proveedorId) AS proveedorId,
         MAX(m.numeroOrden) AS numeroOrden,
-        MAX(m.identificadorUnico) AS identificadorUnico
+        MAX(m.identificadorUnico) AS identificadorUnico,
+        MAX(m.origenTipo) AS origenTipo,
+        MAX(m.tecnicoOrigenId) AS tecnicoOrigenId,
+        MAX(m.inventarioId) AS inventarioId
       FROM movimientos_inventario m
       ${where}
       GROUP BY m.movimientoCodigo
@@ -1737,11 +1775,56 @@ export class MovimientosService {
     ) as number[];
     const proveedorMap = await this.proveedoresService.findSummariesByIds(proveedorIds);
 
+    const inventarioIds = Array.from(
+      new Set(
+        (dataRows || [])
+          .map((r: any) => Number(r.inventarioId))
+          .filter((id: number) => Number.isFinite(id) && id > 0),
+      ),
+    ) as number[];
+    const inventarioMap = new Map<number, any>();
+    await Promise.all(
+      inventarioIds.map(async (inventarioId) => {
+        try {
+          inventarioMap.set(inventarioId, await this.inventariosService.findOne(inventarioId));
+        } catch {
+          /* omitir */
+        }
+      }),
+    );
+
+    const tecnicoIds = Array.from(
+      new Set(
+        (dataRows || [])
+          .map((r: any) => Number(r.tecnicoOrigenId))
+          .filter((id: number) => Number.isFinite(id) && id > 0),
+      ),
+    ) as number[];
+    const tecnicoMap = await this.usersService.findSummariesByIds(tecnicoIds);
+
     const data = (dataRows || []).map((r: any) => {
       const pid = r.proveedorId != null ? Number(r.proveedorId) : null;
       const prov = pid && proveedorMap.get(pid) ? proveedorMap.get(pid)! : null;
       const codigo = r.movimientoCodigo || '';
       const ident = r.identificadorUnico || '';
+      const origenTipoRaw = r.origenTipo ? String(r.origenTipo).toLowerCase() : '';
+      const tecnicoOrigenId =
+        r.tecnicoOrigenId != null ? Number(r.tecnicoOrigenId) : undefined;
+      const inventarioId = r.inventarioId != null ? Number(r.inventarioId) : undefined;
+      const inventario = inventarioId ? inventarioMap.get(inventarioId) : undefined;
+      const tecnico = tecnicoOrigenId ? tecnicoMap.get(tecnicoOrigenId) : undefined;
+
+      let origenTipo: 'bodega' | 'tecnico' | undefined;
+      if (origenTipoRaw === 'tecnico' || tecnicoOrigenId) {
+        origenTipo = 'tecnico';
+      } else if (origenTipoRaw === 'bodega' || inventario?.bodega) {
+        origenTipo = 'bodega';
+      }
+
+      const tecnicoNombre = tecnico
+        ? `${tecnico.usuarioNombre || ''} ${tecnico.usuarioApellido || ''}`.trim()
+        : undefined;
+
       return {
         movimientoCodigo: codigo,
         displayCodigo: ident || codigo,
@@ -1753,6 +1836,11 @@ export class MovimientosService {
         proveedorNombre: prov?.proveedorNombre || '-',
         proveedorId: pid && pid > 0 ? pid : undefined,
         fechaCreacion: r.fechaCreacion,
+        origenTipo,
+        tecnicoOrigenId: origenTipo === 'tecnico' ? tecnicoOrigenId : undefined,
+        tecnicoNombre: origenTipo === 'tecnico' ? tecnicoNombre : undefined,
+        bodegaId: origenTipo === 'bodega' ? inventario?.bodega?.bodegaId : undefined,
+        bodegaNombre: origenTipo === 'bodega' ? inventario?.bodega?.bodegaNombre : undefined,
       };
     });
 
@@ -1802,28 +1890,17 @@ export class MovimientosService {
       throw new NotFoundException(`Movimiento con ID ${id} no encontrado`);
     }
 
-    const rolTipo = user?.usuarioRol?.rolTipo || user?.role;
-    // Admin (centro operativo): solo movimientos de inventarios de bodegas de su sede
-    if (user && rolTipo === 'admin' && user.usuarioSede) {
-      const sedeIdBodega = movimiento.inventario?.bodega?.sedeId ?? null;
-      // Si el movimiento tiene bodega y no es de la sede del admin, denegar
-      if (sedeIdBodega != null && sedeIdBodega !== user.usuarioSede) {
-        throw new NotFoundException(`Movimiento con ID ${id} no encontrado`);
-      }
-    }
-    const rolesConFiltroBodega = [
-      'admin-internas',
-      'admin-redes',
-      'bodega-internas',
-      'bodega-redes',
-    ];
-    if (user && rolesConFiltroBodega.includes(rolTipo)) {
-      const bodegasPermitidas = await this.bodegasService.findAll(user);
-      const bodegaIdMov =
-        movimiento.inventario?.bodegaId ?? movimiento.inventario?.bodega?.bodegaId;
-      const permitido =
-        bodegaIdMov != null && bodegasPermitidas.some((b) => b.bodegaId === bodegaIdMov);
-      if (!permitido) {
+    const rolTipo = String(user?.usuarioRol?.rolTipo || user?.role || '').toLowerCase();
+    if (user && rolTipo !== 'superadmin' && rolTipo !== 'gerencia') {
+      const roleWhere = this.buildMovimientoRoleWhereSql('m', user);
+      const visWhere = roleWhere.sql
+        ? `${roleWhere.sql} AND m.movimientoId = ?`
+        : ` WHERE m.movimientoId = ?`;
+      const visRows = await this.movimientosRepository.query(
+        `SELECT m.movimientoId FROM movimientos_inventario m${visWhere} LIMIT 1`,
+        [...roleWhere.params, id],
+      );
+      if (!visRows?.length || !visRows[0]?.movimientoId) {
         throw new NotFoundException(`Movimiento con ID ${id} no encontrado`);
       }
     }

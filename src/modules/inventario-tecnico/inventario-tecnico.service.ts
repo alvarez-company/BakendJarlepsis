@@ -616,11 +616,18 @@ export class InventarioTecnicoService {
       // 2) Si es medidor y vienen números, reasignarlos al técnico destino
       if (m.numerosMedidor && Array.isArray(m.numerosMedidor) && m.numerosMedidor.length > 0) {
         const numeros = m.numerosMedidor;
-        // Validar que existan y pertenezcan al técnico origen
         for (const num of numeros) {
           const nm = await this.numerosMedidorService.findByNumero(String(num));
           if (!nm) throw new NotFoundException(`Número de medidor "${num}" no encontrado`);
-          if (nm.usuarioId != null && Number(nm.usuarioId) !== usuarioOrigenId) {
+          const perteneceOrigen =
+            Number(nm.usuarioId) === usuarioOrigenId ||
+            (nm.inventarioTecnicoId != null &&
+              inventarioOrigen.some(
+                (it) =>
+                  Number(it.inventarioTecnicoId) === Number(nm.inventarioTecnicoId) &&
+                  Number(it.usuarioId) === usuarioOrigenId,
+              ));
+          if (!perteneceOrigen) {
             throw new BadRequestException(
               `El número de medidor "${num}" no pertenece al técnico origen.`,
             );
@@ -680,14 +687,22 @@ export class InventarioTecnicoService {
 
     }
 
-    // 6) Movimiento solo trazabilidad (PENDIENTE: no vuelve a descontar inventario técnico)
+    const materialIdsAfectados = new Set<number>();
+    for (const m of dto.materiales) {
+      const mid = Number(m.materialId);
+      if (mid > 0) materialIdsAfectados.add(mid);
+    }
+    for (const mid of materialIdsAfectados) {
+      await this.materialesService.sincronizarStock(mid);
+    }
+
+    // 6) Movimiento solo trazabilidad (PENDIENTE: no vuelve a descontar inventario técnico ni tocar seriales)
     await this.movimientosService.create(
       {
         movimientoTipo: TipoMovimiento.SALIDA,
         materiales: dto.materiales.map((m) => ({
           materialId: m.materialId,
           movimientoCantidad: m.cantidad,
-          numerosMedidor: m.numerosMedidor,
         })) as any,
         usuarioId: usuarioAsignador,
         movimientoCodigo: codigo,
