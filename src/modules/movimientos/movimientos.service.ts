@@ -1120,7 +1120,7 @@ export class MovimientosService {
   ): { frag: string; params: any[] } {
     return {
       frag: `EXISTS (
-        SELECT 1 FROM users u
+        SELECT 1 FROM usuarios u
         WHERE u.usuarioId = ${tableAlias}.tecnicoOrigenId AND u.usuarioSede = ?
       )`,
       params: [sedeId],
@@ -1133,7 +1133,7 @@ export class MovimientosService {
   ): { frag: string; params: any[] } {
     return {
       frag: `EXISTS (
-        SELECT 1 FROM users u
+        SELECT 1 FROM usuarios u
         INNER JOIN bodegas b ON b.bodegaId = ?
         WHERE u.usuarioId = ${tableAlias}.tecnicoOrigenId AND u.usuarioSede = b.sedeId
       )`,
@@ -1561,7 +1561,7 @@ export class MovimientosService {
           WHERE i.inventarioId = ${a}.inventarioId AND b.sedeId = ?
         )
         OR EXISTS (
-          SELECT 1 FROM users u
+          SELECT 1 FROM usuarios u
           WHERE u.usuarioId = ${a}.tecnicoOrigenId AND u.usuarioSede = ?
         )
       )`,

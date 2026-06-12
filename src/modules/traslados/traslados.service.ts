@@ -424,7 +424,7 @@ export class TrasladosService {
 
     const ttQb = this.transferenciasTecnicosRepository
       .createQueryBuilder('tt')
-      .leftJoin('users', 'uo', 'uo.usuarioId = tt.usuarioOrigenId');
+      .leftJoin('usuarios', 'uo', 'uo.usuarioId = tt.usuarioOrigenId');
     if (Number.isFinite(sidRaw) && sidRaw > 0) {
       ttQb.andWhere('uo.usuarioSede = :vistaSede', { vistaSede: sidRaw });
     }
@@ -450,8 +450,8 @@ export class TrasladosService {
 
     if (user && !esSuperadminOGerencia && user.usuarioSede) {
       const sid = Number(user.usuarioSede);
-      qb.leftJoin('users', 'uo', 'uo.usuarioId = tt.usuarioOrigenId')
-        .leftJoin('users', 'ud', 'ud.usuarioId = tt.usuarioDestinoId')
+      qb.leftJoin('usuarios', 'uo', 'uo.usuarioId = tt.usuarioOrigenId')
+        .leftJoin('usuarios', 'ud', 'ud.usuarioId = tt.usuarioDestinoId')
         .andWhere(
           new Brackets((q) => {
             q.where('uo.usuarioSede = :ttSede', { ttSede: sid }).orWhere('ud.usuarioSede = :ttSede', {
