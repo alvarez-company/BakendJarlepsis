@@ -28,6 +28,9 @@ import { BodegasService } from '../bodegas/bodegas.service';
 import { NumerosMedidorService } from '../numeros-medidor/numeros-medidor.service';
 import { EstadoNumeroMedidor } from '../numeros-medidor/numero-medidor.entity';
 import { PaginationDto } from '../../common/dto/pagination.dto';
+import {
+  formatMovimientoDisplayCodigo,
+} from '../../common/utils/inventory-display-codes';
 
 const MSG_BODEGA_INSTALACIONES_NO_MOVIMIENTOS =
   'La bodega de instalaciones no admite movimientos de inventario (entradas, salidas, devoluciones ni traslados). Solo se usa para novedades de instalación.';
@@ -1827,7 +1830,12 @@ export class MovimientosService {
 
       return {
         movimientoCodigo: codigo,
-        displayCodigo: ident || codigo,
+        displayCodigo: formatMovimientoDisplayCodigo({
+          movimientoCodigo: codigo,
+          identificadorUnico: ident,
+          movimientoTipo: tipo,
+          movimientoId: Number(r.movimientoId),
+        }),
         identificadorUnico: ident || undefined,
         movimientoId: Number(r.movimientoId),
         numeroOrden: r.numeroOrden ? String(r.numeroOrden).trim() : undefined,

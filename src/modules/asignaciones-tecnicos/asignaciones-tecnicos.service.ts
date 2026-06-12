@@ -13,6 +13,10 @@ import { MovimientosService } from '../movimientos/movimientos.service';
 import { InventarioTecnicoService } from '../inventario-tecnico/inventario-tecnico.service';
 import { NumerosMedidorService } from '../numeros-medidor/numeros-medidor.service';
 import { MaterialesService } from '../materiales/materiales.service';
+import {
+  formatAsignacionDisplayCodigo,
+  shouldAutoGenerateAsignacionCodigo,
+} from '../../common/utils/inventory-display-codes';
 import { InventariosService } from '../inventarios/inventarios.service';
 import { AuditoriaService } from '../auditoria/auditoria.service';
 import { TipoEntidad } from '../auditoria/auditoria.entity';
@@ -91,8 +95,8 @@ export class AsignacionesTecnicosService {
       }
     }
 
-    // Si no se proporciona código, generar uno automáticamente
-    if (!createDto.asignacionCodigo) {
+    // Si no se proporciona código legible (ASIG-N), generar uno automáticamente
+    if (shouldAutoGenerateAsignacionCodigo(createDto.asignacionCodigo)) {
       createDto.asignacionCodigo = await this.generarCodigoAsignacion();
     }
 
@@ -213,8 +217,13 @@ export class AsignacionesTecnicosService {
 
     const [data, total] = await queryBuilder.getManyAndCount();
 
+    const dataWithDisplay = data.map((a) => ({
+      ...a,
+      displayCodigo: formatAsignacionDisplayCodigo(a.asignacionCodigo, a.asignacionTecnicoId),
+    }));
+
     return {
-      data,
+      data: dataWithDisplay as AsignacionTecnico[],
       total,
       page,
       limit,
@@ -247,7 +256,13 @@ export class AsignacionesTecnicosService {
       }
     }
 
-    return asignacion;
+    return {
+      ...asignacion,
+      displayCodigo: formatAsignacionDisplayCodigo(
+        asignacion.asignacionCodigo,
+        asignacion.asignacionTecnicoId,
+      ),
+    } as AsignacionTecnico;
   }
 
   async findByUsuario(usuarioId: number, user?: any): Promise<AsignacionTecnico[]> {

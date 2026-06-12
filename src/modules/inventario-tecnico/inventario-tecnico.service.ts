@@ -77,9 +77,13 @@ export class InventarioTecnicoService {
     }
 
     const idempotencyKey = dto.idempotencyKey?.trim() || undefined;
-    if (idempotencyKey) {
-      const asignacionPrevia = await this.asignacionesTecnicosService.findByCodigo(idempotencyKey);
-      if (asignacionPrevia && Number(asignacionPrevia.usuarioId) === Number(usuarioId)) {
+    if (idempotencyKey && dto.inventarioId) {
+      const salidaCodigo = `SALIDA-ASIG-${idempotencyKey}`;
+      const salidasExistentes = await this.movimientosService.countLineasPorCodigoYTipo(
+        salidaCodigo,
+        TipoMovimiento.SALIDA,
+      );
+      if (salidasExistentes >= dto.materiales.length) {
         return this.findByUsuario(usuarioId, requestingUser);
       }
     }
@@ -402,7 +406,6 @@ export class InventarioTecnicoService {
         });
 
         asignacionCreada = await this.asignacionesTecnicosService.create({
-          asignacionCodigo: idempotencyKey || undefined, // undefined = se generará automáticamente
           numeroOrden: dto.numeroOrden,
           usuarioId,
           inventarioId: dto.inventarioId,
