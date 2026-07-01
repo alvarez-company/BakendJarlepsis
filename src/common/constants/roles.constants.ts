@@ -360,6 +360,29 @@ export const ROLES_INSTALACIONES_MATERIALES = [
 /** Roles auditoria inventario */
 export const ROLES_AUDITORIA_INVENTARIO = ['superadmin', 'admin', 'almacenista'] as const;
 
+/** Roles que pueden crear y ver requerimientos (todos los usuarios operativos) */
+export const ROLES_REQUERIMIENTOS = [
+  'superadmin',
+  'gerencia',
+  'admin',
+  'admin-internas',
+  'admin-redes',
+  'almacenista',
+  'tecnico',
+  'soldador',
+  'bodega-internas',
+  'bodega-redes',
+] as const;
+
+/** Roles que pueden administrar requerimientos (asignar, cambiar estado) */
+export const ROLES_REQUERIMIENTOS_ADMIN = [
+  'superadmin',
+  'gerencia',
+  'admin',
+  'admin-internas',
+  'admin-redes',
+] as const;
+
 /** Roles estados cliente/instalacion (admin + tecnico) */
 export const ROLES_ESTADOS_CAMPO = ['superadmin', 'admin', 'tecnico'] as const;
 

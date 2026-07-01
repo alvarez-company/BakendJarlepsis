@@ -24,6 +24,7 @@ import { UsersService } from '../users/users.service';
 import { NumerosMedidorService } from '../numeros-medidor/numeros-medidor.service';
 import { EstadoNumeroMedidor } from '../numeros-medidor/numero-medidor.entity';
 import { TransferenciasTecnicosService } from '../transferencias-tecnicos/transferencias-tecnicos.service';
+import { logger } from '../../common/utils/logger';
 
 @Injectable()
 export class InventarioTecnicoService {
@@ -72,6 +73,12 @@ export class InventarioTecnicoService {
     dto: AssignMaterialesToTecnicoDto,
     requestingUser?: any,
   ): Promise<InventarioTecnico[]> {
+    logger.inventory.assignment('Iniciando asignación de materiales', {
+      tecnicoId: usuarioId,
+      inventarioId: dto.inventarioId,
+      cantidadMateriales: dto.materiales?.length || 0,
+    });
+    
     if (!dto?.materiales?.length) {
       throw new BadRequestException('Debe enviar al menos un material');
     }
@@ -158,6 +165,13 @@ export class InventarioTecnicoService {
             ? `SALIDA-ASIG-${idempotencyKey}`
             : `SALIDA-TECNICO-${usuarioId}-${Date.now()}`;
 
+          logger.inventory.assignment('Creando movimientos de SALIDA para descontar stock', {
+            bodegaId,
+            inventarioId: dto.inventarioId,
+            salidaCodigo,
+            cantidadMateriales: dto.materiales.length,
+          });
+
           const salidasExistentes = idempotencyKey
             ? await this.movimientosService.countLineasPorCodigoYTipo(
                 salidaCodigo,
@@ -186,21 +200,55 @@ export class InventarioTecnicoService {
             );
 
             if (movimientosSalida?.length) {
+              logger.inventory.assignment(`Se crearon ${movimientosSalida.length} movimientos de salida`, {
+                movimientoIds: movimientosSalida.map(m => m.movimientoId),
+              });
+              
               for (const movimiento of movimientosSalida) {
                 if (movimiento.movimientoEstado !== EstadoMovimiento.COMPLETADA) {
+                  logger.inventory.stock('Completando movimiento para descontar stock de bodega', {
+                    movimientoId: movimiento.movimientoId,
+                    materialId: movimiento.materialId,
+                    cantidad: movimiento.movimientoCantidad,
+                  });
+                  
                   await this.movimientosService.actualizarEstado(
                     movimiento.movimientoId,
                     EstadoMovimiento.COMPLETADA,
                   );
                 }
               }
+              
+              logger.success('Movimientos de salida completados - Stock descontado de bodega', {
+                module: 'INVENTARIO-TECNICO',
+                action: 'asignarMateriales',
+              });
             }
+          } else {
+            logger.warn('Se omitieron movimientos de salida por idempotencia', {
+              module: 'INVENTARIO-TECNICO',
+              data: { salidaCodigo, salidasExistentes },
+            });
           }
+        } else {
+          logger.warn('No se crearon movimientos de salida porque bodegaId es null', {
+            module: 'INVENTARIO-TECNICO',
+            data: { inventarioId: dto.inventarioId },
+          });
         }
       } catch (error) {
-        console.error('Error al crear movimientos de salida:', error);
-        throw error; // Lanzar error para que se detenga la asignación si falla
+        logger.error('Error al crear movimientos de salida', {
+          module: 'INVENTARIO-TECNICO',
+          action: 'asignarMateriales',
+          data: { error: error instanceof Error ? error.message : String(error) },
+        });
+        throw error;
       }
+    } else {
+      logger.warn('No se proporcionó inventarioId - No se descontará stock de bodega', {
+        module: 'INVENTARIO-TECNICO',
+        action: 'asignarMateriales',
+      });
     }
 
     // NOTA: La asignación se creará después de asignar los números de medidor

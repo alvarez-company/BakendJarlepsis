@@ -28,6 +28,7 @@ import { BodegasService } from '../bodegas/bodegas.service';
 import { NumerosMedidorService } from '../numeros-medidor/numeros-medidor.service';
 import { EstadoNumeroMedidor } from '../numeros-medidor/numero-medidor.entity';
 import { PaginationDto } from '../../common/dto/pagination.dto';
+import { logger } from '../../common/utils/logger';
 import {
   formatMovimientoDisplayCodigo,
 } from '../../common/utils/inventory-display-codes';
@@ -589,18 +590,28 @@ export class MovimientosService {
         }
       } else {
         // Si no hay origenTipo definido, usar inventarioId si está disponible (comportamiento legacy)
-        // IMPORTANTE: Si createMovimientoDto.inventarioId es explícitamente null, no establecer inventarioId
+        // PRIORIDAD: Siempre usar el inventarioId del DTO si viene explícitamente definido (no undefined)
+        // Esto asegura que las asignaciones a técnicos y otros flujos que pasan inventarioId
+        // siempre tengan el inventarioId correcto para que actualizarEstado() pueda ajustar el stock.
         if (createMovimientoDto.inventarioId === null) {
           movimientoData.inventarioId = null;
+        } else if (createMovimientoDto.inventarioId !== undefined && createMovimientoDto.inventarioId > 0) {
+          // CORRECCIÓN CRÍTICA: Si el DTO tiene un inventarioId válido, usarlo SIEMPRE
+          // Esto tiene prioridad sobre inventarioDestino calculado
+          movimientoData.inventarioId = createMovimientoDto.inventarioId;
         } else if (inventarioDestino !== null && inventarioDestino !== undefined) {
           movimientoData.inventarioId = inventarioDestino;
-        } else if (createMovimientoDto.inventarioId !== undefined) {
-          // CORRECCIÓN: Si se pasó inventarioId en el DTO pero inventarioDestino no se resolvió,
-          // usar el inventarioId del DTO directamente para asegurar que el movimiento tenga inventarioId
-          // y el ajuste de stock se pueda realizar en actualizarEstado()
-          movimientoData.inventarioId = createMovimientoDto.inventarioId;
         }
       }
+      
+      logger.inventory.movement('Creando movimiento', {
+        tipo: createMovimientoDto.movimientoTipo,
+        inventarioId_dto: createMovimientoDto.inventarioId,
+        inventarioDestino,
+        inventarioId_final: movimientoData.inventarioId,
+        materialId: materialIdFinal,
+        cantidad: cantidadMovimiento,
+      });
 
       const movimiento = this.movimientosRepository.create(movimientoData);
       const movimientoGuardado = (await this.movimientosRepository.save(
@@ -2767,8 +2778,25 @@ export class MovimientosService {
     }
 
     const estadoAnterior = movimiento.movimientoEstado;
-    const estabaCompletado = estadoAnterior === EstadoMovimiento.COMPLETADA;
-    const seraCompletado = nuevoEstado === EstadoMovimiento.COMPLETADA;
+    // Normalizar comparación para manejar posibles variaciones de tipo
+    const estadoAnteriorStr = String(estadoAnterior || '').toLowerCase();
+    const nuevoEstadoStr = String(nuevoEstado || '').toLowerCase();
+    const estabaCompletado = estadoAnteriorStr === 'completada' || estadoAnterior === EstadoMovimiento.COMPLETADA;
+    const seraCompletado = nuevoEstadoStr === 'completada' || nuevoEstado === EstadoMovimiento.COMPLETADA;
+    
+    logger.info('Actualizando estado de movimiento', {
+      module: 'MOVIMIENTOS',
+      action: 'actualizarEstado',
+      data: {
+        movimientoId,
+        tipo: movimiento.movimientoTipo,
+        inventarioId: movimiento.inventarioId,
+        estadoAnterior,
+        nuevoEstado,
+        estabaCompletado,
+        seraCompletado,
+      },
+    });
 
     // Si el movimiento tiene inventario, ajustar stock según el cambio de estado
     if (movimiento.inventarioId) {
@@ -2800,6 +2828,13 @@ export class MovimientosService {
           }
           // Si no estaba completado y ahora sí lo está, aplicar el ajuste de stock
           else if (!estabaCompletado && seraCompletado) {
+            logger.inventory.stock('Aplicando ajuste de stock', {
+              movimientoId,
+              materialId: movimiento.materialId,
+              tipo: movimiento.movimientoTipo,
+              cantidad: movimiento.movimientoCantidad,
+              bodegaId,
+            });
             // Asegurar que para devoluciones se use el tipo correcto
             const tipoMovimiento = movimiento.movimientoTipo;
             const tipoStr = String(tipoMovimiento).toLowerCase();
@@ -2818,20 +2853,33 @@ export class MovimientosService {
                 bodegaId,
               );
             }
+            logger.success(`Ajuste de stock completado para movimiento ${movimientoId}`, {
+              module: 'MOVIMIENTOS',
+              action: 'actualizarEstado',
+            });
           }
         }
       } catch (error) {
-        // Loguear el error para diagnóstico pero continuar con la actualización
-        console.error(
-          `[actualizarEstado] Error al ajustar stock para movimiento ${movimientoId}, inventarioId ${movimiento.inventarioId}:`,
-          error,
-        );
+        logger.error(`Error al ajustar stock para movimiento ${movimientoId}`, {
+          module: 'MOVIMIENTOS',
+          action: 'actualizarEstado',
+          data: {
+            inventarioId: movimiento.inventarioId,
+            error: error instanceof Error ? error.message : String(error),
+          },
+        });
       }
     } else if (!estabaCompletado && seraCompletado) {
-      // Si el movimiento pasa a COMPLETADA pero no tiene inventarioId, loguear advertencia
-      console.warn(
-        `[actualizarEstado] Movimiento ${movimientoId} (tipo: ${movimiento.movimientoTipo}) cambió a COMPLETADA pero no tiene inventarioId. El stock de bodega NO fue ajustado.`,
-      );
+      logger.warn(`Movimiento ${movimientoId} cambió a COMPLETADA pero NO tiene inventarioId`, {
+        module: 'MOVIMIENTOS',
+        action: 'actualizarEstado',
+        data: {
+          tipo: movimiento.movimientoTipo,
+          materialId: movimiento.materialId,
+          cantidad: movimiento.movimientoCantidad,
+          nota: 'El stock de bodega NO fue ajustado',
+        },
+      });
     }
 
     movimiento.movimientoEstado = nuevoEstado;

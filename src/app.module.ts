@@ -52,6 +52,8 @@ import { AuditoriaInventarioModule } from './modules/auditoria-inventario/audito
 import { AuditoriaEliminacionesModule } from './modules/auditoria/auditoria-eliminaciones.module';
 import { UploadModule } from './modules/upload/upload.module';
 import { PushTokensModule } from './modules/push-tokens/push-tokens.module';
+import { RequerimientosModule } from './modules/requerimientos/requerimientos.module';
+import { NovedadesSistemaModule } from './modules/novedades-sistema/novedades-sistema.module';
 import { isDevelopmentNodeEnv } from './common/utils/node-env';
 
 @Module({
@@ -168,6 +170,8 @@ import { isDevelopmentNodeEnv } from './common/utils/node-env';
     AuditoriaEliminacionesModule,
     UploadModule,
     PushTokensModule,
+    RequerimientosModule,
+    NovedadesSistemaModule,
   ],
 })
 export class AppModule {}

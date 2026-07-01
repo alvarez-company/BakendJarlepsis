@@ -17,6 +17,7 @@ import { BodegasService } from '../bodegas/bodegas.service';
 import { InventarioTecnicoService } from '../inventario-tecnico/inventario-tecnico.service';
 import { AuditoriaInventarioService } from '../auditoria-inventario/auditoria-inventario.service';
 import { TipoCambioInventario } from '../auditoria-inventario/auditoria-inventario.entity';
+import { logger } from '../../common/utils/logger';
 
 @Injectable()
 export class MaterialesService {
@@ -575,6 +576,11 @@ export class MaterialesService {
     usuarioId?: number,
   ): Promise<Material> {
     if (!bodegaId) {
+      logger.error('No se especificó bodegaId para ajustar stock', {
+        module: 'MATERIALES',
+        action: 'ajustarStock',
+        data: { materialId: id, cantidad },
+      });
       throw new Error('Debe especificar la bodega para ajustar el stock.');
     }
 
@@ -584,6 +590,14 @@ export class MaterialesService {
     });
     const cantidadAnterior = stockBodegaAntes ? Number(stockBodegaAntes.stock) : 0;
 
+    logger.inventory.stock('Ajustando stock en bodega', {
+      materialId: id,
+      bodegaId,
+      stockAnterior: cantidadAnterior,
+      ajuste: cantidad,
+      stockEsperado: cantidadAnterior + cantidad,
+    });
+
     await this.adjustStockForBodega(id, bodegaId, cantidad);
     await this.syncMaterialStock(id);
 
@@ -592,6 +606,22 @@ export class MaterialesService {
       where: { materialId: id, bodegaId },
     });
     const cantidadNueva = stockBodegaDespues ? Number(stockBodegaDespues.stock) : 0;
+
+    // Verificar que el ajuste se hizo correctamente
+    const ajusteEsperado = cantidadAnterior + cantidad;
+    if (cantidadNueva === ajusteEsperado) {
+      logger.success(`Stock ajustado correctamente: ${cantidadAnterior} → ${cantidadNueva}`, {
+        module: 'MATERIALES',
+        action: 'ajustarStock',
+        data: { materialId: id, bodegaId, cambio: cantidad },
+      });
+    } else {
+      logger.warn(`Stock final difiere del esperado: esperado=${ajusteEsperado}, actual=${cantidadNueva}`, {
+        module: 'MATERIALES',
+        action: 'ajustarStock',
+        data: { materialId: id, bodegaId },
+      });
+    }
 
     // Registrar en auditoría
     if (usuarioId) {
