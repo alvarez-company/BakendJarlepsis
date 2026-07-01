@@ -13,6 +13,7 @@ import {
   EstadoRequerimiento,
   PrioridadRequerimiento,
   CategoriaRequerimiento,
+  SubmoduloRequerimiento,
 } from '../requerimiento.entity';
 
 export class UpdateRequerimientoDto {
@@ -53,11 +54,19 @@ export class UpdateRequerimientoDto {
 
   @ApiPropertyOptional({
     enum: CategoriaRequerimiento,
-    description: 'Categoría del requerimiento',
+    description: 'Categoría/Módulo del requerimiento',
   })
   @IsEnum(CategoriaRequerimiento)
   @IsOptional()
   categoria?: CategoriaRequerimiento;
+
+  @ApiPropertyOptional({
+    enum: SubmoduloRequerimiento,
+    description: 'Submódulo/Tab específico del requerimiento',
+  })
+  @IsEnum(SubmoduloRequerimiento)
+  @IsOptional()
+  submodulo?: SubmoduloRequerimiento;
 
   @ApiPropertyOptional({ description: 'ID del usuario asignado' })
   @IsNumber()

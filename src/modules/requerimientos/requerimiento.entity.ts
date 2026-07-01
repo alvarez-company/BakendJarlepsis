@@ -46,6 +46,42 @@ export enum CategoriaRequerimiento {
   OTRO = 'otro',
 }
 
+export enum SubmoduloRequerimiento {
+  // Inventario
+  INV_STOCK = 'inv_stock',
+  INV_MOVIMIENTOS = 'inv_movimientos',
+  INV_TRASLADOS = 'inv_traslados',
+  INV_MATERIALES = 'inv_materiales',
+  INV_BODEGAS = 'inv_bodegas',
+  INV_ASIGNACIONES = 'inv_asignaciones',
+  INV_AUDITORIA = 'inv_auditoria',
+  // Instalaciones
+  INST_LISTA = 'inst_lista',
+  INST_PENDIENTES = 'inst_pendientes',
+  INST_MATERIALES = 'inst_materiales',
+  INST_MEDIDORES = 'inst_medidores',
+  INST_ESTADOS = 'inst_estados',
+  INST_PROYECTOS = 'inst_proyectos',
+  // Usuarios
+  USR_LISTA = 'usr_lista',
+  USR_ROLES = 'usr_roles',
+  USR_PERMISOS = 'usr_permisos',
+  // Reportes
+  REP_GENERAL = 'rep_general',
+  REP_EXPORTACION = 'rep_exportacion',
+  REP_ESTADISTICAS = 'rep_estadisticas',
+  // Chat
+  CHAT_MENSAJES = 'chat_mensajes',
+  CHAT_GRUPOS = 'chat_grupos',
+  // Medidores
+  MED_LISTA = 'med_lista',
+  MED_ASIGNACION = 'med_asignacion',
+  MED_ESTADOS = 'med_estados',
+  // General
+  GENERAL = 'general',
+  OTRO = 'otro',
+}
+
 @Entity('requerimientos')
 @Index(['estado', 'prioridad'])
 @Index(['solicitanteId', 'fechaCreacion'])
@@ -91,6 +127,13 @@ export class Requerimiento {
     default: CategoriaRequerimiento.GENERAL,
   })
   categoria: CategoriaRequerimiento;
+
+  @Column({
+    type: 'enum',
+    enum: SubmoduloRequerimiento,
+    nullable: true,
+  })
+  submodulo: SubmoduloRequerimiento;
 
   @Column()
   solicitanteId: number;

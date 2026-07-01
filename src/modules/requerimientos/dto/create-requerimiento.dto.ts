@@ -13,6 +13,7 @@ import {
   TipoRequerimiento,
   PrioridadRequerimiento,
   CategoriaRequerimiento,
+  SubmoduloRequerimiento,
 } from '../requerimiento.entity';
 
 export class CreateRequerimientoDto {
@@ -45,12 +46,20 @@ export class CreateRequerimientoDto {
 
   @ApiPropertyOptional({
     enum: CategoriaRequerimiento,
-    description: 'Categoría del requerimiento',
+    description: 'Categoría/Módulo del requerimiento',
     default: CategoriaRequerimiento.GENERAL,
   })
   @IsEnum(CategoriaRequerimiento)
   @IsOptional()
   categoria?: CategoriaRequerimiento;
+
+  @ApiPropertyOptional({
+    enum: SubmoduloRequerimiento,
+    description: 'Submódulo/Tab específico del requerimiento',
+  })
+  @IsEnum(SubmoduloRequerimiento)
+  @IsOptional()
+  submodulo?: SubmoduloRequerimiento;
 
   @ApiPropertyOptional({ description: 'ID de la sede relacionada' })
   @IsNumber()
