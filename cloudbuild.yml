@@ -62,6 +62,7 @@ jobs:
             --port=8080 \
             --service-account=alvarez-company@farmsmanager.iam.gserviceaccount.com \
             --set-env-vars="NODE_ENV=prod" \
+            --set-env-vars="DB_MIGRATIONS_RUN=true" \
             --set-env-vars="DB_HOST=srv1925.hstgr.io" \
             --set-env-vars="DB_PORT=3306" \
             --set-env-vars="DB_USERNAME=u675639001_jarlepdev" \
