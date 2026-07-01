@@ -2,6 +2,7 @@ import {
   Controller,
   Get,
   Post,
+  Put,
   Body,
   Param,
   Query,
@@ -37,13 +38,16 @@ export class NovedadesSistemaController {
   @ApiOperation({ summary: 'Listar novedades del sistema' })
   @ApiQuery({ name: 'limit', required: false, type: Number })
   @ApiQuery({ name: 'soloDestacadas', required: false, type: Boolean })
+  @ApiQuery({ name: 'incluirInactivas', required: false, type: Boolean })
   findAll(
     @Query('limit') limit?: string,
     @Query('soloDestacadas') soloDestacadas?: string,
+    @Query('incluirInactivas') incluirInactivas?: string,
   ) {
     return this.novedadesService.findAll({
       limit: limit ? +limit : undefined,
       soloDestacadas: soloDestacadas === 'true',
+      incluirInactivas: incluirInactivas === 'true',
     });
   }
 
@@ -80,10 +84,31 @@ export class NovedadesSistemaController {
     return this.novedadesService.findOne(id);
   }
 
-  @Delete(':id')
+  @Put(':id')
+  @Roles(...ROLES_SUPERADMIN_GERENCIA)
+  @ApiOperation({ summary: 'Actualizar una novedad' })
+  update(@Param('id', ParseIntPipe) id: number, @Body() updateDto: Partial<CreateNovedadSistemaDto>) {
+    return this.novedadesService.update(id, updateDto);
+  }
+
+  @Put(':id/desactivar')
   @Roles(...ROLES_SUPERADMIN_GERENCIA)
   @ApiOperation({ summary: 'Desactivar una novedad' })
   desactivar(@Param('id', ParseIntPipe) id: number) {
     return this.novedadesService.desactivar(id);
+  }
+
+  @Put(':id/activar')
+  @Roles(...ROLES_SUPERADMIN_GERENCIA)
+  @ApiOperation({ summary: 'Activar una novedad' })
+  activar(@Param('id', ParseIntPipe) id: number) {
+    return this.novedadesService.activar(id);
+  }
+
+  @Delete(':id')
+  @Roles(...ROLES_SUPERADMIN_GERENCIA)
+  @ApiOperation({ summary: 'Eliminar una novedad permanentemente' })
+  remove(@Param('id', ParseIntPipe) id: number) {
+    return this.novedadesService.remove(id);
   }
 }

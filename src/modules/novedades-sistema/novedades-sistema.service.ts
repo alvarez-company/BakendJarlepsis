@@ -55,13 +55,15 @@ export class NovedadesSistemaService {
     limit?: number;
     soloActivas?: boolean;
     soloDestacadas?: boolean;
+    incluirInactivas?: boolean;
   }): Promise<NovedadSistema[]> {
     const qb = this.novedadesRepository
       .createQueryBuilder('n')
       .leftJoinAndSelect('n.publicadoPor', 'publicadoPor')
       .leftJoinAndSelect('n.requerimiento', 'requerimiento');
 
-    if (options?.soloActivas !== false) {
+    // Por defecto solo muestra activas, a menos que explícitamente se pida incluir inactivas
+    if (options?.soloActivas !== false && !options?.incluirInactivas) {
       qb.andWhere('n.activa = :activa', { activa: true });
     }
 
@@ -106,10 +108,27 @@ export class NovedadesSistemaService {
     return novedad;
   }
 
+  async update(id: number, updateDto: Partial<CreateNovedadSistemaDto>): Promise<NovedadSistema> {
+    const novedad = await this.findOne(id);
+    Object.assign(novedad, updateDto);
+    return this.novedadesRepository.save(novedad);
+  }
+
   async desactivar(id: number): Promise<NovedadSistema> {
     const novedad = await this.findOne(id);
     novedad.activa = false;
     return this.novedadesRepository.save(novedad);
+  }
+
+  async activar(id: number): Promise<NovedadSistema> {
+    const novedad = await this.findOne(id);
+    novedad.activa = true;
+    return this.novedadesRepository.save(novedad);
+  }
+
+  async remove(id: number): Promise<void> {
+    const novedad = await this.findOne(id);
+    await this.novedadesRepository.remove(novedad);
   }
 
   async contarNoVistas(ultimaVista: Date): Promise<number> {
