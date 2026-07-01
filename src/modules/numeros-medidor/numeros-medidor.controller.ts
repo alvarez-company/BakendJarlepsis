@@ -9,16 +9,20 @@ import {
   Query,
   UseGuards,
   Request,
+  Ip,
 } from '@nestjs/common';
 import { NumerosMedidorService } from './numeros-medidor.service';
-import { CreateNumeroMedidorDto, UpdateNumeroMedidorDto } from './dto/create-numero-medidor.dto';
+import { CreateNumeroMedidorDto, UpdateNumeroMedidorDto, EditarNumeroSerieDto } from './dto/create-numero-medidor.dto';
 import { EstadoNumeroMedidor } from './numero-medidor.entity';
 import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard';
 import { RolesGuard } from '../../common/guards/roles.guard';
 import { Roles } from '../../common/decorators/roles.decorator';
 import { PaginationDto } from '../../common/dto/pagination.dto';
-import { ROLES_NUMEROS_MEDIDOR } from '../../common/constants/roles.constants';
+import { ROLES_NUMEROS_MEDIDOR, ROLES_SUPERADMIN_GERENCIA, ROLES_AUDITORIA_INVENTARIO } from '../../common/constants/roles.constants';
+import { ApiTags, ApiOperation, ApiBearerAuth } from '@nestjs/swagger';
 
+@ApiTags('Números de Medidor')
+@ApiBearerAuth()
 @Controller('numeros-medidor')
 @UseGuards(JwtAuthGuard, RolesGuard)
 @Roles(...ROLES_NUMEROS_MEDIDOR)
@@ -138,5 +142,44 @@ export class NumerosMedidorController {
   @Delete(':id')
   remove(@Param('id') id: string) {
     return this.numerosMedidorService.remove(+id);
+  }
+
+  @Patch(':id/editar-numero-serie')
+  @Roles(...ROLES_AUDITORIA_INVENTARIO)
+  @ApiOperation({ summary: 'Edita el número de serie de un medidor y registra auditoría' })
+  editarNumeroSerie(
+    @Param('id') id: string,
+    @Body() dto: EditarNumeroSerieDto,
+    @Request() req: { user?: any },
+    @Ip() ip: string,
+  ) {
+    return this.numerosMedidorService.editarNumeroSerie(+id, dto, req.user, ip);
+  }
+
+  @Get(':id/historial-cambios')
+  @ApiOperation({ summary: 'Obtiene el historial de cambios de número de serie para un medidor' })
+  obtenerHistorialCambios(@Param('id') id: string) {
+    return this.numerosMedidorService.obtenerHistorialCambios(+id);
+  }
+
+  @Get('auditoria/historial')
+  @Roles(...ROLES_AUDITORIA_INVENTARIO)
+  @ApiOperation({ summary: 'Obtiene el historial general de cambios de números de medidor' })
+  obtenerHistorialGeneral(
+    @Query('materialId') materialId?: string,
+    @Query('usuarioId') usuarioId?: string,
+    @Query('fechaDesde') fechaDesde?: string,
+    @Query('fechaHasta') fechaHasta?: string,
+    @Query('page') page?: string,
+    @Query('limit') limit?: string,
+  ) {
+    return this.numerosMedidorService.obtenerHistorialCambiosGeneral({
+      materialId: materialId ? +materialId : undefined,
+      usuarioId: usuarioId ? +usuarioId : undefined,
+      fechaDesde: fechaDesde ? new Date(fechaDesde) : undefined,
+      fechaHasta: fechaHasta ? new Date(fechaHasta) : undefined,
+      page: page ? +page : undefined,
+      limit: limit ? +limit : undefined,
+    });
   }
 }

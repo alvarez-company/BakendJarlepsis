@@ -106,3 +106,13 @@ export class AsignarNumerosMedidorBodyDto {
   @Type(() => ItemAsignarNumeroMedidorDto)
   items: ItemAsignarNumeroMedidorDto[];
 }
+
+// DTO para editar el número de serie de un medidor (con auditoría)
+export class EditarNumeroSerieDto {
+  @IsString()
+  nuevoNumero: string;
+
+  @IsOptional()
+  @IsString()
+  motivo?: string;
+}

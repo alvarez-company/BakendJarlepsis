@@ -12,6 +12,7 @@ import {
   CreateInstalacionMaterialDto,
   UpdateInstalacionMaterialDto,
   AssignMaterialesToInstalacionDto,
+  CorregirYAprobarMaterialDto,
 } from './dto/create-instalacion-material.dto';
 import { InstalacionesService } from '../instalaciones/instalaciones.service';
 import { InventarioTecnicoService } from '../inventario-tecnico/inventario-tecnico.service';
@@ -784,6 +785,88 @@ export class InstalacionesMaterialesService {
   }
 
   /**
+   * Corrige la cantidad de un material instalado y lo aprueba/desaprueba de forma atómica.
+   * 
+   * LÓGICA DE INVENTARIO:
+   * - Si cantidadCorregida > cantidadOriginal: se DESCUENTA la diferencia del inventario del técnico
+   *   (el técnico usó MÁS material del que reportó inicialmente)
+   * - Si cantidadCorregida < cantidadOriginal: se DEVUELVE la diferencia al inventario del técnico
+   *   (el técnico usó MENOS material del que reportó inicialmente)
+   * - El stock de BODEGA NO cambia en ningún caso (solo inventario del técnico)
+   * 
+   * @example
+   * // Técnico reportó 2 abrazaderas, almacenista corrige a 3:
+   * // diferencia = 3 - 2 = +1
+   * // inventario_tecnico -= 1 (se descuenta porque usó 1 más)
+   * 
+   * @example
+   * // Técnico reportó 3 abrazaderas, almacenista corrige a 2:
+   * // diferencia = 2 - 3 = -1
+   * // inventario_tecnico += 1 (se devuelve porque usó 1 menos)
+   */
+  async corregirYAprobarMaterial(
+    id: number,
+    dto: CorregirYAprobarMaterialDto,
+    requestingUser?: any,
+  ): Promise<InstalacionMaterial> {
+    const instalacionMaterial = await this.findOne(id);
+    const instalacion = await this.instalacionesService.findOne(
+      instalacionMaterial.instalacionId,
+      requestingUser,
+    );
+
+    const cantidadOriginal = Number(instalacionMaterial.cantidad || 0);
+    const cantidadCorregida = Number(dto.cantidadCorregida);
+
+    if (cantidadCorregida < 0) {
+      throw new BadRequestException('La cantidad corregida no puede ser negativa.');
+    }
+
+    const material = await this.materialesService.findOne(instalacionMaterial.materialId);
+    const esMedidor = await this.esMaterialMedidor(material);
+
+    if (esMedidor && cantidadCorregida !== 1) {
+      throw new BadRequestException(
+        'Para medidores, la cantidad debe ser exactamente 1 por instalación.',
+      );
+    }
+
+    // Calcular diferencia: positiva = usar más, negativa = usar menos
+    const diferencia = cantidadCorregida - cantidadOriginal;
+
+    if (diferencia !== 0) {
+      // Validar stock disponible del técnico si se aumenta la cantidad
+      if (diferencia > 0) {
+        await this.validarCambioCantidadConInventarioTecnico(
+          instalacionMaterial,
+          instalacion,
+          diferencia,
+          esMedidor,
+          requestingUser,
+        );
+      }
+
+      // Aplicar el ajuste de inventario del técnico
+      await this.aplicarCambioCantidadInventarioTecnico(
+        instalacionMaterial,
+        instalacion,
+        diferencia,
+        esMedidor,
+        requestingUser,
+      );
+    }
+
+    // Actualizar el registro con la cantidad corregida y el estado de aprobación
+    instalacionMaterial.cantidad = cantidadCorregida;
+    instalacionMaterial.materialAprobado = dto.aprobado;
+    if (dto.observaciones !== undefined) {
+      instalacionMaterial.observaciones = dto.observaciones;
+    }
+
+    return this.instalacionMaterialRepository.save(instalacionMaterial);
+  }
+
+  /**
    * Descontar material del inventario del técnico asignado a una instalación
    */
   private async descontarMaterialDelTecnico(
@@ -835,7 +918,15 @@ export class InstalacionesMaterialesService {
   }
 
   /**
-   * Devolver material al inventario del técnico cuando se elimina de una instalación
+   * Devolver material al inventario del técnico cuando se elimina de una instalación.
+   * 
+   * IMPORTANTE: Solo devuelve al técnico si existe un registro de inventario previo.
+   * NO crea nuevos registros de inventario para evitar inflar el stock cuando:
+   * - El material fue registrado por un admin/almacenista (sin descontar de técnico)
+   * - El técnico asignado cambió después del registro original
+   * 
+   * El material que un técnico "instala" (usa en obra) ya salió de su inventario,
+   * NO debe volver a sumarse al stock general.
    */
   private async devolverMaterialAlTecnico(
     instalacionId: number,
@@ -861,6 +952,9 @@ export class InstalacionesMaterialesService {
         (inv) => inv.materialId === materialId && inv.usuarioId === tecnicoId,
       );
 
+      // CORRECCIÓN BUG: Solo devolver si el técnico ya tenía este material en su inventario.
+      // Si no existe registro previo, significa que el material nunca se descontó de este técnico,
+      // por lo tanto NO debemos crear uno nuevo (eso inflaría el stock).
       if (inventarioItem) {
         const cantidadActual = Number(inventarioItem.cantidad || 0);
         const nuevaCantidad = cantidadActual + cantidadNumerica;
@@ -869,12 +963,14 @@ export class InstalacionesMaterialesService {
           cantidad: nuevaCantidad,
         });
       } else {
-        // Si no existe el registro en el inventario, crearlo
-        await this.inventarioTecnicoService.create({
-          usuarioId: tecnicoId,
-          materialId: materialId,
-          cantidad: cantidadNumerica,
-        });
+        // NO crear nuevo registro - el material no venía del inventario de este técnico.
+        // Esto evita que el stock suba incorrectamente cuando:
+        // 1. Un admin registró material sin descontar de nadie
+        // 2. El técnico asignado es diferente al original
+        console.warn(
+          `[InstalacionesMaterialesService] No se devuelve material ${materialId} al técnico ${tecnicoId}: ` +
+          `no existe registro previo en su inventario (el material no fue originalmente descontado de este técnico).`,
+        );
       }
     } catch (error) {
       console.error(

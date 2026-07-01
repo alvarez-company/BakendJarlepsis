@@ -8,7 +8,8 @@ import {
 import { InjectRepository } from '@nestjs/typeorm';
 import { Brackets, In, Repository } from 'typeorm';
 import { NumeroMedidor, EstadoNumeroMedidor } from './numero-medidor.entity';
-import { CreateNumeroMedidorDto, UpdateNumeroMedidorDto } from './dto/create-numero-medidor.dto';
+import { AuditoriaNumeroMedidor } from './auditoria-numero-medidor.entity';
+import { CreateNumeroMedidorDto, UpdateNumeroMedidorDto, EditarNumeroSerieDto } from './dto/create-numero-medidor.dto';
 import { MaterialesService } from '../materiales/materiales.service';
 import { BodegasService } from '../bodegas/bodegas.service';
 
@@ -17,6 +18,8 @@ export class NumerosMedidorService {
   constructor(
     @InjectRepository(NumeroMedidor)
     private readonly numerosMedidorRepository: Repository<NumeroMedidor>,
+    @InjectRepository(AuditoriaNumeroMedidor)
+    private readonly auditoriaRepository: Repository<AuditoriaNumeroMedidor>,
     @Inject(forwardRef(() => MaterialesService))
     private readonly materialesService: MaterialesService,
     @Inject(forwardRef(() => BodegasService))
@@ -651,5 +654,117 @@ export class NumerosMedidorService {
     }
 
     return disponibles;
+  }
+
+  /**
+   * Edita el número de serie de un medidor y registra la auditoría.
+   * El cambio se refleja en todo el sistema ya que es el mismo registro.
+   */
+  async editarNumeroSerie(
+    id: number,
+    dto: EditarNumeroSerieDto,
+    user?: any,
+    ipAddress?: string,
+  ): Promise<NumeroMedidor> {
+    const numeroMedidor = await this.findOne(id);
+    const numeroAnterior = numeroMedidor.numeroMedidor;
+    const nuevoNumeroNormalizado = this.normalizeNumero(dto.nuevoNumero);
+
+    if (!nuevoNumeroNormalizado) {
+      throw new BadRequestException('El nuevo número de medidor es requerido');
+    }
+
+    // Verificar que no sea el mismo número
+    if (this.normalizeNumero(numeroAnterior) === nuevoNumeroNormalizado) {
+      throw new BadRequestException('El nuevo número es igual al número actual');
+    }
+
+    // Verificar unicidad case-insensitive
+    const existe = await this.numerosMedidorRepository
+      .createQueryBuilder('n')
+      .where('LOWER(TRIM(n.numeroMedidor)) = :num', { num: nuevoNumeroNormalizado })
+      .andWhere('n.numeroMedidorId != :id', { id })
+      .getCount();
+
+    if (existe > 0) {
+      throw new BadRequestException(
+        `El número de medidor "${dto.nuevoNumero}" ya existe en el sistema. Los números de medidor son únicos.`,
+      );
+    }
+
+    // Actualizar el número
+    numeroMedidor.numeroMedidor = dto.nuevoNumero.trim();
+    const saved = await this.numerosMedidorRepository.save(numeroMedidor);
+
+    // Registrar auditoría
+    const auditoria = this.auditoriaRepository.create({
+      numeroMedidorId: id,
+      materialId: numeroMedidor.materialId,
+      numeroAnterior,
+      numeroNuevo: dto.nuevoNumero.trim(),
+      usuarioId: user?.usuarioId || user?.sub || null,
+      usuarioNombre: user?.usuarioNombre || user?.nombre || null,
+      usuarioCorreo: user?.usuarioCorreo || user?.email || null,
+      motivo: dto.motivo || null,
+      ipAddress: ipAddress || null,
+    });
+    await this.auditoriaRepository.save(auditoria);
+
+    return saved;
+  }
+
+  /**
+   * Obtiene el historial de cambios de número de serie para un medidor específico.
+   */
+  async obtenerHistorialCambios(numeroMedidorId: number): Promise<AuditoriaNumeroMedidor[]> {
+    return this.auditoriaRepository.find({
+      where: { numeroMedidorId },
+      order: { fechaCambio: 'DESC' },
+      relations: ['usuario'],
+    });
+  }
+
+  /**
+   * Obtiene todo el historial de cambios de números de medidor (para auditoría general).
+   */
+  async obtenerHistorialCambiosGeneral(params?: {
+    materialId?: number;
+    usuarioId?: number;
+    fechaDesde?: Date;
+    fechaHasta?: Date;
+    page?: number;
+    limit?: number;
+  }): Promise<{ data: AuditoriaNumeroMedidor[]; total: number; page: number; limit: number }> {
+    const page = params?.page || 1;
+    const limit = params?.limit || 50;
+    const skip = (page - 1) * limit;
+
+    const qb = this.auditoriaRepository
+      .createQueryBuilder('a')
+      .leftJoinAndSelect('a.usuario', 'usuario')
+      .leftJoinAndSelect('a.material', 'material')
+      .leftJoinAndSelect('a.numeroMedidor', 'numeroMedidor')
+      .orderBy('a.fechaCambio', 'DESC');
+
+    if (params?.materialId) {
+      qb.andWhere('a.materialId = :materialId', { materialId: params.materialId });
+    }
+
+    if (params?.usuarioId) {
+      qb.andWhere('a.usuarioId = :usuarioId', { usuarioId: params.usuarioId });
+    }
+
+    if (params?.fechaDesde) {
+      qb.andWhere('a.fechaCambio >= :fechaDesde', { fechaDesde: params.fechaDesde });
+    }
+
+    if (params?.fechaHasta) {
+      qb.andWhere('a.fechaCambio <= :fechaHasta', { fechaHasta: params.fechaHasta });
+    }
+
+    const total = await qb.clone().getCount();
+    const data = await qb.skip(skip).take(limit).getMany();
+
+    return { data, total, page, limit };
   }
 }

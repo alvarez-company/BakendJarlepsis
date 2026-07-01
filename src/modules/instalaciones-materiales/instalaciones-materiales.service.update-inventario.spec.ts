@@ -106,4 +106,24 @@ describe('InstalacionesMaterialesService - update inventario técnico', () => {
     expect(mockInventarioTecnicoService.update).toHaveBeenCalledWith(1, { cantidad: 1 });
     expect(mockRepository.save).toHaveBeenCalled();
   });
+
+  it('NO crea inventario técnico al disminuir cantidad si no existe registro previo (fix bug suma stock)', async () => {
+    // Simular que el técnico NO tiene este material en su inventario (diferente materialId)
+    mockInventarioTecnicoService.findByUsuario.mockResolvedValue([
+      { inventarioTecnicoId: 2, usuarioId: 99, materialId: 999, cantidad: 10 }, // otro material
+    ]);
+    mockRepository.save.mockImplementation(async (row) => row);
+
+    const result = await service.update(10, { cantidad: 1 });
+
+    // Se debe guardar el cambio en instalacion_material
+    expect(result.cantidad).toBe(1);
+    expect(mockRepository.save).toHaveBeenCalled();
+    
+    // PERO NO se debe crear nuevo inventario técnico
+    // Esto previene el bug donde se suma stock incorrectamente
+    expect(mockInventarioTecnicoService.create).not.toHaveBeenCalled();
+    // Tampoco se actualiza (no hay registro para este material)
+    expect(mockInventarioTecnicoService.update).not.toHaveBeenCalled();
+  });
 });

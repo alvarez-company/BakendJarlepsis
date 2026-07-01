@@ -594,6 +594,11 @@ export class MovimientosService {
           movimientoData.inventarioId = null;
         } else if (inventarioDestino !== null && inventarioDestino !== undefined) {
           movimientoData.inventarioId = inventarioDestino;
+        } else if (createMovimientoDto.inventarioId !== undefined) {
+          // CORRECCIÓN: Si se pasó inventarioId en el DTO pero inventarioDestino no se resolvió,
+          // usar el inventarioId del DTO directamente para asegurar que el movimiento tenga inventarioId
+          // y el ajuste de stock se pueda realizar en actualizarEstado()
+          movimientoData.inventarioId = createMovimientoDto.inventarioId;
         }
       }
 
@@ -847,6 +852,15 @@ export class MovimientosService {
               cantidadMovimiento,
               createMovimientoDto.tecnicoOrigenId,
             );
+            // Para devoluciones de técnico a bodega, sumar el stock a la bodega destino
+            if (esDevolucion && bodegaDestino) {
+              await this.ajustarStockMovimiento(
+                materialIdFinal,
+                TipoMovimiento.ENTRADA, // Usar ENTRADA para SUMAR a la bodega
+                cantidadMovimiento,
+                bodegaDestino,
+              );
+            }
           }
         }
         // Si es una ENTRADA sin bodega seleccionada y sin origen técnico, ajustar stock directamente en la sede
@@ -2807,8 +2821,17 @@ export class MovimientosService {
           }
         }
       } catch (error) {
-        // Continuar con la actualización aunque falle el ajuste de stock
+        // Loguear el error para diagnóstico pero continuar con la actualización
+        console.error(
+          `[actualizarEstado] Error al ajustar stock para movimiento ${movimientoId}, inventarioId ${movimiento.inventarioId}:`,
+          error,
+        );
       }
+    } else if (!estabaCompletado && seraCompletado) {
+      // Si el movimiento pasa a COMPLETADA pero no tiene inventarioId, loguear advertencia
+      console.warn(
+        `[actualizarEstado] Movimiento ${movimientoId} (tipo: ${movimiento.movimientoTipo}) cambió a COMPLETADA pero no tiene inventarioId. El stock de bodega NO fue ajustado.`,
+      );
     }
 
     movimiento.movimientoEstado = nuevoEstado;

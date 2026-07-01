@@ -1,5 +1,5 @@
 import { ApiProperty } from '@nestjs/swagger';
-import { IsNumber, IsOptional, IsString, Min, IsArray } from 'class-validator';
+import { IsNumber, IsOptional, IsString, Min, IsArray, IsBoolean } from 'class-validator';
 
 export class CreateInstalacionMaterialDto {
   @ApiProperty({ example: 1 })
@@ -52,4 +52,27 @@ export class AssignMaterialesToInstalacionDto {
     observaciones?: string;
     numerosMedidor?: string[]; // Números de medidor específicos
   }>;
+}
+
+export class CorregirYAprobarMaterialDto {
+  @ApiProperty({
+    description: 'Cantidad corregida por el almacenista',
+    example: 3,
+    minimum: 0,
+  })
+  @IsNumber()
+  @Min(0)
+  cantidadCorregida: number;
+
+  @ApiProperty({
+    description: 'Estado de aprobación: true = aprobado, false = desaprobado',
+    example: true,
+  })
+  @IsBoolean()
+  aprobado: boolean;
+
+  @ApiProperty({ required: false })
+  @IsString()
+  @IsOptional()
+  observaciones?: string;
 }

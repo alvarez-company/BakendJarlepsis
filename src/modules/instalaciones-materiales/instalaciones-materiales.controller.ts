@@ -17,6 +17,7 @@ import {
   CreateInstalacionMaterialDto,
   UpdateInstalacionMaterialDto,
   AssignMaterialesToInstalacionDto,
+  CorregirYAprobarMaterialDto,
 } from './dto/create-instalacion-material.dto';
 import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard';
 import { RolesGuard } from '../../common/guards/roles.guard';
@@ -137,5 +138,27 @@ export class InstalacionesMaterialesController {
   @ApiOperation({ summary: 'Aprobar o desaprobar un material utilizado' })
   aprobarMaterial(@Param('id') id: string, @Body() body: { aprobado: boolean }) {
     return this.service.aprobarMaterial(+id, body.aprobado);
+  }
+
+  @Post(':id/corregir-y-aprobar')
+  @Roles(...ROLES_APROBAR_ASIGNACIONES)
+  @ApiOperation({
+    summary: 'Corregir cantidad y aprobar/desaprobar un material utilizado (atómico)',
+    description: `
+      Permite al almacenista corregir la cantidad de un material instalado y aprobarlo/desaprobarlo
+      en una sola operación atómica.
+      
+      LÓGICA DE INVENTARIO:
+      - Si cantidadCorregida > cantidadOriginal: se DESCUENTA la diferencia del inventario del técnico
+      - Si cantidadCorregida < cantidadOriginal: se DEVUELVE la diferencia al inventario del técnico
+      - El stock de BODEGA NO cambia
+    `,
+  })
+  corregirYAprobarMaterial(
+    @Param('id') id: string,
+    @Body() dto: CorregirYAprobarMaterialDto,
+    @Req() req: { user?: any },
+  ) {
+    return this.service.corregirYAprobarMaterial(+id, dto, req.user);
   }
 }
