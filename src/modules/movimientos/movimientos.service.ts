@@ -490,6 +490,26 @@ export class MovimientosService {
           ? numerosMedidorInput.length
           : materialDto.movimientoCantidad;
 
+      const esSalidaMov =
+        createMovimientoDto.movimientoTipo === TipoMovimiento.SALIDA ||
+        String(createMovimientoDto.movimientoTipo).toLowerCase() === 'salida';
+      const esDevolucionMov =
+        createMovimientoDto.movimientoTipo === TipoMovimiento.DEVOLUCION ||
+        String(createMovimientoDto.movimientoTipo).toLowerCase() === 'devolucion';
+
+      if (material?.materialEsMedidor && (esSalidaMov || esDevolucionMov)) {
+        if (numerosMedidorInput.length === 0) {
+          throw new BadRequestException(
+            'Los materiales medidor requieren seleccionar números de serie en salidas y devoluciones.',
+          );
+        }
+        if (numerosMedidorInput.length !== Number(cantidadMovimiento)) {
+          throw new BadRequestException(
+            `La cantidad del movimiento (${cantidadMovimiento}) debe coincidir con los seriales seleccionados (${numerosMedidorInput.length}).`,
+          );
+        }
+      }
+
       const inventarioContexto = await obtenerContextoInventario(material);
       // Permitir movimientos sin inventarioId (se asignará después desde la lista)
       const inventarioDestino = inventarioContexto?.inventarioId || null;
@@ -737,11 +757,6 @@ export class MovimientosService {
               );
             }
           } else if (esSalida || esDevolucion) {
-            // SALIDA/DEVOLUCIÓN:
-            // En este sistema el DTO solo soporta `origenTipo` y `tecnicoOrigenId` (origen técnico),
-            // pero NO existe un "destino técnico" para asignaciones (bodega -> técnico).
-            // La asignación a técnico maneja los números desde `InventarioTecnicoService`.
-            // Por eso, aquí SOLO debemos tocar números cuando el ORIGEN es técnico; en caso contrario, no modificar.
             const origenEsTecnico =
               createMovimientoDto.origenTipo === 'tecnico' &&
               Boolean(createMovimientoDto.tecnicoOrigenId);
@@ -758,6 +773,8 @@ export class MovimientosService {
               }
             }
 
+            const idsSalida: number[] = [];
+
             for (const numeroMedidor of numeros) {
               const norm = String(numeroMedidor || '')
                 .trim()
@@ -765,34 +782,32 @@ export class MovimientosService {
               if (!norm) continue;
               const numeroMedidorEntity = existingMap.get(norm);
 
+              if (!numeroMedidorEntity) {
+                throw new BadRequestException(
+                  `El número de medidor "${numeroMedidor}" no existe en el inventario.`,
+                );
+              }
+
               if (origenEsTecnico) {
-                if (!numeroMedidorEntity) {
-                  await this.numerosMedidorService.create({
-                    materialId: materialIdFinal,
-                    numeroMedidor: numeroMedidor,
-                    estado: EstadoNumeroMedidor.DISPONIBLE,
-                    bodegaId: bodegaIdContexto ?? undefined,
-                    usuarioId: null,
-                  });
-                } else {
-                  await this.numerosMedidorService.update(numeroMedidorEntity.numeroMedidorId, {
-                    estado: EstadoNumeroMedidor.DISPONIBLE,
-                    bodegaId: bodegaIdContexto ?? undefined,
-                    instalacionId: null,
-                    instalacionMaterialId: null,
-                    usuarioId: null,
-                    inventarioTecnicoId: null,
-                  });
+                const tecnicoId = Number(createMovimientoDto.tecnicoOrigenId);
+                if (
+                  numeroMedidorEntity.estado !== EstadoNumeroMedidor.ASIGNADO_TECNICO ||
+                  Number(numeroMedidorEntity.usuarioId) !== tecnicoId
+                ) {
+                  throw new BadRequestException(
+                    `El número de medidor "${numeroMedidor}" no pertenece al técnico de origen seleccionado.`,
+                  );
                 }
+                if (numeroMedidorEntity.materialId !== materialIdFinal) {
+                  throw new BadRequestException(
+                    `El número de medidor "${numeroMedidor}" no corresponde al material del movimiento.`,
+                  );
+                }
+                idsSalida.push(numeroMedidorEntity.numeroMedidorId);
                 continue;
               }
 
-              if (origenEsBodega && esSalida) {
-                if (!numeroMedidorEntity) {
-                  throw new BadRequestException(
-                    `El número de medidor "${numeroMedidor}" no existe en el inventario.`,
-                  );
-                }
+              if (origenEsBodega) {
                 if (
                   bodegaIdContexto != null &&
                   numeroMedidorEntity.bodegaId != null &&
@@ -807,15 +822,17 @@ export class MovimientosService {
                     `El número de medidor "${numeroMedidor}" está asignado a un técnico y no puede salir desde bodega.`,
                   );
                 }
-                await this.numerosMedidorService.update(numeroMedidorEntity.numeroMedidorId, {
-                  estado: EstadoNumeroMedidor.DISPONIBLE,
-                  bodegaId: null,
-                  instalacionId: null,
-                  instalacionMaterialId: null,
-                  usuarioId: null,
-                  inventarioTecnicoId: null,
-                });
+                if (numeroMedidorEntity.estado !== EstadoNumeroMedidor.DISPONIBLE) {
+                  throw new BadRequestException(
+                    `El número de medidor "${numeroMedidor}" no está disponible (estado: ${numeroMedidorEntity.estado}).`,
+                  );
+                }
+                idsSalida.push(numeroMedidorEntity.numeroMedidorId);
               }
+            }
+
+            if (idsSalida.length > 0) {
+              await this.numerosMedidorService.registrarSalidaDeInventario(idsSalida);
             }
           }
         }
@@ -857,19 +874,17 @@ export class MovimientosService {
               );
             }
           } else if (esSalida || esDevolucion) {
-            await this.ajustarInventarioTecnicoMovimiento(
-              materialIdFinal,
-              tipoMovimiento,
-              cantidadMovimiento,
-              createMovimientoDto.tecnicoOrigenId,
-            );
-            // Para devoluciones de técnico a bodega, sumar el stock a la bodega destino
-            if (esDevolucion && bodegaDestino) {
-              await this.ajustarStockMovimiento(
+            if (material?.materialEsMedidor) {
+              await this.inventarioTecnicoService.syncCantidadMedidorDesdeSeriales(
+                Number(createMovimientoDto.tecnicoOrigenId),
                 materialIdFinal,
-                TipoMovimiento.ENTRADA, // Usar ENTRADA para SUMAR a la bodega
+              );
+            } else {
+              await this.ajustarInventarioTecnicoMovimiento(
+                materialIdFinal,
+                tipoMovimiento,
                 cantidadMovimiento,
-                bodegaDestino,
+                createMovimientoDto.tecnicoOrigenId,
               );
             }
           }
@@ -1078,23 +1093,19 @@ export class MovimientosService {
     }
 
     try {
-      // Buscar el inventario técnico existente
-      const inventarioTecnico = await this.inventarioTecnicoService.findByUsuario(tecnicoId);
-      const inventarioItem = inventarioTecnico.find(
-        (inv) => inv.materialId === materialId && inv.usuarioId === tecnicoId,
+      const inventarioItem = await this.inventarioTecnicoService.findRegistroRaw(
+        tecnicoId,
+        materialId,
       );
 
       if (inventarioItem) {
-        // Calcular nueva cantidad (restar para salidas y devoluciones)
         const cantidadActual = Number(inventarioItem.cantidad || 0);
         const nuevaCantidad = Math.max(0, cantidadActual - cantidadNumerica);
 
-        // Actualizar el inventario técnico
         await this.inventarioTecnicoService.update(inventarioItem.inventarioTecnicoId, {
           cantidad: nuevaCantidad,
         });
 
-        // IMPORTANTE: Sincronizar el stock total del material después de actualizar inventario técnico
         await this.materialesService.sincronizarStock(materialId);
       }
     } catch (error) {

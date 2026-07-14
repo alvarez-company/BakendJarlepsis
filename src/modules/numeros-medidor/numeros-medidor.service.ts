@@ -611,6 +611,27 @@ export class NumerosMedidorService {
   }
 
   /**
+   * Salida o devolución a proveedor: el serial sale del inventario (no queda "disponible").
+   */
+  async registrarSalidaDeInventario(numerosMedidorIds: number[]): Promise<void> {
+    const ids = [...new Set(numerosMedidorIds.map(Number).filter((id) => id > 0))];
+    if (!ids.length) return;
+
+    const entities = await this.numerosMedidorRepository.find({
+      where: { numeroMedidorId: In(ids) },
+    });
+    if (entities.length !== ids.length) {
+      throw new NotFoundException('Algunos números de medidor no fueron encontrados');
+    }
+
+    const materialIds = new Set(entities.map((e) => e.materialId));
+    await this.numerosMedidorRepository.remove(entities);
+    for (const mid of materialIds) {
+      await this.sincronizarStockMaterialMedidor(mid);
+    }
+  }
+
+  /**
    * Verifica si un material es medidor usando el campo materialEsMedidor
    */
   private async esMaterialMedidor(materialId: number): Promise<boolean> {

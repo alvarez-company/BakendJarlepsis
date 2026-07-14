@@ -419,6 +419,18 @@ export class InventarioTecnicoService {
     // Ejecutar todos los procesos de materiales en paralelo
     await Promise.all(procesosMateriales);
 
+    // Medidores: alinear cantidad en inventario_tecnico con seriales asignados
+    for (const materialId of materialesIds) {
+      try {
+        const mat = await this.materialesService.findOne(materialId);
+        if (mat?.materialEsMedidor) {
+          await this.syncCantidadMedidorDesdeSeriales(usuarioId, materialId);
+        }
+      } catch {
+        // ignorar
+      }
+    }
+
     // IMPORTANTE: Sincronizar el stock total de cada material después de asignar (en paralelo)
     const sincronizacionesStock = Array.from(materialesIds).map((materialId) =>
       this.materialesService.sincronizarStock(materialId).catch((error) => {
@@ -657,11 +669,33 @@ export class InventarioTecnicoService {
       if (!materialId || cantidad <= 0) continue;
 
       const itemOrigen = byMaterialOrigen.get(materialId);
-      const disponible = Number(itemOrigen?.cantidad || 0);
+      const materialInfo =
+        itemOrigen?.material || (await this.materialesService.findOne(materialId).catch(() => null));
+      const esMedidor = Boolean(materialInfo?.materialEsMedidor);
+
+      let disponible = Number(itemOrigen?.cantidad || 0);
+      if (esMedidor) {
+        const numerosOrigen = await this.numerosMedidorService.findByUsuario(usuarioOrigenId);
+        disponible = numerosOrigen.filter(
+          (n) =>
+            Number(n.materialId) === materialId &&
+            n.estado === EstadoNumeroMedidor.ASIGNADO_TECNICO &&
+            Number(n.usuarioId) === Number(usuarioOrigenId),
+        ).length;
+      }
+
       if (disponible < cantidad) {
         throw new BadRequestException(
           `Stock insuficiente en técnico origen para material ${materialId}. Disponible: ${disponible}, solicitado: ${cantidad}`,
         );
+      }
+
+      if (esMedidor) {
+        if (!m.numerosMedidor?.length || m.numerosMedidor.length !== cantidad) {
+          throw new BadRequestException(
+            `El material medidor ${materialId} requiere seleccionar exactamente ${cantidad} número(s) de serie para el traslado.`,
+          );
+        }
       }
 
       // 2) Si es medidor y vienen números, reasignarlos al técnico destino
@@ -686,54 +720,71 @@ export class InventarioTecnicoService {
         }
       }
 
-      // 3) Descontar del técnico origen (inventario_tecnico)
-      // Buscar registro real (no consolidado) para actualizar: el primero del query
-      const registroOrigen = inventarioOrigen.find((x) => Number(x.materialId) === materialId);
-      if (!registroOrigen) {
-        throw new BadRequestException(
-          `No se encontró inventario del técnico origen para material ${materialId}`,
-        );
-      }
-      const nuevaCantOrigen = Number(registroOrigen.cantidad || 0) - cantidad;
-      if (nuevaCantOrigen < 0) {
-        throw new BadRequestException(
-          `Stock insuficiente en técnico origen para material ${materialId}`,
-        );
-      }
-      await this.inventarioTecnicoRepository.save({
-        ...registroOrigen,
-        cantidad: nuevaCantOrigen,
-      });
+      // 3) Descontar del técnico origen / sumar al destino (materiales no medidor)
+      let registroDestino: InventarioTecnico | null = null;
+      if (!esMedidor) {
+        const registroOrigen = inventarioOrigen.find((x) => Number(x.materialId) === materialId);
+        if (!registroOrigen) {
+          throw new BadRequestException(
+            `No se encontró inventario del técnico origen para material ${materialId}`,
+          );
+        }
+        const nuevaCantOrigen = Number(registroOrigen.cantidad || 0) - cantidad;
+        if (nuevaCantOrigen < 0) {
+          throw new BadRequestException(
+            `Stock insuficiente en técnico origen para material ${materialId}`,
+          );
+        }
+        await this.inventarioTecnicoRepository.save({
+          ...registroOrigen,
+          cantidad: nuevaCantOrigen,
+        });
 
-      // 4) Sumar al técnico destino (crear o actualizar)
-      let registroDestino = await this.inventarioTecnicoRepository.findOne({
-        where: { usuarioId: Number(dto.usuarioDestinoId), materialId },
-      });
-      if (!registroDestino) {
-        registroDestino = await this.inventarioTecnicoRepository.save({
-          usuarioId: Number(dto.usuarioDestinoId),
-          materialId,
-          cantidad: cantidad,
-        } as any);
+        registroDestino = await this.inventarioTecnicoRepository.findOne({
+          where: { usuarioId: Number(dto.usuarioDestinoId), materialId },
+        });
+        if (!registroDestino) {
+          registroDestino = await this.inventarioTecnicoRepository.save({
+            usuarioId: Number(dto.usuarioDestinoId),
+            materialId,
+            cantidad: cantidad,
+          } as any);
+        } else {
+          registroDestino.cantidad = Number(registroDestino.cantidad || 0) + cantidad;
+          registroDestino = await this.inventarioTecnicoRepository.save(registroDestino);
+        }
       } else {
-        registroDestino.cantidad = Number(registroDestino.cantidad || 0) + cantidad;
-        registroDestino = await this.inventarioTecnicoRepository.save(registroDestino);
+        registroDestino = await this.inventarioTecnicoRepository.findOne({
+          where: { usuarioId: Number(dto.usuarioDestinoId), materialId },
+        });
+        if (!registroDestino) {
+          registroDestino = await this.inventarioTecnicoRepository.save({
+            usuarioId: Number(dto.usuarioDestinoId),
+            materialId,
+            cantidad: 0,
+          } as any);
+        }
       }
 
-      // 5) Reasignar números de medidor al técnico destino si aplica (por IDs)
+      // 4) Reasignar números de medidor al técnico destino si aplica (por IDs)
       if (m.numerosMedidor && Array.isArray(m.numerosMedidor) && m.numerosMedidor.length > 0) {
         const ids: number[] = [];
         for (const num of m.numerosMedidor) {
           const nm = await this.numerosMedidorService.findByNumero(String(num));
           if (nm?.numeroMedidorId) ids.push(nm.numeroMedidorId);
         }
-        if (ids.length > 0) {
+        if (ids.length > 0 && registroDestino) {
           await this.numerosMedidorService.asignarATecnico(
             ids,
             Number(dto.usuarioDestinoId),
             registroDestino.inventarioTecnicoId,
           );
         }
+      }
+
+      if (esMedidor) {
+        await this.syncCantidadMedidorDesdeSeriales(usuarioOrigenId, materialId);
+        await this.syncCantidadMedidorDesdeSeriales(Number(dto.usuarioDestinoId), materialId);
       }
 
     }
@@ -857,10 +908,7 @@ export class InventarioTecnicoService {
       const idsEnResultado = new Set(resultado.map((r) => r.materialId));
       for (const item of resultado) {
         if (!item.material?.materialEsMedidor) continue;
-        const porSeriales = porMaterial.get(item.materialId);
-        if (porSeriales != null && porSeriales > 0) {
-          item.cantidad = porSeriales;
-        }
+        item.cantidad = porMaterial.get(item.materialId) ?? 0;
       }
 
       for (const [materialId, count] of porMaterial.entries()) {
@@ -881,6 +929,55 @@ export class InventarioTecnicoService {
     }
 
     return resultado;
+  }
+
+  /**
+   * Alinea inventario_tecnicos.cantidad con los seriales ASIGNADO_TECNICO del técnico.
+   * Fuente de verdad para materiales medidor en manos del técnico.
+   */
+  async syncCantidadMedidorDesdeSeriales(usuarioId: number, materialId: number): Promise<void> {
+    const material = await this.materialesService.findOne(materialId).catch(() => null);
+    if (!material?.materialEsMedidor) return;
+
+    const numeros = await this.numerosMedidorService.findByUsuario(usuarioId);
+    const count = numeros.filter(
+      (n) =>
+        Number(n.materialId) === Number(materialId) &&
+        n.estado === EstadoNumeroMedidor.ASIGNADO_TECNICO &&
+        Number(n.usuarioId) === Number(usuarioId),
+    ).length;
+
+    const rows = await this.inventarioTecnicoRepository.find({
+      where: { usuarioId, materialId },
+    });
+
+    if (rows.length === 0) {
+      if (count > 0) {
+        await this.inventarioTecnicoRepository.save({
+          usuarioId,
+          materialId,
+          cantidad: count,
+        });
+      }
+      return;
+    }
+
+    rows[0].cantidad = count;
+    await this.inventarioTecnicoRepository.save(rows[0]);
+    for (let i = 1; i < rows.length; i++) {
+      rows[i].cantidad = 0;
+      await this.inventarioTecnicoRepository.save(rows[i]);
+    }
+  }
+
+  /** Lectura directa de inventario_tecnico sin enriquecer por seriales (para ajustes de stock). */
+  async findRegistroRaw(
+    usuarioId: number,
+    materialId: number,
+  ): Promise<InventarioTecnico | null> {
+    return this.inventarioTecnicoRepository.findOne({
+      where: { usuarioId, materialId },
+    });
   }
 
   /**
